@@ -33,16 +33,7 @@ Last swept: 2026-08-12, against `e60c97e`.
 - **Wrong side** — arguably neither, but the guidance does not say which of the
   two to reach for, and the codebase has not picked one. Worth deciding.
 
-## 3. `README.md` points bug reports at a repository that is not this one
-
-- **Written** — "Please open a GitHub issue:
-  `https://github.com/Wafler1/transportia/issues/new/choose`".
-- **True** — `origin` is `https://github.com/blauertee/transportia`.
-- **Wrong side** — unknown, and that is the point. Either the README is stale
-  or this is a fork whose README was never repointed. Someone with the history
-  should say which.
-
-## 4. `AGENTS.md` names an example test file that does not exist
+## 3. `AGENTS.md` names an example test file that does not exist
 
 - **Written** — "Place tests in `test/` with `_test.dart` suffix (e.g.,
   `route_field_box_test.dart`)."
@@ -52,7 +43,7 @@ Last swept: 2026-08-12, against `e60c97e`.
 - **Wrong side** — both, in different ways. Either pick an example that exists,
   or write the test the example implies.
 
-## 5. `SavedTripsService`'s class doc undersells what it does
+## 4. `SavedTripsService`'s class doc undersells what it does
 
 - **Written** — "there is no cap and nothing is evicted to make room — a saved
   trip disappears only when the user removes it, or once it is long enough in
@@ -63,7 +54,7 @@ Last swept: 2026-08-12, against `e60c97e`.
 - **Wrong side** — the document, mildly. Naming the window in the class doc
   would make the one surprising behaviour discoverable.
 
-## 6. `TransitModeGroup.allSelectable` re-lists what the enum already declares
+## 5. `TransitModeGroup.allSelectable` re-lists what the enum already declares
 
 Not a doc mismatch — a latent bug. Filed here because this is where findings
 that need a decision live.

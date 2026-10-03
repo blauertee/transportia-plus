@@ -29,7 +29,6 @@ class BottomCard extends StatefulWidget {
     this.drag,
     required this.fromCtrl,
     required this.toCtrl,
-    required this.showMyLocationDefault,
     required this.onUnfocus,
     required this.onSwapRequested,
     required this.options,
@@ -61,9 +60,8 @@ class BottomCard extends StatefulWidget {
   final SheetDrag? drag;
   final TextEditingController fromCtrl;
   final TextEditingController toCtrl;
-  final bool showMyLocationDefault;
   final VoidCallback onUnfocus;
-  final bool Function() onSwapRequested;
+  final VoidCallback onSwapRequested;
 
   /// The options for the next search, which last only for it.
   final RoutingOptions options;
@@ -233,7 +231,6 @@ class _BottomCardState extends State<BottomCard> {
                           child: RouteFieldBox(
                             fromController: widget.fromCtrl,
                             toController: widget.toCtrl,
-                            showMyLocationDefault: widget.showMyLocationDefault,
                             accentColor: AppColors.accentOf(context),
                             onSwapRequested: widget.onSwapRequested,
                             layerLink: widget.routeFieldLink,

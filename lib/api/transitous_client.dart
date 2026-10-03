@@ -30,12 +30,15 @@ class TransitousClient {
   final http.Client _http;
   final Duration timeout;
 
+  /// [host] sends this one request somewhere other than the rider's server:
+  /// a shared trip has to be read back on the server that planned it.
   Future<T> get<T>(
     TransitousEndpoint endpoint,
     Map<String, String?> query,
-    ResponseParser<T> parse,
-  ) {
-    final uri = uriFor(endpoint, query);
+    ResponseParser<T> parse, {
+    String? host,
+  }) {
+    final uri = uriFor(endpoint, query, host: host);
     return _send(
       endpoint,
       uri,
@@ -69,13 +72,17 @@ class TransitousClient {
 
   /// Builds the request URI, dropping null parameters so an unset option is
   /// absent rather than sent as an empty string.
-  Uri uriFor(TransitousEndpoint endpoint, Map<String, String?> query) {
+  Uri uriFor(
+    TransitousEndpoint endpoint,
+    Map<String, String?> query, {
+    String? host,
+  }) {
     final params = <String, String>{
       for (final entry in query.entries)
         if (entry.value != null) entry.key: entry.value!,
     };
     return Uri.https(
-      Environment.transitousHost,
+      host ?? Environment.transitousHost,
       Environment.pathFor(endpoint),
       params.isEmpty ? null : params,
     );
@@ -107,7 +114,7 @@ class TransitousClient {
         stackTrace: stackTrace,
       );
       throw TransitousApiException(
-        'Could not reach ${Environment.transitousHost}',
+        'Could not reach ${uri.authority}',
         uri: uri,
         cause: e,
       );

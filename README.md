@@ -1,30 +1,44 @@
-# Transportia
+# Transportia+
 
 <p align="center">
   <img src="assets/branding/logo_rounded.png" width="120" alt="Transportia app icon" />
 </p>
 
 <p align="center">
-  <b>Transportia</b> is a modern travel companion designed to make public transportation easier and more accessible.
+  <b>Transportia+</b> is a fork of
+  <a href="https://github.com/Wafler1/transportia">Wafler1/transportia</a>,
+  like the original app this fork was mostly programmed by LLM assisted coding. This is mostly a personal project but if you like it feel free to use it and make suggestions.
 </p>
 
 ---
 
+## What this fork adds
 
+- **Saved trips** — keep an itinerary for later, with live times refreshed.
+- **A richer search** — pick exact transport modes, via stops, transfers,
+  walking/cycling speed and step-free routes right from the search screen.
+- **A redesigned journey view** — one continuous timeline from search to
+  itinerary, with tappable stops and pull-to-refresh.
+- **Side-by-side install** — its own app ID, so it runs next to the original.
+
+## Screenshots
 
 <p align="center">
-<a href="https://peerpush.net/p/transportia"
-  target="_blank"
-  rel="noopener"
-  style="width: 230px;"
->
-  <img
-    src="https://peerpush.net/p/transportia/badge.png"
-    alt="Transportia badge"
-    style="width: 230px;"
-  />
-</a>
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="45%" alt="Search screen" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.png" width="45%" alt="Search with first-mile options" />
 </p>
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.png" width="45%" alt="Shared vehicles and other ways to travel" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.png" width="45%" alt="Saved trips" />
+</p>
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="45%" alt="Itinerary details" />
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="45%" alt="Itinerary with all stops shown" />
+</p>
+
+## Install
+
+Add the F-Droid repo: **https://blauertee.github.io/fdroid/**
 
 ## What Transportia offers
 
@@ -42,7 +56,10 @@
 - **Stay focused**
   - intentionally simple UI for quick navigation
 
-## Download
+## The original app
+
+The upstream app (not this fork) is also available on Google Play and
+IzzyOnDroid:
 
 <p align="left">
   <a href="https://play.google.com/store/apps/details?id=one.wafler.transportia">
@@ -54,7 +71,11 @@
 
 ## Suggestions, issues, or bugs
 
-Please open a GitHub issue (click-through):
+For this fork, open an issue here:
+
+- https://github.com/blauertee/transportia/issues/new/choose
+
+For the upstream app, use Wafler1's tracker instead:
 
 - https://github.com/Wafler1/transportia/issues/new/choose
 
@@ -71,4 +92,3 @@ When reporting a bug, include:
 <a href="https://maplibre.org/">MapLibre GL</a> - Interactive vector tile maps in the browser.
 
 <a href="https://lucide.dev/">Lucide</a> - Beautiful & consistent icon toolkit made by the community.
-

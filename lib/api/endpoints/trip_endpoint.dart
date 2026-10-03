@@ -38,15 +38,20 @@ class TripEndpoint {
   /// the two forms are not interchangeable: this opaque string is only
   /// accepted by the GET form, and the POST form only accepts the structured
   /// identifier — see [refreshItineraryById].
+  ///
+  /// [host] reads the id on another server than the rider's: the one a shared
+  /// trip was planned on.
   static Future<Itinerary> refreshItinerary({
     required String itineraryId,
     RefreshItineraryOptions options = const RefreshItineraryOptions(),
+    String? host,
     TransitousClient? client,
   }) {
     return (client ?? TransitousClient.instance).get(
       TransitousEndpoint.refreshItinerary,
       {'itineraryId': itineraryId, ...options.toQuery()},
       (json) => Itinerary.fromJson(json as Map<String, dynamic>),
+      host: host,
     );
   }
 

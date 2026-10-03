@@ -63,6 +63,14 @@
 			</dict>
 			<dict>
 				<key>CFBundleURLName</key>
+				<string>transportia.motis</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>motis</string>
+				</array>
+			</dict>
+			<dict>
+				<key>CFBundleURLName</key>
 				<string>transportia.geo</string>
 				<key>CFBundleURLSchemes</key>
 				<array>

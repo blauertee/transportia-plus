@@ -1,9 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../widgets/validation_toast.dart';
 import '../utils/haptics.dart';
 import '../theme/app_colors.dart';
-import '../models/my_location.dart';
 import '../theme/journey_metrics.dart';
 import '../utils/journey_colors.dart';
 import 'journey/spine_rail.dart';
@@ -20,7 +18,6 @@ class RouteFieldBox extends StatefulWidget {
     super.key,
     required this.fromController,
     required this.toController,
-    this.showMyLocationDefault = false,
     required this.accentColor,
     required this.onSwapRequested,
     required this.layerLink,
@@ -35,9 +32,8 @@ class RouteFieldBox extends StatefulWidget {
 
   final TextEditingController fromController;
   final TextEditingController toController;
-  final bool showMyLocationDefault;
   final Color accentColor;
-  final bool Function() onSwapRequested;
+  final VoidCallback onSwapRequested;
   final LayerLink layerLink;
   final bool fromLoading;
   final bool toLoading;
@@ -183,18 +179,10 @@ class _RouteFieldBoxState extends State<RouteFieldBox> {
     );
   }
 
-  /// Where the trip starts, as a value to tap rather than a field to fill:
-  /// most searches start from where the rider is, so that is what it says
-  /// until they pick somewhere else.
-  bool get _originIsMyLocation =>
-      widget.fromController.text.isEmpty && widget.showMyLocationDefault;
-
   Widget _buildOrigin() {
     final text = widget.fromController.text;
     final origin = EditableValue.origin(
-      label: _originIsMyLocation
-          ? myLocationName
-          : (text.isEmpty ? 'From' : text),
+      label: text.isEmpty ? 'From' : text,
       semanticsLabel: 'Change origin',
       onTap: widget.onFromPressed,
     );
@@ -216,14 +204,7 @@ class _RouteFieldBoxState extends State<RouteFieldBox> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        final fromText = widget.fromController.text;
-        final toText = widget.toController.text;
-        if (fromText.isEmpty && toText.isEmpty) {
-          showValidationToast(context, "Supply at least one location to swap");
-          return;
-        }
-        final swapped = widget.onSwapRequested();
-        if (!swapped) return;
+        widget.onSwapRequested();
         Haptics.mediumTick();
       },
       onTapDown: (_) => setState(() => _swapPressed = true),

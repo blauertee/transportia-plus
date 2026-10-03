@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "one.wafler.transportia"
+        applicationId = "io.github.blauertee.transportia"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:transportia/services/transitous_geocode_service.dart';
 import 'package:transportia/utils/custom_page_route.dart';
 import 'package:transportia/utils/leg_helper.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -10,8 +11,11 @@ import '../models/time_selection.dart';
 import '../widgets/custom_card.dart';
 import '../widgets/empty_state.dart';
 import '../models/itinerary.dart';
+import '../models/my_location.dart';
 import '../models/routing_options.dart';
 import '../providers/theme_provider.dart';
+import '../services/location_service.dart';
+import '../services/plan_request.dart';
 import '../services/recent_trips_service.dart';
 import '../services/routing_options_service.dart';
 import '../services/routing_service.dart';
@@ -60,6 +64,57 @@ class ItineraryListScreen extends StatefulWidget {
     this.fromSelection,
     this.toSelection,
   });
+
+  /// Shows results for a journey the routing screen did not search for, with
+  /// the routing screen underneath holding the same journey — so Back lands
+  /// where the search can be changed, not on whatever was open before.
+  ///
+  /// A [from] of My Location is resolved to the rider's position here.
+  static Future<void> openOverRoutingScreen(
+    NavigatorState navigator, {
+    required TransitousLocationSuggestion from,
+    required TransitousLocationSuggestion to,
+    required TimeSelection time,
+  }) async {
+    // Resolved once and handed to both, so the fields and the results
+    // describe the same search.
+    final options = await RoutingOptionsService.load();
+    if (!navigator.mounted) return;
+
+    // Asked before the tabs are uncovered: the shell brings the routing tab
+    // forward for it and the routing screen takes it from there.
+    PlanRequests.ask(
+      PlanRequest(from: from, to: to, time: time, options: options),
+    );
+    navigator.popUntil((route) => route.isFirst);
+
+    final FutureOr<double> fromLat;
+    final FutureOr<double> fromLon;
+    if (from.isMyLocation) {
+      final position = LocationService.currentPosition();
+      fromLat = position.then((p) => p.latitude);
+      fromLon = position.then((p) => p.longitude);
+    } else {
+      fromLat = from.lat;
+      fromLon = from.lon;
+    }
+    unawaited(
+      navigator.push(
+        CupertinoPageRoute(
+          builder: (_) => ItineraryListScreen(
+            fromLat: fromLat,
+            fromLon: fromLon,
+            toLat: to.lat,
+            toLon: to.lon,
+            timeSelection: time,
+            options: options,
+            fromSelection: from.isMyLocation ? null : from,
+            toSelection: to,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   State<ItineraryListScreen> createState() => _ItineraryListScreenState();
@@ -111,6 +166,8 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
         timeSelection: widget.timeSelection,
         options: options,
       );
+      // The rider can go back before the planner answers.
+      if (!mounted) return;
       setState(() {
         _fromLat = fromLat;
         _fromLon = fromLon;
@@ -122,6 +179,7 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
       });
       _maybeApplyInitialPreviousOffset();
     } catch (_) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }

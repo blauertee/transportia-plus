@@ -44,7 +44,8 @@ void main() {
 
   group('the origin and time', () {
     testWidgets('start from where the rider is, leaving now', (tester) async {
-      await _pump(tester, const BottomCardHost());
+      // The screen fills My Location in; the card only shows it.
+      await _pump(tester, const BottomCardHost(from: myLocationName));
 
       expect(find.text(myLocationName), findsOneWidget);
       expect(find.text('Leave now'), findsOneWidget);
@@ -56,6 +57,7 @@ void main() {
       await _pump(
         tester,
         BottomCardHost(
+          from: myLocationName,
           onFromPressed: () => from++,
           onTimeSelectionTap: () => time++,
         ),
@@ -68,12 +70,31 @@ void main() {
       expect(time, 1);
     });
 
+    testWidgets('an empty origin asks for one', (tester) async {
+      // No more standing in for My Location: that is a value of its own.
+      await _pump(tester, const BottomCardHost());
+
+      expect(find.text('From'), findsOneWidget);
+      expect(find.text(myLocationName), findsNothing);
+    });
+
     testWidgets('a picked origin is shown by name', (tester) async {
       await _pump(tester, const BottomCardHost(from: 'Hauptbahnhof'));
 
       expect(find.text('Hauptbahnhof'), findsOneWidget);
       expect(find.text(myLocationName), findsNothing);
     });
+  });
+
+  testWidgets('swap always swaps, whatever the fields hold', (tester) async {
+    var swaps = 0;
+    await _pump(tester, BottomCardHost(onSwapRequested: () => swaps++));
+
+    // Both empty included: nothing to refuse, so no toast either.
+    await tester.tap(find.bySemanticsLabel('Swap origin and destination'));
+    await tester.pump();
+    expect(swaps, 1);
+    expect(find.textContaining('Supply at least'), findsNothing);
   });
 
   testWidgets('the ends are not kept from here', (tester) async {

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:transportia/widgets/time_selection_overlay.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:geolocator/geolocator.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -42,6 +43,7 @@ import '../services/transitous_map_service.dart';
 import '../services/transitous_geocode_service.dart';
 import '../services/trip_details_service.dart';
 import '../theme/app_colors.dart';
+import '../theme/system_bars.dart';
 import '../utils/color_utils.dart';
 import '../utils/geo_utils.dart';
 import '../utils/map_framing.dart';
@@ -357,7 +359,12 @@ class _MapScreenState extends State<MapScreen>
     if (!mounted) return;
     setState(() {
       _storedOptions = stored;
-      if (!_optionsTouched) _options = stored;
+      // A plan request can arrive before this read, and judges "touched"
+      // against the placeholder; matching what was stored is not an edit.
+      if (!_optionsTouched || _options == stored) {
+        _options = stored;
+        _optionsTouched = false;
+      }
     });
   }
 
@@ -510,6 +517,7 @@ class _MapScreenState extends State<MapScreen>
     setState(() => _hasLocationPermission = granted);
 
     if (granted) {
+      _defaultOriginToMyLocation();
       unawaited(_applyPersistedLastLocation());
       unawaited(_applyDeviceLastKnown());
       if (serviceEnabled) _startPositionStream();
@@ -518,6 +526,16 @@ class _MapScreenState extends State<MapScreen>
       _posSub = null;
       _lastUserLatLng = null;
     }
+  }
+
+  /// A new search starts from where the rider is, once the app may know it.
+  ///
+  /// Only an empty origin is filled, never one already picked or handed over
+  /// by a plan request.
+  void _defaultOriginToMyLocation() {
+    if (_fromSelection != null || _fromCtrl.text.isNotEmpty) return;
+    _setControllerText(RouteFieldKind.from, myLocationName);
+    _setSelection(RouteFieldKind.from, myLocationSuggestion, notify: true);
   }
 
   Future<void> _applyPersistedLastLocation() async {
@@ -1717,12 +1735,21 @@ class _MapScreenState extends State<MapScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
     return PopScope(
       canPop: _canPop,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _stepBack();
       },
-      child: _showsMap ? _buildSplitLayout() : _buildPageLayout(),
+      child: _showsMap
+          ? AnnotatedRegion<SystemUiOverlayStyle>(
+              value: systemBarsOverMap(
+                appIsDark: theme.isDark,
+                mapIsDark: theme.isMapDark,
+              ),
+              child: _buildSplitLayout(),
+            )
+          : _buildPageLayout(),
     );
   }
 
@@ -1968,7 +1995,6 @@ class _MapScreenState extends State<MapScreen>
       isCollapsed: _isSheetCollapsed,
       fromCtrl: _fromCtrl,
       toCtrl: _toCtrl,
-      showMyLocationDefault: _hasLocationPermission,
       onUnfocus: _unfocusInputs,
       onSwapRequested: _handleSwapRequested,
       options: _options,
@@ -1998,16 +2024,14 @@ class _MapScreenState extends State<MapScreen>
     if (_isSearching) return;
 
     _unfocusInputs();
-    final needsFrom = !_hasLocationPermission;
     final fromText = _fromCtrl.text.trim();
     final toText = _toCtrl.text.trim();
-    final fromEmpty = fromText.isEmpty;
-    final toEmpty = toText.isEmpty;
-    final invalid = (needsFrom && fromEmpty) || toEmpty;
-    if (invalid) {
-      final msg = _hasLocationPermission
-          ? 'Please enter a destination'
-          : 'Please enter both locations';
+    if (fromText.isEmpty || toText.isEmpty) {
+      final msg = fromText.isEmpty && toText.isEmpty
+          ? 'Please enter both locations'
+          : fromText.isEmpty
+          ? 'Please enter a starting point'
+          : 'Please enter a destination';
       showValidationToast(context, msg);
       return;
     }
@@ -2026,7 +2050,8 @@ class _MapScreenState extends State<MapScreen>
       resolvedTo = await _resolveSelectionFromQuery(RouteFieldKind.to);
     }
 
-    if (needsFrom && resolvedFrom == null) {
+    if (!mounted) return;
+    if (resolvedFrom == null) {
       showValidationToast(context, 'Please select a starting point');
       setState(() => _isSearching = false);
       return;
@@ -2038,45 +2063,32 @@ class _MapScreenState extends State<MapScreen>
       return;
     }
 
-    Future<Position>? positionFuture;
-    FutureOr<double> fromLatSource;
-    FutureOr<double> fromLonSource;
-    double? fromLatHistory;
-    double? fromLonHistory;
-
-    if (resolvedFrom != null) {
-      fromLatHistory = resolvedFrom.lat;
-      fromLonHistory = resolvedFrom.lon;
-    } else if (_lastUserLatLng != null) {
-      fromLatHistory = _lastUserLatLng!.latitude;
-      fromLonHistory = _lastUserLatLng!.longitude;
-    } else {
-      positionFuture = LocationService.currentPosition();
+    LatLng? here;
+    if (resolvedFrom.isMyLocation || resolvedTo.isMyLocation) {
+      here = await _myLocationForSearch();
+      if (!mounted) return;
+      if (here == null) {
+        setState(() => _isSearching = false);
+        return;
+      }
     }
-
-    final toLat = resolvedTo.lat;
-    final toLon = resolvedTo.lon;
-
-    if (positionFuture != null) {
-      fromLatSource = positionFuture.then((position) => position.latitude);
-      fromLonSource = positionFuture.then((position) => position.longitude);
-    } else {
-      fromLatSource = fromLatHistory!;
-      fromLonSource = fromLonHistory!;
-    }
+    final from = resolvedFrom.isMyLocation ? here! : resolvedFrom.latLng;
+    final to = resolvedTo.isMyLocation ? here! : resolvedTo.latLng;
 
     Navigator.of(context)
         .push(
           CupertinoPageRoute(
             builder: (_) => ItineraryListScreen(
-              fromLat: fromLatSource,
-              fromLon: fromLonSource,
-              toLat: toLat,
-              toLon: toLon,
+              fromLat: from.latitude,
+              fromLon: from.longitude,
+              toLat: to.latitude,
+              toLon: to.longitude,
               timeSelection: timeSelection,
               options: _options,
-              fromSelection: resolvedFrom,
-              toSelection: resolvedTo,
+              // Not My Location: a trip saved from these results is reopened
+              // from somewhere else, where it would name the wrong place.
+              fromSelection: resolvedFrom.isMyLocation ? null : resolvedFrom,
+              toSelection: resolvedTo.isMyLocation ? null : resolvedTo,
             ),
           ),
         )
@@ -2085,6 +2097,32 @@ class _MapScreenState extends State<MapScreen>
           setState(() => _isSearching = false);
           unawaited(_loadRecentTrips());
         });
+  }
+
+  /// Where the rider is, for a search with My Location at either end, or
+  /// null — having said why — when there is nothing to plan from.
+  ///
+  /// The live fix, or a fresh one: the OS's cached position can be hours old,
+  /// and a trip planned from there is planned from the wrong place.
+  Future<LatLng?> _myLocationForSearch() async {
+    if (!await _ensurePermissionOnDemand()) {
+      if (mounted) {
+        showValidationToast(
+          context,
+          'Location permission required to use My Location',
+        );
+      }
+      return null;
+    }
+    final live = _lastUserLatLng;
+    if (live != null) return live;
+    try {
+      final fresh = await LocationService.currentPosition();
+      return LatLng(fresh.latitude, fresh.longitude);
+    } catch (_) {
+      if (mounted) showValidationToast(context, "Couldn't find where you are");
+      return null;
+    }
   }
 
   Future<TransitousLocationSuggestion?> _resolveSelectionFromQuery(
@@ -2375,11 +2413,11 @@ class _MapScreenState extends State<MapScreen>
     _openDestinationIfStillEmpty(field);
   }
 
-  /// Puts the rider's own position into [field].
+  /// Puts My Location into [field], asking for the location permission it
+  /// will need first.
   ///
   /// Not recorded as a recent place: a recent is replayed by its coordinates,
-  /// and yesterday's position filed under "My Location" would be a misleading
-  /// row in tomorrow's list.
+  /// and My Location has none of its own.
   Future<void> _applyMyLocation(RouteFieldKind field) async {
     if (!await _ensurePermissionOnDemand()) {
       if (!mounted) return;
@@ -2389,41 +2427,10 @@ class _MapScreenState extends State<MapScreen>
       );
       return;
     }
-
-    final position = await _bestKnownLatLng();
     if (!mounted) return;
-    if (position == null) {
-      showValidationToast(context, "Couldn't find where you are");
-      return;
-    }
-
-    final selection = myLocationSelectionFor(
-      field,
-      position.latitude,
-      position.longitude,
-    );
-    _setControllerText(field, selection?.name ?? '');
-    _setSelection(field, selection, notify: true);
+    _setControllerText(field, myLocationName);
+    _setSelection(field, myLocationSuggestion, notify: true);
     _openDestinationIfStillEmpty(field);
-  }
-
-  /// Where the rider is, cheapest source first.
-  ///
-  /// The picker has already closed by the time this runs, so a bare
-  /// [LocationService.currentPosition] would be several seconds of a screen
-  /// that looks like it ignored the tap. The live fix and the OS's cached one
-  /// are both immediate, and a fresh fix is only asked for when neither
-  /// exists.
-  Future<LatLng?> _bestKnownLatLng() async {
-    if (_lastUserLatLng != null) return _lastUserLatLng;
-    try {
-      final cached = await LocationService.lastKnownPosition();
-      if (cached != null) return LatLng(cached.latitude, cached.longitude);
-      final fresh = await LocationService.currentPosition();
-      return LatLng(fresh.latitude, fresh.longitude);
-    } catch (_) {
-      return null;
-    }
   }
 
   /// Picking an origin first is the common order, so the destination picker
@@ -2450,7 +2457,14 @@ class _MapScreenState extends State<MapScreen>
     _setControllerText(RouteFieldKind.to, request.to.name);
     _setSelection(RouteFieldKind.from, request.from);
     _setSelection(RouteFieldKind.to, request.to);
-    setState(() => _timeSelection = request.time);
+    setState(() {
+      _timeSelection = request.time;
+      final options = request.options;
+      if (options != null) {
+        _options = options;
+        _optionsTouched = options != _storedOptions;
+      }
+    });
     // Fields nobody can see are not filled in as far as the rider is
     // concerned, and the card may have been left down over the map.
     _expandSheetToCard();
@@ -2480,52 +2494,30 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  void _swapSelectionMetadata() {
+  void _handleSwapRequested() {
+    final fromText = _fromCtrl.text;
+    _setControllerText(RouteFieldKind.from, _toCtrl.text);
+    _setControllerText(RouteFieldKind.to, fromText);
     setState(() {
-      final tmp = _fromSelection;
+      final from = _fromSelection;
       _fromSelection = _toSelection;
-      _toSelection = tmp;
+      _toSelection = from;
     });
     unawaited(_refreshRouteMarkers());
-  }
-
-  bool _handleSwapRequested() {
-    final fromText = _fromCtrl.text;
-    final toText = _toCtrl.text;
-    if (fromText.isEmpty && toText.isEmpty) {
-      return false;
-    }
-    _suppressFromListener = true;
-    _suppressToListener = true;
-    _fromCtrl
-      ..text = toText
-      ..selection = TextSelection.collapsed(offset: toText.length);
-    _toCtrl
-      ..text = fromText
-      ..selection = TextSelection.collapsed(offset: fromText.length);
-    _suppressFromListener = false;
-    _suppressToListener = false;
-    _swapSelectionMetadata();
     _maybeFitSelectionsOnCollapsed();
-    return true;
   }
 
-  List<LatLng> _selectionLatLngs() {
-    final points = <LatLng>[];
-    final from = _effectiveFromLatLngForBounds();
-    if (from != null) points.add(from);
-    final to = _toSelection?.latLng;
-    if (to != null) points.add(to);
-    return points;
-  }
+  List<LatLng> _selectionLatLngs() => [
+    for (final selection in [_fromSelection, _toSelection])
+      if (_pointOf(selection) case final point?) point,
+  ];
 
-  LatLng? _effectiveFromLatLngForBounds() {
-    final selected = _fromSelection?.latLng;
-    if (selected != null) return selected;
-    if (!_hasLocationPermission) return null;
-    if (_lastUserLatLng == null) return null;
-    if (_fromCtrl.text.trim().isNotEmpty) return null;
-    return _lastUserLatLng;
+  /// Where a field's selection is on the map: My Location is wherever the
+  /// rider is now, and nowhere until that is known.
+  LatLng? _pointOf(TransitousLocationSuggestion? selection) {
+    if (selection == null) return null;
+    if (selection.isMyLocation) return _lastUserLatLng;
+    return selection.latLng;
   }
 
   void _maybeFitSelectionsOnCollapsed() {
@@ -2603,7 +2595,8 @@ class _MapScreenState extends State<MapScreen>
       TransitousLocationSuggestion? selection,
       String imageId,
     ) async {
-      if (selection == null) return null;
+      // The location dot already marks My Location.
+      if (selection == null || selection.isMyLocation) return null;
       try {
         return await controller.addSymbol(
           SymbolOptions(

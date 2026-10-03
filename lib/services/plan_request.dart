@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/routing_options.dart';
 import '../models/time_selection.dart';
 import 'transitous_geocode_service.dart';
 
@@ -10,11 +11,20 @@ import 'transitous_geocode_service.dart';
 /// they may want a different destination, a later train, or to walk it.
 @immutable
 class PlanRequest {
-  const PlanRequest({required this.from, required this.to, required this.time});
+  const PlanRequest({
+    required this.from,
+    required this.to,
+    required this.time,
+    this.options,
+  });
 
   final TransitousLocationSuggestion from;
   final TransitousLocationSuggestion to;
   final TimeSelection time;
+
+  /// The options the journey was searched with. Null keeps whatever the
+  /// routing screen holds.
+  final RoutingOptions? options;
 }
 
 /// The one journey waiting to be shown on the routing screen.

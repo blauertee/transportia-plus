@@ -24,6 +24,7 @@ class BottomCardHost extends StatefulWidget {
     this.onToPressed,
     this.onTimeSelectionTap,
     this.onSearch,
+    this.onSwapRequested,
     this.asPage = false,
   });
 
@@ -41,6 +42,7 @@ class BottomCardHost extends StatefulWidget {
   final VoidCallback? onToPressed;
   final VoidCallback? onTimeSelectionTap;
   final ValueChanged<TimeSelection>? onSearch;
+  final VoidCallback? onSwapRequested;
 
   @override
   State<BottomCardHost> createState() => BottomCardHostState();
@@ -77,9 +79,8 @@ class BottomCardHostState extends State<BottomCardHost> {
                   ),
             fromCtrl: fromCtrl,
             toCtrl: toCtrl,
-            showMyLocationDefault: true,
             onUnfocus: () {},
-            onSwapRequested: () => true,
+            onSwapRequested: widget.onSwapRequested ?? () {},
             options: RoutingOptions.defaults,
             storedOptions: RoutingOptions.defaults,
             capabilities: ServerConfig.fallback,

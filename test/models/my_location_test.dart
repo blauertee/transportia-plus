@@ -1,33 +1,29 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/my_location.dart';
-import 'package:transportia/models/route_field_kind.dart';
+import 'package:transportia/services/transitous_geocode_service.dart';
 
-/// Picking "My Location" means two different things depending on which end of
-/// the trip it is for, and getting that backwards is a silent failure: an
-/// origin that was pinned to a stale coordinate, or a destination the search
-/// rejects as empty.
+/// My Location is recognised by id. Getting that wrong is a silent failure:
+/// a stop called "My Location" planned from the rider's position, or the
+/// rider's position planned from 0,0.
 void main() {
-  test('an origin is left for the search to resolve', () {
-    // An empty origin already means "from where I am", read when Search is
-    // pressed — so the trip starts where you are then, not where you were
-    // when you picked.
-    expect(myLocationSelectionFor(RouteFieldKind.from, 52.52, 13.41), isNull);
+  test('the token is My Location', () {
+    expect(myLocationSuggestion.isMyLocation, isTrue);
+    expect(myLocationSuggestion.name, myLocationName);
   });
 
-  test('a destination takes the position as it stands', () {
-    // The planner rejects an empty destination outright, so this end has to
-    // carry real coordinates.
-    final selection = myLocationSelectionFor(RouteFieldKind.to, 52.52, 13.41);
-
-    expect(selection, isNotNull);
-    expect(selection!.lat, 52.52);
-    expect(selection.lon, 13.41);
-    expect(selection.name, myLocationName);
+  test('a place merely named My Location is not', () {
+    final lookalike = TransitousLocationSuggestion(
+      id: 'some-stop',
+      name: myLocationName,
+      lat: 1,
+      lon: 2,
+      type: 'STOP',
+    );
+    expect(lookalike.isMyLocation, isFalse);
   });
 
-  test('a resolved position is still recognisable as My Location', () {
-    // Recognised by id rather than by name, so a stop that happens to be
-    // called "My Location" is not mistaken for it.
-    expect(myLocationAt(52.52, 13.41).id, myLocationSuggestion.id);
+  test('no selection is not My Location', () {
+    const TransitousLocationSuggestion? none = null;
+    expect(none.isMyLocation, isFalse);
   });
 }

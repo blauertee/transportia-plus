@@ -25,4 +25,34 @@ void main() {
       expect(style.systemNavigationBarColor, const Color(0x00000000));
     }
   });
+
+  group('over a map', () {
+    for (final appIsDark in [false, true]) {
+      for (final mapIsDark in [false, true]) {
+        test('app dark: $appIsDark, map dark: $mapIsDark', () {
+          final style = systemBarsOverMap(
+            appIsDark: appIsDark,
+            mapIsDark: mapIsDark,
+          );
+          // Icons sit on the map, so a dark map wants light ones.
+          expect(
+            style.statusBarIconBrightness,
+            mapIsDark ? Brightness.light : Brightness.dark,
+          );
+          expect(
+            style.statusBarBrightness,
+            mapIsDark ? Brightness.dark : Brightness.light,
+          );
+          // The bottom of the screen is the sheet, which follows the app.
+          final app = systemBarsFor(isDark: appIsDark);
+          expect(
+            style.systemNavigationBarIconBrightness,
+            app.systemNavigationBarIconBrightness,
+          );
+          expect(style.statusBarColor, const Color(0x00000000));
+          expect(style.systemNavigationBarColor, const Color(0x00000000));
+        });
+      }
+    }
+  });
 }

@@ -62,6 +62,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Color get accentColor => _accentColor;
   String get mapStyle => _mapStyle;
+
+  /// Whether the map is drawn dark. Only the dark style is; the default style
+  /// is a light map, whatever the app theme.
+  bool get isMapDark => _mapStyle == 'dark';
   String get mapStyleUrl =>
       mapStyleUrls[_mapStyle] ?? mapStyleUrls[defaultMapStyle]!;
   AppThemeMode get appThemeMode => _appThemeMode;

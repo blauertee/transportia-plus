@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:transportia/widgets/load_more_button.dart';
+import 'package:transportia/widgets/share_trip_sheet.dart';
 import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
@@ -385,7 +384,6 @@ class ItineraryDetailScreen extends StatefulWidget {
 }
 
 class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
-  bool _isSharing = false;
   late Itinerary _itinerary;
   DateTime? _lastUpdated;
   bool _isRefreshing = false;
@@ -501,29 +499,24 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   /// Re-plans the same journey, so the user has somewhere to go when the
   /// stored connection no longer works.
   void _findAlternatives(SavedTrip trip, {required DateTime departAt}) {
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryListScreen(
-          fromLat: trip.fromLat,
-          fromLon: trip.fromLon,
-          toLat: trip.toLat,
-          toLon: trip.toLon,
-          fromSelection: TransitousLocationSuggestion(
-            id: 'saved-from-${trip.id}',
-            name: trip.fromName,
-            lat: trip.fromLat,
-            lon: trip.fromLon,
-            type: 'PLACE',
-          ),
-          toSelection: TransitousLocationSuggestion(
-            id: 'saved-to-${trip.id}',
-            name: trip.toName,
-            lat: trip.toLat,
-            lon: trip.toLon,
-            type: 'PLACE',
-          ),
-          timeSelection: TimeSelection(dateTime: departAt, isArriveBy: false),
+    unawaited(
+      ItineraryListScreen.openOverRoutingScreen(
+        Navigator.of(context),
+        from: TransitousLocationSuggestion(
+          id: 'saved-from-${trip.id}',
+          name: trip.fromName,
+          lat: trip.fromLat,
+          lon: trip.fromLon,
+          type: 'PLACE',
         ),
+        to: TransitousLocationSuggestion(
+          id: 'saved-to-${trip.id}',
+          name: trip.toName,
+          lat: trip.toLat,
+          lon: trip.toLon,
+          type: 'PLACE',
+        ),
+        time: TimeSelection(dateTime: departAt, isArriveBy: false),
       ),
     );
   }
@@ -687,7 +680,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         ),
       () => LoadMoreButton(
         onTap: _shareItinerary,
-        isLoading: _isSharing,
+        isLoading: false,
         label: 'Share this trip',
         icon: LucideIcons.share2,
       ),
@@ -762,39 +755,14 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     );
   }
 
-  Future<void> _shareItinerary() async {
-    if (_isSharing) return;
-
-    final legs = _itinerary.legs;
-    if (legs.isEmpty) {
-      debugPrint('Cannot share itinerary without any legs.');
-      return;
-    }
-
-    setState(() => _isSharing = true);
-
-    try {
-      final firstLeg = legs.first;
-      final lastLeg = legs.last;
-
-      final payload = jsonEncode({
-        'from': {'lat': firstLeg.fromLat, 'lon': firstLeg.fromLon},
-        'to': {'lat': lastLeg.toLat, 'lon': lastLeg.toLon},
-        'time': _itinerary.startTime.toIso8601String(),
-      });
-
-      final encoded = base64Url.encode(utf8.encode(payload));
-      final shareUrl = 'https://transportia.wafler.one/trip/$encoded';
-
-      await SharePlus.instance.share(ShareParams(text: shareUrl));
-    } catch (error, stackTrace) {
-      debugPrint('Failed to share itinerary: $error');
-      debugPrint('$stackTrace');
-    } finally {
-      if (mounted) {
-        setState(() => _isSharing = false);
-      }
-    }
+  void _shareItinerary() {
+    if (_itinerary.legs.isEmpty) return;
+    showShareTripSheet(
+      context,
+      itinerary: _itinerary,
+      fromName: widget.fromName ?? widget.savedTrip?.fromName,
+      toName: widget.toName ?? widget.savedTrip?.toName,
+    );
   }
 }
 

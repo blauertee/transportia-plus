@@ -1,0 +1,98 @@
+name: "Dev Build"
+
+# Lives only on the dev-build branch, so it never reaches master or the
+# upstream pull request. Every push publishes a GitHub Release whose APKs
+# anyone can download without a GitHub account.
+on:
+  push:
+    branches:
+      - dev-build
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set Up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: oracle
+          java-version: '25'
+
+      - name: Set Up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          channel: stable
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+
+      - name: Create key.properties
+        run: |
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "storeFile=keystore.jks" >> android/key.properties
+
+      # The versionCode is the run number, not the pubspec build number, so
+      # every dev build installs over the previous one. It restarts at 1 if
+      # this file is renamed; phones would then refuse the update.
+      - name: Get version
+        run: |
+          APP_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d '[:space:]')
+          APP_VERSION_NAME="${APP_VERSION%%+*}-dev.${{ github.run_number }}"
+          echo "APP_VERSION_NAME=$APP_VERSION_NAME" >> $GITHUB_ENV
+          echo "APP_VERSION_CODE=${{ github.run_number }}" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v$APP_VERSION_NAME" >> $GITHUB_ENV
+
+      - name: Build APKs
+        run: |
+          flutter build apk --release --split-per-abi \
+            --target-platform android-arm,android-arm64 \
+            --build-name "$APP_VERSION_NAME" \
+            --build-number "$APP_VERSION_CODE" \
+            --split-debug-info=build/symbols
+
+      # Fixed asset names keep
+      # releases/latest/download/transportia-arm64-v8a.apk a stable link.
+      - name: Rename APK files
+        run: |
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk transportia-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk transportia-arm64-v8a.apk
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            transportia-arm64-v8a.apk \
+            transportia-armeabi-v7a.apk \
+            --title "Transportia $APP_VERSION_NAME" \
+            --notes "Dev build from branch '${{ github.ref_name }}' at commit ${{ github.sha }}." \
+            --target "${{ github.sha }}" \
+            --latest
+
+      # Runs after the release exists, so fdroid's Publish can download it.
+      - name: Update F-Droid repo
+        env:
+          FDROID_DEPLOY_KEY: ${{ secrets.FDROID_DEPLOY_KEY }}
+        run: |
+          .github/scripts/update-fdroid-source.sh "$RELEASE_TAG" "${{ github.sha }}" \
+            transportia-arm64-v8a.apk transportia-armeabi-v7a.apk

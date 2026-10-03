@@ -19,3 +19,18 @@ SystemUiOverlayStyle systemBarsFor({required bool isDark}) {
     systemNavigationBarIconBrightness: icons,
   );
 }
+
+/// The bars on a screen whose map runs up under the status bar.
+///
+/// The status bar's icons sit on the map, so they follow the map's style — the
+/// app theme and the map style are chosen separately, and a dark app over the
+/// default map otherwise gets white icons on a pale map. The navigation bar
+/// keeps the app's: Flutter reads it from what is at the bottom of the screen,
+/// and there that is the sheet, not the map.
+SystemUiOverlayStyle systemBarsOverMap({
+  required bool appIsDark,
+  required bool mapIsDark,
+}) => systemBarsFor(isDark: appIsDark).copyWith(
+  statusBarIconBrightness: mapIsDark ? Brightness.light : Brightness.dark,
+  statusBarBrightness: mapIsDark ? Brightness.dark : Brightness.light,
+);
