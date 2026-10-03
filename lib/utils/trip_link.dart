@@ -11,6 +11,18 @@ const String _kLegacyTripLinkScheme = 'transportia';
 /// The path every trip link carries after the scheme: `motis://trip?…`.
 const String _kTripLinkHost = 'trip';
 
+/// Where shared trips point on the web, so a messenger shows them as links.
+///
+/// Android opens these straight in Transportia once it has verified the
+/// domain against `/.well-known/assetlinks.json` there. Anywhere else the page
+/// at this path hands the trip on as `motis://trip`, to whichever MOTIS app
+/// is installed, or to the MOTIS web app when none is.
+const String kTripShareHost = 'blauertee.github.io';
+const String kTripSharePath = '/fw/';
+
+/// The paths that page answers on: GitHub Pages serves it at all three.
+const Set<String> _kTripSharePaths = {'/fw', '/fw/', '/fw/index.html'};
+
 /// A hostname, optionally with a port. A link is untrusted input, and the
 /// host is where the app will send a request, so anything else — a path, a
 /// scheme, credentials — makes the link invalid rather than being cleaned up.
@@ -38,6 +50,13 @@ class TripLink {
     queryParameters: {'itineraryId': itineraryId, 'host': ?host},
   );
 
+  /// The link to share: an https link that opens in Transportia directly, or
+  /// in any MOTIS app through the page it points to. See [kTripShareHost].
+  Uri get shareLink => Uri.https(kTripShareHost, kTripSharePath, {
+    'itineraryId': itineraryId,
+    'host': ?host,
+  });
+
   /// The same trip in the web app every MOTIS server serves at its root, for
   /// someone without a MOTIS app. Null when the link names no server.
   Uri? get webLink =>
@@ -45,11 +64,7 @@ class TripLink {
 
   /// Reads a trip link, or null when [uri] is not one or is malformed.
   static TripLink? tryParse(Uri uri) {
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme != kTripLinkScheme && scheme != _kLegacyTripLinkScheme) {
-      return null;
-    }
-    if (uri.host.toLowerCase() != _kTripLinkHost) return null;
+    if (!_isAppLink(uri) && !_isShareLink(uri)) return null;
 
     // Base64 has no spaces, but `+` reads back as one when a messenger
     // unescapes `%2B` before the query is parsed.
@@ -61,4 +76,20 @@ class TripLink {
     if (!_kHostPattern.hasMatch(host)) return null;
     return TripLink(itineraryId: id, host: host.toLowerCase());
   }
+
+  static bool _isAppLink(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != kTripLinkScheme && scheme != _kLegacyTripLinkScheme) {
+      return false;
+    }
+    return uri.host.toLowerCase() == _kTripLinkHost;
+  }
+
+  /// Exactly the share page: https, that host, that path. Anything close —
+  /// http, a lookalike domain, a neighbouring path — is not ours.
+  static bool _isShareLink(Uri uri) =>
+      uri.scheme.toLowerCase() == 'https' &&
+      uri.host.toLowerCase() == kTripShareHost &&
+      !uri.hasPort &&
+      _kTripSharePaths.contains(uri.path);
 }

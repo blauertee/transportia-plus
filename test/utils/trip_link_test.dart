@@ -26,6 +26,16 @@ void main() {
       expect(uri.queryParameters['itineraryId'], _id);
     });
 
+    test('the share link is https, on the share page', () {
+      final uri = link.shareLink;
+      expect(uri.scheme, 'https');
+      expect(uri.host, 'blauertee.github.io');
+      expect(uri.path, '/fw/');
+      expect(uri.queryParameters['itineraryId'], _id);
+      expect(uri.queryParameters['host'], 'api.transitous.org');
+      expect(uri.toString(), isNot(contains('+')));
+    });
+
     test('a link without a server has no web link', () {
       const bare = TripLink(itineraryId: _id);
       expect(bare.webLink, isNull);
@@ -43,6 +53,29 @@ void main() {
 
     test('a + that came back as a space is a + again', () {
       final uri = Uri.parse('motis://trip?itineraryId=CmEh+w/UoXI9CSkA=');
+      expect(TripLink.tryParse(uri)!.itineraryId, _id);
+    });
+
+    test('reads back the share link it built', () {
+      const link = TripLink(itineraryId: _id, host: 'api.transitous.org');
+      final read = TripLink.tryParse(Uri.parse(link.shareLink.toString()))!;
+      expect(read.itineraryId, _id);
+      expect(read.host, 'api.transitous.org');
+    });
+
+    for (final path in ['/fw', '/fw/', '/fw/index.html']) {
+      test('reads the share page at $path', () {
+        final uri = Uri.parse(
+          'https://blauertee.github.io$path?itineraryId=abc&host=api.transitous.org',
+        );
+        expect(TripLink.tryParse(uri)!.itineraryId, 'abc');
+      });
+    }
+
+    test('a + that came back as a space is a + on the share page too', () {
+      final uri = Uri.parse(
+        'https://blauertee.github.io/fw/?itineraryId=CmEh+w/UoXI9CSkA=',
+      );
       expect(TripLink.tryParse(uri)!.itineraryId, _id);
     });
 
@@ -79,6 +112,25 @@ void main() {
       (
         'a server with a scheme',
         'motis://trip?itineraryId=a&host=http://evil.example',
+      ),
+      (
+        'the share page over http',
+        'http://blauertee.github.io/fw/?itineraryId=a',
+      ),
+      ('a neighbouring path', 'https://blauertee.github.io/fwx?itineraryId=a'),
+      (
+        'another page on the domain',
+        'https://blauertee.github.io/other/?itineraryId=a',
+      ),
+      (
+        'a lookalike domain',
+        'https://blauertee.github.io.evil.example/fw/?itineraryId=a',
+      ),
+      ('the path on another domain', 'https://evil.example/fw/?itineraryId=a'),
+      ('another port', 'https://blauertee.github.io:8443/fw/?itineraryId=a'),
+      (
+        'no id on the share page',
+        'https://blauertee.github.io/fw/?host=api.transitous.org',
       ),
     ]) {
       test('is refused with $why', () {

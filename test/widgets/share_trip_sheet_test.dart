@@ -64,15 +64,30 @@ void main() {
         InMemorySharedPreferencesAsync.empty();
   });
 
-  testWidgets('the app link opens in a MOTIS app', (tester) async {
+  testWidgets('the app link is an https link to the share page', (
+    tester,
+  ) async {
     final shared = await _pump(tester, _trip(id: _id));
     await _tap(tester, 'App link');
 
+    // https, so a messenger shows it as a link at all.
     final link = Uri.parse(shared.texts.single);
-    expect(link.scheme, 'motis');
+    expect(link.scheme, 'https');
+    expect(link.host, 'blauertee.github.io');
+    expect(link.path, '/fw/');
     expect(link.queryParameters['itineraryId'], _id);
     expect(link.queryParameters['host'], 'api.transitous.org');
     expect(shared.dismissed, 1);
+  });
+
+  testWidgets('the app and web links are different links', (tester) async {
+    final shared = await _pump(tester, _trip(id: _id));
+    await _tap(tester, 'App link');
+    await _tap(tester, 'Web link');
+
+    expect(Uri.parse(shared.texts.first).host, 'blauertee.github.io');
+    // Straight to the MOTIS web app, not through the share page.
+    expect(Uri.parse(shared.texts.last).host, 'api.transitous.org');
   });
 
   testWidgets('the web link opens on the rider\'s server', (tester) async {
