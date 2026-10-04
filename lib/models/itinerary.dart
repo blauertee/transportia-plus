@@ -16,6 +16,18 @@ export 'transitous/place.dart' show TransitPlace;
 export 'transitous/rental.dart' show Rental, RentalVehicleType;
 export 'transitous/step_instruction.dart' show StepInstruction;
 
+/// Modes the traveller covers under their own power or in their own vehicle,
+/// as opposed to riding a service.
+const Set<String> kStreetModes = {
+  'WALK',
+  'BIKE',
+  'CAR',
+  'CAR_PARKING',
+  'CAR_DROPOFF',
+  'RENTAL',
+  'ODM',
+};
+
 /// A stop a leg passes through without the rider boarding or alighting.
 ///
 /// MOTIS returns the same `Place` object here as for leg endpoints, so this is
@@ -181,17 +193,25 @@ class Itinerary {
   /// This is the stretch the planner calls the pre-transit offset, and which a
   /// refresh has to find again. Empty when the journey starts on a ride or has
   /// none at all.
+  ///
+  /// Told apart by mode rather than trip id: a ride a refresh could not find
+  /// again comes back without its trip id, and is still a ride.
   List<Leg> get firstMileLegs {
-    final firstRide = legs.indexWhere((leg) => leg.isRide);
+    final firstRide = legs.indexWhere((leg) => !leg.isStreet);
     return firstRide <= 0 ? const [] : legs.sublist(0, firstRide);
   }
 
   /// The street legs after the last ride, as [firstMileLegs] at the other end.
   List<Leg> get lastMileLegs {
-    final lastRide = legs.lastIndexWhere((leg) => leg.isRide);
+    final lastRide = legs.lastIndexWhere((leg) => !leg.isStreet);
     if (lastRide < 0 || lastRide == legs.length - 1) return const [];
     return legs.sublist(lastRide + 1);
   }
+
+  /// Everything from the first ride to the last: the rides and the changes
+  /// between them.
+  List<Leg> get rideLegs =>
+      legs.sublist(firstMileLegs.length, legs.length - lastMileLegs.length);
 
   /// Returns a copy of this itinerary with [newLegs] substituted in,
   /// recomputing the fields derived from the leg list (e.g. after a
@@ -493,6 +513,9 @@ class Leg {
   /// A ride on a scheduled service, which is what carries a trip id. Street
   /// legs and shared vehicles have none.
   bool get isRide => tripId?.isNotEmpty ?? false;
+
+  /// Covered on foot, by bike, by car or on a shared vehicle.
+  bool get isStreet => kStreetModes.contains(mode);
 
   String get fromName => from.name;
   String get toName => to.name;
