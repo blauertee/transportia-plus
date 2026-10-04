@@ -218,7 +218,9 @@ class Itinerary {
   /// real-time refresh updates individual legs).
   Itinerary withLegs(List<Leg> newLegs) {
     if (newLegs.isEmpty) return this;
-    final transitLegCount = newLegs.where((l) => l.mode != 'WALK').length;
+    // Rides, not everything that is not a walk: a bike or a shared scooter
+    // to the station is no change of vehicle.
+    final transitLegCount = newLegs.where((l) => !l.isStreet).length;
     return Itinerary(
       duration: newLegs.last.endTime
           .difference(newLegs.first.startTime)
@@ -530,11 +532,14 @@ class Leg {
   String? get fromScheduledTrack => from.scheduledTrack;
   String? get toScheduledTrack => to.scheduledTrack;
 
+  /// This leg as planned, but no longer possible.
+  Leg withCancelled() => withRealTimeFrom(this, cancelled: true);
+
   /// Returns a copy of this leg with the real-time fields (times, delay,
   /// cancellation, track, intermediate stops, alerts) refreshed from
   /// [fresh], while keeping itinerary-specific context (fare indices,
-  /// geometry) from this leg.
-  Leg withRealTimeFrom(Leg fresh) {
+  /// geometry) from this leg. [cancelled] overrides the fresh leg's own.
+  Leg withRealTimeFrom(Leg fresh, {bool? cancelled}) {
     return Leg(
       mode: mode,
       from: from.mergeRealTime(fresh.from),
@@ -567,11 +572,15 @@ class Leg {
       tripTo: fresh.tripTo ?? tripTo,
       category: category,
       source: source,
-      cancelled: fresh.cancelled,
+      cancelled: cancelled ?? fresh.cancelled,
       intermediateStops: fresh.intermediateStops.isNotEmpty
           ? fresh.intermediateStops
           : intermediateStops,
-      alerts: fresh.alerts.isNotEmpty ? fresh.alerts : alerts,
+      // A ride a refresh could not find again comes back as a stand-in
+      // without its trip id, whose only alert is the server's error text.
+      alerts: fresh.alerts.isNotEmpty && (fresh.isRide || !fresh.cancelled)
+          ? fresh.alerts
+          : alerts,
       legGeometry: legGeometry,
       steps: steps,
       rental: rental,

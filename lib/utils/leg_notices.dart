@@ -41,8 +41,7 @@ List<LegNotice> legNotices(Leg leg, {Changeover? changeover}) {
   final missed = changeover?.isMissed ?? false;
   final notices = <LegNotice>[
     if (missed) const LegNotice(NoticeSeverity.problem, kMissedChangeMessage),
-    if (leg.cancelled)
-      const LegNotice(NoticeSeverity.problem, 'This service is cancelled.'),
+    if (leg.cancelled) LegNotice(NoticeSeverity.problem, _cancelledTitle(leg)),
     if (!leg.cancelled && leg.from.cancelled)
       LegNotice(
         NoticeSeverity.problem,
@@ -92,11 +91,26 @@ int _skippedStops(Leg leg) {
   return leg.intermediateStops.where((stop) => stop.cancelled).length;
 }
 
+/// What a cancelled leg means for the rider, which depends on what the leg
+/// is: a service that will not run, a shared vehicle that is no longer there,
+/// or a way on foot the street network no longer has.
+String _cancelledTitle(Leg leg) {
+  if (!leg.isStreet) return 'This service is cancelled.';
+  if (leg.mode == TransitMode.rental.wireName) {
+    return 'No shared vehicle is within reach any more.';
+  }
+  return 'There is no way through here any more.';
+}
+
 /// The operator's alerts on the leg and on every stop it calls at, each once.
+///
+/// A cancelled street leg is the stand-in a refresh sends for a stretch it
+/// could not route again, and its only alert is the server's own error text
+/// ("no offset found"), not anything an operator said.
 Iterable<LegNotice> _alertNotices(Leg leg) {
   final seen = <String>{};
   final all = [
-    ...leg.alerts,
+    if (!(leg.isStreet && leg.cancelled)) ...leg.alerts,
     ...leg.from.alerts,
     for (final stop in leg.intermediateStops) ...stop.alerts,
     ...leg.to.alerts,
