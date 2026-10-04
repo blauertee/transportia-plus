@@ -239,6 +239,29 @@ void main() {
       },
     );
 
+    test(
+      'a stand-in keeps the ride even when it has no stored shape',
+      () async {
+        final shapeless = _itinerary([
+          _leg('SUBWAY', tripId: 'u5', from: 5, to: 15),
+          _leg('WALK', from: 15, to: 18),
+          _leg('SUBURBAN', tripId: 's3', from: 20, to: 30),
+        ]);
+        final result = await _refresh(
+          shapeless,
+          _itinerary([
+            _leg('SUBWAY', tripId: 'u5', from: 5, to: 15),
+            _leg('WALK', from: 15, to: 18),
+            _leg('SUBURBAN', from: 20, to: 30, cancelled: true),
+          ]),
+        );
+        final ride = result.itinerary.legs.last;
+
+        expect(ride.tripId, 's3');
+        expect(ride.cancelled, isTrue);
+      },
+    );
+
     test('a change with no way through is a changed connection', () async {
       // A footpath the server cannot route — a lift out of order on the only
       // step-free path — comes back cancelled. Unlike the first mile, that is
