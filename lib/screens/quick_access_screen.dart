@@ -180,7 +180,7 @@ class _QuickAccessScreenState extends State<QuickAccessScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
                 child: Text(
-                  'The icons on the search card switch a whole section on or '
+                  'The icons on the routing card switch a whole section on or '
                   'off. Hold a mode and drag it to move it, or tap it to pick '
                   'where it goes; tap the pencil to rename a section or '
                   'change its icon.',

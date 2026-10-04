@@ -119,30 +119,44 @@ class OptionsRow extends StatelessWidget {
       ],
     );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
+    final head = Padding(
+      padding: EdgeInsets.only(top: 11, bottom: below == null ? 11 : 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          onTap == null
-              ? row
-              : GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onTap,
-                  child: row,
-                ),
+          row,
           if (description != null)
             Padding(
               padding: const EdgeInsets.only(left: 26, top: 3),
               child: OptionsNote(description!),
             ),
-          if (below != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 26, top: 8),
-              child: below,
-            ),
         ],
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The row, its description and the space around them are one
+        // target: a rider taps the card, not the arrow at its end. What is
+        // [below] is left out, since it holds controls of its own.
+        if (onTap case final onTap?)
+          Semantics(
+            button: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: head,
+            ),
+          )
+        else
+          head,
+        if (below != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 26, top: 8, bottom: 11),
+            child: below,
+          ),
+      ],
     );
   }
 }
