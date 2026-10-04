@@ -26,6 +26,8 @@ than against hand-written JSON that agrees with our assumptions.
 | `rentals_groups.json` | `/api/v1/rentals?withProviders=false` — every provider group, nothing else (2026-09-29) |
 | `health.json` | `/api/v1/health` |
 | `debug_transfers.json` | `/api/debug/transfers` for Alexanderplatz |
+| `refresh_itinerary_bike.json` | `/api/v6/refresh-itinerary` for the #35 journey (bike → S3 → bike, Berlin), `preTransitModes=BIKE&postTransitModes=BIKE`, `maxPre/PostTransitTime=3600`, full geometry (2026-10-04, `v2.11.3`) |
+| `plan_itinerary_rental.json` | one itinerary from `/api/v6/plan` Kottbusser Tor area → Alexanderplatz, `preTransitModes=RENTAL&preTransitRentalFormFactors=SCOOTER_STANDING`: walk, Dott scooter, walk, U5, walk (2026-10-04, `v2.11.3`) |
 
 ## Trimming
 

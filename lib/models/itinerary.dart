@@ -186,7 +186,25 @@ class Itinerary {
 
   /// Whether any leg is a ride on a scheduled service. Walking, cycling and
   /// shared vehicles carry no trip id.
-  bool get hasTransit => legs.any((leg) => leg.tripId?.isNotEmpty ?? false);
+  bool get hasTransit => legs.any((leg) => leg.isRide);
+
+  /// The street legs before the first ride: the way to the first station, on
+  /// foot, by bike or on a shared vehicle (a walk to it, the ride, a walk on).
+  ///
+  /// This is the stretch the planner calls the pre-transit offset, and which a
+  /// refresh has to find again. Empty when the journey starts on a ride or has
+  /// none at all.
+  List<Leg> get firstMileLegs {
+    final firstRide = legs.indexWhere((leg) => leg.isRide);
+    return firstRide <= 0 ? const [] : legs.sublist(0, firstRide);
+  }
+
+  /// The street legs after the last ride, as [firstMileLegs] at the other end.
+  List<Leg> get lastMileLegs {
+    final lastRide = legs.lastIndexWhere((leg) => leg.isRide);
+    if (lastRide < 0 || lastRide == legs.length - 1) return const [];
+    return legs.sublist(lastRide + 1);
+  }
 
   /// Returns a copy of this itinerary with [newLegs] substituted in,
   /// recomputing the fields derived from the leg list (e.g. after a
@@ -503,6 +521,10 @@ class Leg {
   /// Typed form of [mode]; null when the server sends a mode this build does
   /// not know.
   TransitMode? get transitMode => TransitMode.fromWire(mode);
+
+  /// A ride on a scheduled service, which is what carries a trip id. Street
+  /// legs and shared vehicles have none.
+  bool get isRide => tripId?.isNotEmpty ?? false;
 
   String get fromName => from.name;
   String get toName => to.name;
