@@ -171,6 +171,10 @@ class Itinerary {
 
   bool get hasTicketInfo => ticketInfo.isNotEmpty;
 
+  /// Whether any leg is a ride on a scheduled service. Walking, cycling and
+  /// shared vehicles carry no trip id.
+  bool get hasTransit => legs.any((leg) => leg.tripId?.isNotEmpty ?? false);
+
   /// Returns a copy of this itinerary with [newLegs] substituted in,
   /// recomputing the fields derived from the leg list (e.g. after a
   /// real-time refresh updates individual legs).
