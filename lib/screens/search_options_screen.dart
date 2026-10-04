@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../environment.dart';
 import '../models/routing_options.dart';
@@ -11,8 +12,10 @@ import '../services/rental_providers_service.dart';
 import '../services/routing_options_service.dart';
 import '../services/server_capabilities_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/custom_page_route.dart';
 import '../utils/place_bias.dart';
 import '../widgets/app_page_scaffold.dart';
+import 'quick_access_screen.dart';
 import 'search_options/search_options_backend.dart';
 import 'search_options/search_options_place_bias.dart';
 import 'search_options/search_options_rental_providers.dart';
@@ -148,6 +151,26 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
       ),
       if (_capabilities.hasElevation)
         SearchOptionsInclineGroup(options: _options, onChanged: _update),
+      OptionsGroup(
+        title: 'Search card',
+        children: [
+          OptionsRow(
+            icon: LucideIcons.layoutGrid,
+            label: 'Quick access icons',
+            trailing: Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: AppColors.black.withValues(alpha: 0.3),
+            ),
+            description:
+                'Which modes each icon on the search card switches, and '
+                'what the sections are called.',
+            onTap: () => Navigator.of(
+              context,
+            ).push(CustomPageRoute<void>(child: const QuickAccessScreen())),
+          ),
+        ],
+      ),
       if (Environment.showBackendSettings) const _AdvancedSection(),
     ];
     return [

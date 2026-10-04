@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:transportia/models/quick_access_layout.dart';
+import 'package:transportia/models/street_leg_choice.dart';
 import 'package:transportia/models/routing_options.dart';
 import 'package:transportia/models/transit_mode_group.dart';
 import 'package:transportia/models/transitous/enums.dart';
@@ -26,8 +27,10 @@ class _Host extends StatefulWidget {
     required this.initial,
     this.providerNames = const [],
     this.opening = SearchOptionsOpening.closed,
+    this.layout,
   });
 
+  final QuickAccessLayout? layout;
   final RoutingOptions initial;
   final List<String> providerNames;
   final SearchOptionsOpening opening;
@@ -65,6 +68,7 @@ class _HostState extends State<_Host> {
               onLimitToMyProvidersChanged: (value) =>
                   setState(() => limitToMyProviders = value),
               opening: opening,
+              layout: widget.layout,
             ),
           ),
         ),
@@ -78,6 +82,7 @@ Future<_HostState> _pumpSpine(
   RoutingOptions initial = RoutingOptions.defaults,
   List<String> providerNames = const [],
   SearchOptionsOpening opening = SearchOptionsOpening.closed,
+  QuickAccessLayout? layout,
 }) async {
   // Tall enough that an expanded stage is on screen and so tappable; the
   // default 800x600 surface would push the last stage past the bottom.
@@ -87,7 +92,12 @@ Future<_HostState> _pumpSpine(
   addTearDown(tester.view.resetDevicePixelRatio);
 
   await tester.pumpWidget(
-    _Host(initial: initial, providerNames: providerNames, opening: opening),
+    _Host(
+      initial: initial,
+      providerNames: providerNames,
+      opening: opening,
+      layout: layout,
+    ),
   );
   return tester.state<_HostState>(find.byType(_Host));
 }
@@ -1042,6 +1052,27 @@ void main() {
         _summary('Walk, own bike, own car, other', '1 h 30'),
       );
       expect(text.maxLines, 2);
+    });
+  });
+
+  group('follows the rider\'s sections', () {
+    final rearranged = QuickAccessLayout.defaults
+        .withStreetGroup(
+          QuickAccessLayout.defaults.street.first.copyWith(title: 'On foot'),
+        )
+        .moveStreet(const StreetMode(TransitMode.bike), 'walk');
+
+    testWidgets('names and icons as set, empty ones left out', (tester) async {
+      await _pumpSpine(tester, layout: rearranged);
+      await _open(tester, 'TO THE STATION');
+      expect(_pick('On foot'), findsOneWidget);
+      // Own bike lost its only mode: no icon that would do nothing.
+      expect(_pick('Own bike'), findsNothing);
+    });
+
+    testWidgets('the summary reads the headings as set', (tester) async {
+      await _pumpSpine(tester, layout: rearranged);
+      expect(_summary('On foot', '15 min'), findsNWidgets(2));
     });
   });
 }

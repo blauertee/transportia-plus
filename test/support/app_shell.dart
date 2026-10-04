@@ -6,11 +6,16 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 import 'package:transportia/providers/theme_provider.dart';
 
 /// Pumps [home] as the first page of an app shell like app.dart's: theme,
-/// localizations and a navigator, on a phone-sized surface.
-Future<void> pumpInAppShell(WidgetTester tester, Widget home) async {
+/// localizations and a navigator, on a phone-sized surface unless [size]
+/// says otherwise.
+Future<void> pumpInAppShell(
+  WidgetTester tester,
+  Widget home, {
+  Size size = const Size(400, 860),
+}) async {
   SharedPreferencesAsyncPlatform.instance =
       InMemorySharedPreferencesAsync.empty();
-  tester.view.physicalSize = const Size(400, 860);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

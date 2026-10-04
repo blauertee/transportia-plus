@@ -142,6 +142,151 @@ class QuickAccessLayout {
     ),
   ];
 
+  /// This layout with the transit section of [group]'s id replaced by it:
+  /// a rename or a new icon.
+  QuickAccessLayout withTransitGroup(QuickGroup<TransitMode> group) =>
+      QuickAccessLayout(
+        transit: [for (final g in transit) g.id == group.id ? group : g],
+        street: street,
+      );
+
+  /// [withTransitGroup] for a street section.
+  QuickAccessLayout withStreetGroup(QuickGroup<StreetItem> group) =>
+      QuickAccessLayout(
+        transit: transit,
+        street: [for (final g in street) g.id == group.id ? group : g],
+      );
+
+  /// [mode] moved into the transit section [toId], or into Other when that
+  /// is [otherId]. Sections keep the modes in the pickers' order, so where it
+  /// lands within one is not the rider's to choose.
+  QuickAccessLayout moveTransit(TransitMode mode, String toId) =>
+      QuickAccessLayout(
+        transit: [
+          for (final g in transit)
+            g.copyWith(
+              items: [
+                for (final m in TransitModeGroup.allSelectable)
+                  if (m == mode ? g.id == toId : g.items.contains(m)) m,
+              ],
+            ),
+        ],
+        street: street,
+      );
+
+  /// [item] moved into the street section [toId], or into Other.
+  QuickAccessLayout moveStreet(StreetItem item, String toId) =>
+      QuickAccessLayout(
+        transit: transit,
+        street: [
+          for (final g in street)
+            g.copyWith(
+              items: [
+                for (final i in StreetItem.all)
+                  if (i == item ? g.id == toId : g.items.contains(i)) i,
+              ],
+            ),
+        ],
+      );
+
+  Map<String, dynamic> toJson() => {
+    'transit': [
+      for (final g in transit)
+        _groupJson(g, [for (final mode in g.items) mode.wireName]),
+    ],
+    'street': [
+      for (final g in street)
+        _groupJson(g, [for (final item in g.items) item.key]),
+    ],
+  };
+
+  static Map<String, dynamic> _groupJson(QuickGroup g, List<String> items) => {
+    'id': g.id,
+    'title': g.title,
+    'icon': g.iconName,
+    'items': items,
+  };
+
+  /// Reads a stored layout section by section: a section that is missing or
+  /// unreadable takes its default, without the rest following it. The
+  /// sections and their order are always the defaults'; an item claimed by
+  /// an earlier section is not claimed again, so nothing sits in two.
+  factory QuickAccessLayout.fromJson(Map<String, dynamic> json) {
+    final fallback = QuickAccessLayout.defaults;
+    return QuickAccessLayout(
+      transit: _readGroups(
+        json['transit'],
+        fallback.transit,
+        (raw) => switch (TransitMode.fromWire(raw)) {
+          final mode? => TransitModeGroup.canonical(mode),
+          null => null,
+        },
+      ),
+      street: _readGroups(
+        json['street'],
+        fallback.street,
+        (raw) => raw is String ? StreetItem.fromKey(raw) : null,
+      ),
+    );
+  }
+
+  static List<QuickGroup<T>> _readGroups<T>(
+    Object? raw,
+    List<QuickGroup<T>> defaults,
+    T? Function(Object?) readItem,
+  ) {
+    final stored = {
+      if (raw is List)
+        for (final entry in raw)
+          if (entry is Map<String, dynamic> && entry['id'] is String)
+            entry['id'] as String: entry,
+    };
+    final read = [
+      for (final fallback in defaults)
+        _readGroup(stored[fallback.id], fallback, readItem),
+    ];
+    // Stored sections claim their items first; a section that fell back to
+    // its default must not take back an item the rider moved elsewhere.
+    final claimed = <T>{
+      for (final (i, g) in read.indexed)
+        if (stored.containsKey(defaults[i].id)) ...g.items,
+    };
+    final seen = <T>{};
+    return [
+      for (final (i, g) in read.indexed)
+        g.copyWith(
+          items: [
+            for (final item in g.items)
+              if ((stored.containsKey(defaults[i].id) ||
+                      !claimed.contains(item)) &&
+                  seen.add(item))
+                item,
+          ],
+        ),
+    ];
+  }
+
+  static QuickGroup<T> _readGroup<T>(
+    Map<String, dynamic>? json,
+    QuickGroup<T> fallback,
+    T? Function(Object?) readItem,
+  ) {
+    if (json == null) return fallback;
+    final title = json['title'];
+    final icon = json['icon'];
+    final items = json['items'];
+    return fallback.copyWith(
+      title: title is String && title.trim().isNotEmpty ? title : null,
+      iconName: icon is String && icon.isNotEmpty ? icon : null,
+      items: items is List
+          ? [
+              for (final entry in items)
+                if (readItem(entry) case final item?) item,
+            ]
+          : null,
+    );
+  }
+
   /// Every street section, Other last.
   List<QuickGroup<StreetItem>> get streetSections => [
     ...street,

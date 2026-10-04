@@ -59,6 +59,10 @@ class PrefsKeys {
   /// searches keep to them, JSON-encoded.
   static const String rentalProviders = 'rental_providers';
 
+  /// How the search card groups the modes into sections, JSON-encoded.
+  /// Absent means the default sections.
+  static const String quickAccessLayout = 'quick_access_layout';
+
   /// The server's list of rental provider groups, with the host and time it
   /// was fetched, JSON-encoded. A cache; safe to delete.
   static const String rentalCatalogue = 'rental_catalogue';

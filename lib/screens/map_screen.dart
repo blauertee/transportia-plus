@@ -34,6 +34,7 @@ import '../services/location_service.dart';
 import '../services/plan_request.dart';
 import '../services/recent_trips_service.dart';
 import '../services/backend_reload_service.dart';
+import '../services/quick_access_service.dart';
 import '../services/rental_providers_service.dart';
 import '../services/routing_options_service.dart';
 import '../services/saved_places_service.dart';
@@ -332,6 +333,7 @@ class _MapScreenState extends State<MapScreen>
   Future<void> _initStartup() async {
     unawaited(_loadRoutingOptions());
     unawaited(RentalProvidersService.loadPrefs());
+    unawaited(QuickAccessService.load());
     unawaited(ServerCapabilitiesService.ensureLoaded());
     await _loadShowStopsPreference();
     await _loadQuickSettingsPreferences();
