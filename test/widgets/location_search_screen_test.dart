@@ -494,8 +494,8 @@ void main() {
   testWidgets('renaming a stop kept with its transport icon keeps the icon', (
     tester,
   ) async {
-    // The picker does not offer the transport icons, so nothing in it is
-    // selected; saving a new name must not take that as a pick.
+    // Its icon is not among the suggestions; saving a new name must not
+    // take that as picking another.
     await _keep([_favourite(id: 'a', name: 'Hauptbahnhof', iconName: 'train')]);
     await _pump(tester);
 
@@ -507,7 +507,8 @@ void main() {
 
     final stored = FavoritesService.favoritesListenable.value.single;
     expect(stored.label, 'Work');
-    expect(stored.iconName, 'train');
+    // The same icon, now under the name saves use from here on.
+    expect(stored.iconName, 'lucide:train-front');
     expect(find.byIcon(LucideIcons.trainFront), findsOne);
   });
 
@@ -680,7 +681,7 @@ void main() {
       expect(kept.name, 'Ostkreuz');
       expect(kept.stopId, 'de-DELFI_Ostkreuz');
       // Kept with the face the list drew it with.
-      expect(kept.iconName, 'train');
+      expect(kept.iconName, 'lucide:train-front');
       // Still here, not popped with an answer.
       expect(find.byType(LocationSearchScreen), findsOne);
     });

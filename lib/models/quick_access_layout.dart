@@ -49,7 +49,7 @@ class QuickAccessLayout {
 
   static const String otherId = 'other';
   static const String otherTitle = 'Other';
-  static const String otherIconName = 'shapes';
+  static const String otherIconName = 'lucide:shapes';
 
   static final QuickAccessLayout defaults = QuickAccessLayout(
     transit: [
@@ -65,19 +65,19 @@ class QuickAccessLayout {
       QuickGroup(
         id: 'walk',
         title: 'Walk',
-        iconName: 'footprints',
+        iconName: 'lucide:footprints',
         items: [StreetMode(TransitMode.walk)],
       ),
       QuickGroup(
         id: 'own-bike',
         title: 'Own bike',
-        iconName: 'bike',
+        iconName: 'lucide:bike',
         items: [StreetMode(TransitMode.bike)],
       ),
       QuickGroup(
         id: 'shared-light',
         title: 'Shared bikes & scooters',
-        iconName: 'scooter',
+        iconName: 'lucide:scooter',
         items: [
           SharedVehicle(RentalFormFactor.bicycle),
           SharedVehicle(RentalFormFactor.cargoBicycle),
@@ -91,7 +91,7 @@ class QuickAccessLayout {
       QuickGroup(
         id: 'own-car',
         title: 'Own car',
-        iconName: 'car',
+        iconName: 'lucide:car',
         items: [
           StreetMode(TransitMode.car),
           StreetMode(TransitMode.carParking),
@@ -113,10 +113,10 @@ class QuickAccessLayout {
   );
 
   static const Map<TransitModeGroup, String> _transitIconNames = {
-    TransitModeGroup.rail: 'train-front',
-    TransitModeGroup.metro: 'train-front-tunnel',
-    TransitModeGroup.bus: 'bus',
-    TransitModeGroup.boat: 'ship',
+    TransitModeGroup.rail: 'lucide:train-front',
+    TransitModeGroup.metro: 'lucide:train-front-tunnel',
+    TransitModeGroup.bus: 'lucide:bus',
+    TransitModeGroup.boat: 'lucide:ship',
   };
 
   /// Transit modes no section holds.

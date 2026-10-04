@@ -35,8 +35,8 @@ enum IconCategory {
 class CatalogueIcon {
   const CatalogueIcon(this.name, this.icon, this.categories, this.words);
 
-  /// Lucide's own name, such as `train-front`; what a picked icon is saved
-  /// as.
+  /// Lucide's own name, such as `train-front`. A picked icon is saved with
+  /// a namespace in front; see `AppIcons.lucide`.
   final String name;
   final IconData icon;
 
