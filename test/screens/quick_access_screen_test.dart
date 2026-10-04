@@ -1,5 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/quick_access_layout.dart';
 import 'package:transportia/models/street_leg_choice.dart';
@@ -106,5 +107,69 @@ void main() {
     await tester.tap(find.text('Reset to default'));
     await tester.pumpAndSettle();
     expect(_layout.toJson(), QuickAccessLayout.defaults.toJson());
+  });
+
+  group('without dragging', () {
+    testWidgets('a tap offers every other section of its half', (tester) async {
+      await _pump(tester);
+      await tester.tap(find.text('Moped'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Move “Moped” to'), findsOneWidget);
+      // The sheet's own entries, not the headings behind it.
+      final sheet = find.byType(CupertinoActionSheet);
+      Finder entry(String title) =>
+          find.descendant(of: sheet, matching: find.text(title));
+      expect(entry('Own car'), findsOneWidget);
+      expect(entry('Other'), findsOneWidget);
+      expect(entry('Shared cars & mopeds'), findsNothing);
+      expect(entry('Rail'), findsNothing);
+
+      await tester.tap(entry('Own car'));
+      await tester.pumpAndSettle();
+      expect(
+        _street('own-car').items,
+        contains(const SharedVehicle(RentalFormFactor.moped)),
+      );
+    });
+
+    testWidgets('cancelling moves nothing', (tester) async {
+      await _pump(tester);
+      final before = _layout.toJson();
+      await tester.tap(find.text('Moped'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(_layout.toJson(), before);
+    });
+
+    testWidgets('a screen reader can move a mode by its actions', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester);
+
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Moped, in Shared cars & mopeds'),
+      );
+      final actions = [
+        for (final id in node.getSemanticsData().customSemanticsActionIds!)
+          CustomSemanticsAction.getAction(id)!.label,
+      ];
+      expect(actions, contains('Move to Own car'));
+      expect(actions, contains('Move to Other'));
+      expect(actions, isNot(contains('Move to Shared cars & mopeds')));
+
+      tester.semantics.customAction(
+        find.semantics.byLabel('Moped, in Shared cars & mopeds'),
+        const CustomSemanticsAction(label: 'Move to Own car'),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        _street('own-car').items,
+        contains(const SharedVehicle(RentalFormFactor.moped)),
+      );
+      semantics.dispose();
+    });
   });
 }

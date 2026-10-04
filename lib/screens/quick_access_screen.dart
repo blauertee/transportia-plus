@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/semantics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../models/quick_access_layout.dart';
@@ -180,8 +181,9 @@ class _QuickAccessScreenState extends State<QuickAccessScreen> {
                 padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
                 child: Text(
                   'The icons on the search card switch a whole section on or '
-                  'off. Hold a mode and drag it to move it; tap the pencil to '
-                  'rename a section or change its icon.',
+                  'off. Hold a mode and drag it to move it, or tap it to pick '
+                  'where it goes; tap the pencil to rename a section or '
+                  'change its icon.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.35,
@@ -193,13 +195,19 @@ class _QuickAccessScreenState extends State<QuickAccessScreen> {
               for (final group in layout.transitSections)
                 _section(
                   group,
+                  half: layout.transitSections,
                   street: false,
                   labelOf: (mode) => TransitModeGroup.modeLabel(mode),
                 ),
               const SizedBox(height: 12),
               const _HalfTitle('To and from the station'),
               for (final group in layout.streetSections)
-                _section(group, street: true, labelOf: (item) => item.label),
+                _section(
+                  group,
+                  half: layout.streetSections,
+                  street: true,
+                  labelOf: (item) => item.label,
+                ),
               const SizedBox(height: 8),
               Center(
                 child: GestureDetector(
@@ -225,12 +233,73 @@ class _QuickAccessScreenState extends State<QuickAccessScreen> {
     );
   }
 
+  /// Moves [item] without dragging: what a tap on it opens, and what a
+  /// screen reader's actions do.
+  void _moveTo<T extends Object>(T item, String toId, {required bool street}) =>
+      _drop(_Moving(item: item, fromId: '', street: street), toId);
+
+  /// Asks where [item] should go, offering every other section of its half.
+  Future<void> _showMoveMenu<T extends Object>(
+    T item,
+    String label,
+    List<QuickGroup<T>> others, {
+    required bool street,
+  }) async {
+    final toId = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text('Move “$label” to'),
+        actions: [
+          for (final target in others)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(target.id),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppIconView(
+                    target.icon,
+                    size: 20,
+                    color: AppColors.accentOf(context),
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      target.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      // The app's accent, not the platform's blue, to match
+                      // the icon beside it.
+                      style: TextStyle(color: AppColors.accentOf(context)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: AppColors.accentOf(context)),
+          ),
+        ),
+      ),
+    );
+    if (toId != null) _moveTo(item, toId, street: street);
+  }
+
   Widget _section<T extends Object>(
     QuickGroup<T> group, {
+    required List<QuickGroup<T>> half,
     required bool street,
     required String Function(T) labelOf,
   }) {
     final isOther = group.id == QuickAccessLayout.otherId;
+    final others = [
+      for (final target in half)
+        if (target.id != group.id) target,
+    ];
     return _SectionTarget(
       group: group,
       street: street,
@@ -251,7 +320,25 @@ class _QuickAccessScreenState extends State<QuickAccessScreen> {
             onDraggableCanceled: (_, _) => _stopEdgeScroll(),
             feedback: _Bubble(labelOf(item), lifted: true),
             childWhenDragging: _Bubble(labelOf(item), ghost: true),
-            child: _Bubble(labelOf(item)),
+            // Dragging needs a finger and a sighted eye. A tap asks where
+            // to instead, and a screen reader gets one action per
+            // section, so neither depends on the drag.
+            child: Semantics(
+              button: true,
+              label: '${labelOf(item)}, in ${group.title}',
+              hint: 'Moves to another section',
+              excludeSemantics: true,
+              customSemanticsActions: {
+                for (final target in others)
+                  CustomSemanticsAction(label: 'Move to ${target.title}'): () =>
+                      _moveTo(item, target.id, street: street),
+              },
+              child: GestureDetector(
+                onTap: () =>
+                    _showMoveMenu(item, labelOf(item), others, street: street),
+                child: _Bubble(labelOf(item)),
+              ),
+            ),
           ),
       ],
     );
