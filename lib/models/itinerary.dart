@@ -471,9 +471,15 @@ class Leg {
   /// Vehicle-sharing details, set on `RENTAL` legs.
   final Rental? rental;
 
-  /// Other departures serving the same connection, when leg alternatives are
-  /// requested.
-  final List<Leg> alternatives;
+  /// Connections that could stand in for this ride, when leg alternatives
+  /// are requested: each one leaves after the ride before it arrives and
+  /// arrives before the ride after it leaves.
+  ///
+  /// Each is a short journey of its own — normally a footpath, a ride and a
+  /// footpath — because the replacement may leave from another platform or
+  /// stop. Empty on street legs, and on every leg of an interlined chain but
+  /// the first.
+  final List<List<Leg>> alternatives;
 
   final bool interlineWithPreviousLeg;
   final int? fareTransferIndex;
@@ -734,6 +740,15 @@ class Leg {
     return a.name.isNotEmpty && a.name == b.name;
   }
 
+  /// `alternatives` is a list of leg lists, one per stand-in connection.
+  static List<List<Leg>> _alternativesFromJson(Object? value) {
+    if (value is! List) return const [];
+    return List.unmodifiable([
+      for (final alternative in value)
+        if (alternative is List) asList(alternative, Leg.fromJson),
+    ]);
+  }
+
   factory Leg.fromJson(Map<String, dynamic> json) {
     try {
       final legGeometry = asMap(json['legGeometry']);
@@ -786,7 +801,7 @@ class Leg {
             : EncodedPolyline.fromJson(legGeometry),
         steps: asList(json['steps'], StepInstruction.fromJson),
         rental: rental == null ? null : Rental.fromJson(rental),
-        alternatives: asList(json['alternatives'], Leg.fromJson),
+        alternatives: _alternativesFromJson(json['alternatives']),
         interlineWithPreviousLeg:
             asBool(json['interlineWithPreviousLeg']) ?? false,
         fareTransferIndex: asInt(json['fareTransferIndex']),
