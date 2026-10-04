@@ -78,7 +78,17 @@ class Transportia extends StatelessWidget {
                     color: themeProvider.backgroundColor,
                     child: IconTheme(
                       data: IconThemeData(color: themeProvider.textColor),
-                      child: OfflineBannerShell(child: content),
+                      // Cupertino widgets (sheets, dialogs, text fields)
+                      // otherwise follow the phone's dark mode, not the
+                      // app's: a light app on a dark phone got dark sheets.
+                      child: CupertinoTheme(
+                        data: CupertinoThemeData(
+                          brightness: themeProvider.isDark
+                              ? Brightness.dark
+                              : Brightness.light,
+                        ),
+                        child: OfflineBannerShell(child: content),
+                      ),
                     ),
                   ),
                 );

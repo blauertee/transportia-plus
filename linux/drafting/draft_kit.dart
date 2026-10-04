@@ -206,6 +206,12 @@ class DraftApp extends StatelessWidget {
           fontSize: 14,
           color: Color(0xFF000000),
         ),
+        // Cupertino widgets take the app's brightness, not the machine's,
+        // as app.dart sets it; drafts are light.
+        builder: (context, child) => CupertinoTheme(
+          data: const CupertinoThemeData(brightness: Brightness.light),
+          child: child ?? const SizedBox.shrink(),
+        ),
         onGenerateRoute: (settings) => PageRouteBuilder<void>(
           settings: settings,
           pageBuilder: (_, _, _) => child,
