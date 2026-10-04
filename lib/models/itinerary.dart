@@ -93,7 +93,20 @@ class FareLegInfo {
   final List<RouteBadge> routeBadges;
   final List<FareOption> options;
 
-  FareLegInfo({required this.routeBadges, required this.options});
+  /// A deep link straight to buying this fare, when the agency exposes one
+  /// (GTFS `ticketUrls`). Preferred to [fareUrl] wherever both exist.
+  final String? ticketUrl;
+
+  /// The agency's general fare-information page (GTFS `agencyFareUrl`), shown
+  /// only when there is no more specific [ticketUrl].
+  final String? fareUrl;
+
+  FareLegInfo({
+    required this.routeBadges,
+    required this.options,
+    this.ticketUrl,
+    this.fareUrl,
+  });
 
   String get _optionsKey => options
       .map(
@@ -235,14 +248,28 @@ class Itinerary {
 
       try {
         final routeBadgesByFareLeg = <String, List<RouteBadge>>{};
+        // A leg's own ticketing deep link is preferred to its agency's
+        // general fare page. Both are keyed like the badges above, so they
+        // land on the same fare leg below.
+        final ticketUrlByFareLeg = <String, String>{};
+        final fareUrlByFareLeg = <String, String>{};
         for (final leg in legs) {
           if (leg.fareTransferIndex == null ||
               leg.effectiveFareLegIndex == null) {
             continue;
           }
+          final key = '${leg.fareTransferIndex}:${leg.effectiveFareLegIndex}';
+          final ticketUrl = leg.ticketUrls?.web;
+          if (ticketUrl != null && ticketUrl.isNotEmpty) {
+            ticketUrlByFareLeg.putIfAbsent(key, () => ticketUrl);
+          }
+          final fareUrl = leg.agencyFareUrl;
+          if (fareUrl != null && fareUrl.isNotEmpty) {
+            fareUrlByFareLeg.putIfAbsent(key, () => fareUrl);
+          }
+
           final name = leg.routeShortName ?? leg.displayName;
           if (name == null || name.isEmpty) continue;
-          final key = '${leg.fareTransferIndex}:${leg.effectiveFareLegIndex}';
           final badges = routeBadgesByFareLeg.putIfAbsent(key, () => []);
           if (!badges.any((b) => b.name == name)) {
             badges.add(
@@ -269,10 +296,13 @@ class Itinerary {
                 .where((o) => o.products.isNotEmpty)
                 .toList();
             if (options.isEmpty) continue;
+            final key = '$t:$i';
             rawTicketInfo.add(
               FareLegInfo(
-                routeBadges: routeBadgesByFareLeg['$t:$i'] ?? const [],
+                routeBadges: routeBadgesByFareLeg[key] ?? const [],
                 options: options,
+                ticketUrl: ticketUrlByFareLeg[key],
+                fareUrl: fareUrlByFareLeg[key],
               ),
             );
           }
@@ -297,6 +327,8 @@ class Itinerary {
             mergedByKey[key] = FareLegInfo(
               routeBadges: combinedBadges,
               options: existing.options,
+              ticketUrl: existing.ticketUrl ?? entry.ticketUrl,
+              fareUrl: existing.fareUrl ?? entry.fareUrl,
             );
           }
         }
