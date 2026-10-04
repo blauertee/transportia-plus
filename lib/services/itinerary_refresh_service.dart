@@ -189,11 +189,16 @@ class ItineraryRefreshService {
   /// is not where anybody walks.
   ///
   /// A stored leg that never had geometry has nothing to lend, so the fresh
-  /// one is taken whole in case it brought some.
-  static Leg _mergeLeg(Leg planned, Leg refreshed) =>
-      (planned.legGeometry?.points.isNotEmpty ?? false)
-      ? planned.withRealTimeFrom(refreshed)
-      : refreshed;
+  /// one is taken whole in case it brought some — unless it is the stand-in
+  /// for a ride the server could not find again, which carries no trip id
+  /// and nothing else of the ride's.
+  static Leg _mergeLeg(Leg planned, Leg refreshed) {
+    final hasShape = planned.legGeometry?.points.isNotEmpty ?? false;
+    final isStandIn = refreshed.cancelled && !refreshed.isRide;
+    return hasShape || isStandIn
+        ? planned.withRealTimeFrom(refreshed)
+        : refreshed;
+  }
 
   /// The way to the first station, or from the last, after the server has
   /// looked for it again.
