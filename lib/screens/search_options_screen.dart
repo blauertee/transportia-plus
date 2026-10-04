@@ -152,7 +152,7 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
       if (_capabilities.hasElevation)
         SearchOptionsInclineGroup(options: _options, onChanged: _update),
       OptionsGroup(
-        title: 'Search card',
+        title: 'Routing card',
         children: [
           OptionsRow(
             icon: LucideIcons.layoutGrid,
@@ -163,7 +163,7 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
               color: AppColors.black.withValues(alpha: 0.3),
             ),
             description:
-                'Which modes each icon on the search card switches, and '
+                'Which modes each icon on the routing card switches, and '
                 'what the sections are called.',
             onTap: () => Navigator.of(
               context,
