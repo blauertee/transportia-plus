@@ -140,12 +140,4 @@ Color legSpineColor({
 /// Modes the traveller covers under their own power or in their own vehicle.
 ///
 /// These get a dotted, neutral stretch: no timetable, no line, no colour.
-bool isStreetLeg(String mode) => const {
-  'WALK',
-  'BIKE',
-  'CAR',
-  'CAR_PARKING',
-  'CAR_DROPOFF',
-  'RENTAL',
-  'ODM',
-}.contains(mode);
+bool isStreetLeg(String mode) => kStreetModes.contains(mode);
