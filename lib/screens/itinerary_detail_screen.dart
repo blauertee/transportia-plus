@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
@@ -38,6 +39,7 @@ import '../widgets/journey/spine_node.dart';
 import '../widgets/journey/spine_row.dart';
 import '../widgets/info_chip.dart';
 import '../widgets/last_updated_footer.dart';
+import '../widgets/pressable_highlight.dart';
 import '../widgets/route_badge_pill.dart';
 import '../widgets/save_trip_button.dart';
 import '../widgets/stop_departures_sheet.dart';
@@ -1137,9 +1139,54 @@ class _TicketInfoCardState extends State<TicketInfoCard> {
               ),
             ),
           ...legInfo.options.map(_buildFareOption),
+          if (legInfo.ticketUrl != null || legInfo.fareUrl != null)
+            _buildFareLink(legInfo),
         ],
       ),
     );
+  }
+
+  /// A direct ticket-purchase link where the agency gives one, and its
+  /// general fare page otherwise; never both.
+  Widget _buildFareLink(FareLegInfo legInfo) {
+    final isTicketLink = legInfo.ticketUrl != null;
+    final url = legInfo.ticketUrl ?? legInfo.fareUrl!;
+    final accent = AppColors.accentOf(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: PressableHighlight(
+        onPressed: () => unawaited(_openFareUrl(url)),
+        borderRadius: BorderRadius.circular(8),
+        enableHaptics: false,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isTicketLink ? LucideIcons.ticket : LucideIcons.info,
+              size: 14,
+              color: accent,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isTicketLink ? 'Buy tickets' : 'More info',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFareUrl(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // A link that will not open has nothing to fall back to.
+    }
   }
 
   Widget _buildRouteBadge(RouteBadge badge) {
