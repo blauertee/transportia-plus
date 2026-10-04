@@ -3,7 +3,7 @@ import '../models/itinerary.dart';
 import '../models/routing_options.dart';
 import '../models/transitous/itinerary_id.dart';
 import 'rental_providers_service.dart';
-import 'trip_details_service.dart';
+import 'server_capabilities_service.dart';
 
 /// How much the app actually knows about an itinerary's current state after
 /// trying to refresh it.
@@ -44,7 +44,7 @@ class ItineraryRefreshResult {
       freshness == ItineraryFreshness.changed;
 }
 
-/// Signature of [TripDetailsService.fetchTripDetails], so tests can supply
+/// Signature of the per-trip lookup, so tests can supply
 /// their own trip data without going over the network.
 typedef TripDetailsFetcher =
     Future<Itinerary> Function({required String tripId});
@@ -77,7 +77,7 @@ class ItineraryRefreshService {
     ItineraryFetcher? fetchItinerary,
     RoutingOptions? options,
   }) async {
-    if (!_hasTransitLegs(itinerary)) {
+    if (!itinerary.hasTransit) {
       return ItineraryRefreshResult(
         itinerary: itinerary,
         freshness: ItineraryFreshness.notRefreshable,
@@ -97,14 +97,13 @@ class ItineraryRefreshService {
       if (refreshed != null) return refreshed;
     }
 
-    return _refreshPerTrip(
-      itinerary,
-      fetchTripDetails ?? TripDetailsService.fetchTripDetails,
-    );
+    return _refreshPerTrip(itinerary, fetchTripDetails ?? _fetchTripTimes);
   }
 
-  static bool _hasTransitLegs(Itinerary itinerary) =>
-      itinerary.legs.any((leg) => leg.tripId != null && leg.tripId!.isNotEmpty);
+  /// `/trip` without the line's shape: the merge keeps the shape the leg
+  /// already has, so downloading it again would only be thrown away.
+  static Future<Itinerary> _fetchTripTimes({required String tripId}) =>
+      TripEndpoint.trip(tripId: tripId, detailedLegs: false);
 
   /// Refreshes the itinerary in one request, or returns null so the caller
   /// falls back to the per-trip path.
@@ -179,6 +178,9 @@ class ItineraryRefreshService {
   ) async {
     final id = itinerary.id;
     final params = options.toRefreshParams(
+      itinerary: itinerary,
+      serverLimit:
+          ServerCapabilitiesService.capabilities.value.maxPrePostTransitTime,
       rentalProviderGroups: await RentalProvidersService.activeGroupIds(),
     );
     // A saved trip parsed from a snapshot taken before the app read `id`

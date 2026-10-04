@@ -11,6 +11,7 @@ import '../environment.dart';
 import '../providers/theme_provider.dart';
 import '../services/rental_providers_service.dart';
 import '../services/routing_options_service.dart';
+import '../services/server_capabilities_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../utils/trip_link.dart';
@@ -76,6 +77,8 @@ class _SharedTripScreenState extends State<SharedTripScreen> {
     try {
       final options = await RoutingOptionsService.load();
       final params = options.toRefreshParams(
+        serverLimit:
+            ServerCapabilitiesService.capabilities.value.maxPrePostTransitTime,
         // Provider groups are the rider's server's; another has its own.
         rentalProviderGroups: isOwn
             ? await RentalProvidersService.activeGroupIds()

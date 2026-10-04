@@ -1,7 +1,7 @@
 import '../api/endpoints/trip_endpoint.dart';
 import '../api/params/plan_params.dart';
+import 'itinerary.dart';
 import 'transit_mode_group.dart';
-import 'transitous/enums.dart';
 
 /// A stop the user wants the journey to pass through.
 class ViaStopOption {
@@ -427,39 +427,105 @@ class RoutingOptions {
   /// `requireDisplayNameMatch` is the other half: it makes the server refuse
   /// to substitute a different journey, rather than handing back a re-plan
   /// that happens to have the same number of legs.
+  ///
+  /// The first and last mile are found again from scratch: the server
+  /// searches every stop within the time limit and picks the planned one out
+  /// of the result. So the limit comes from [itinerary], not from the
+  /// rider's settings, which may have changed since the search — a stretch
+  /// longer than the limit comes back as a cancelled placeholder. It is the
+  /// longest of the two stretches plus [_refreshStreetHeadroom], capped at
+  /// [serverLimit]: any looser only widens that search, since the leg is
+  /// found again either way. Shared vehicles are pinned the same way, to the
+  /// kind and provider the itinerary rents, or the server hands back
+  /// whichever vehicle is nearest now.
+  ///
+  /// The modes, carriage and reservation settings decide nothing on a
+  /// refresh; they shape the per-leg alternatives the endpoint can also
+  /// return, so they stay the rider's.
+  ///
+  /// Geometry is only asked for when it can have changed: a shared vehicle
+  /// may be gone, and the one picked instead stands somewhere else, reached
+  /// another way. Every other leg keeps the shape it already has.
+  ///
+  /// Without an [itinerary] — a shared link, known only by its id — there is
+  /// nothing to measure, so the limit is [serverLimit] and every shape is
+  /// fetched, since none is stored yet.
   RefreshItineraryOptions toRefreshParams({
+    Itinerary? itinerary,
+    required Duration serverLimit,
     List<String> rentalProviderGroups = const [],
-  }) => RefreshItineraryOptions(
-    requireDisplayNameMatch: true,
-    detailedTransfers: true,
-    detailedLegs: true,
-    withFares: true,
-    useRoutedTransfers: useRoutedTransfers,
-    pedestrianProfile: wheelchairAccessibleOnly
-        ? PedestrianProfile.wheelchair
-        : null,
-    requireBikeTransport: requireBikeTransport ? true : null,
-    requireCarTransport: requireCarTransport ? true : null,
-    noCompulsoryReservation: noCompulsoryReservation ? true : null,
-    transitModes: transitModes,
-    preTransitModes: firstMileModes,
-    maxPreTransitTime: maxFirstMileTime,
-    postTransitModes: lastMileModesInUse,
-    maxPostTransitTime: maxLastMileTimeInUse,
-    preTransitRentals: _rentalFilters(
-      firstMileRentalFormFactors,
-      rentalProviderGroups,
-    ),
-    postTransitRentals: _rentalFilters(
-      lastMileRentalFormFactorsInUse,
-      rentalProviderGroups,
-    ),
-    pedestrianSpeed: _msFrom(walkingSpeedKmh, _defaultWalkingSpeedKmh),
-    cyclingSpeed: _msFrom(cyclingSpeedKmh, _defaultCyclingSpeedKmh),
-    elevationCosts: elevationCosts == ElevationCosts.none
-        ? null
-        : elevationCosts,
-  );
+  }) {
+    final firstMile = itinerary?.firstMileLegs ?? const <Leg>[];
+    final lastMile = itinerary?.lastMileLegs ?? const <Leg>[];
+    final streetLimit = itinerary == null
+        ? serverLimit
+        : _refreshStreetLimit([firstMile, lastMile], serverLimit);
+    final rents = [...firstMile, ...lastMile].any((leg) => leg.rental != null);
+    return RefreshItineraryOptions(
+      requireDisplayNameMatch: true,
+      detailedTransfers: itinerary == null,
+      detailedLegs: itinerary == null || rents,
+      withFares: true,
+      useRoutedTransfers: useRoutedTransfers,
+      pedestrianProfile: wheelchairAccessibleOnly
+          ? PedestrianProfile.wheelchair
+          : null,
+      requireBikeTransport: requireBikeTransport ? true : null,
+      requireCarTransport: requireCarTransport ? true : null,
+      noCompulsoryReservation: noCompulsoryReservation ? true : null,
+      transitModes: transitModes,
+      preTransitModes: firstMileModes,
+      maxPreTransitTime: streetLimit,
+      postTransitModes: lastMileModesInUse,
+      maxPostTransitTime: streetLimit,
+      preTransitRentals:
+          _rentedOn(firstMile) ??
+          _rentalFilters(firstMileRentalFormFactors, rentalProviderGroups),
+      postTransitRentals:
+          _rentedOn(lastMile) ??
+          _rentalFilters(lastMileRentalFormFactorsInUse, rentalProviderGroups),
+      pedestrianSpeed: _msFrom(walkingSpeedKmh, _defaultWalkingSpeedKmh),
+      cyclingSpeed: _msFrom(cyclingSpeedKmh, _defaultCyclingSpeedKmh),
+      elevationCosts: elevationCosts == ElevationCosts.none
+          ? null
+          : elevationCosts,
+    );
+  }
+
+  /// Room on top of the stretch being found again, so a street network edited
+  /// since the search does not push it past the limit. MOTIS allows the same
+  /// when it re-routes a leg it already knows.
+  static const Duration _refreshStreetHeadroom = Duration(minutes: 5);
+
+  /// The limit a refresh needs to find [stretches] again, or null when there
+  /// is no street stretch at either end to find.
+  static Duration? _refreshStreetLimit(
+    List<List<Leg>> stretches,
+    Duration serverLimit,
+  ) {
+    final longest = stretches
+        .map((legs) => legs.fold(0, (total, leg) => total + leg.duration))
+        .fold(0, (a, b) => a > b ? a : b);
+    if (longest == 0) return null;
+    final limit = Duration(seconds: longest) + _refreshStreetHeadroom;
+    // A server that does not say what it allows is not capped here.
+    if (serverLimit > Duration.zero && limit > serverLimit) return serverLimit;
+    return limit;
+  }
+
+  /// The vehicle a stretch rents, as a filter that finds that kind from that
+  /// provider again. Null when the stretch rents nothing.
+  static RentalFilters? _rentedOn(List<Leg> stretch) {
+    final rental = stretch
+        .map((leg) => leg.rental)
+        .whereType<Rental>()
+        .firstOrNull;
+    if (rental == null) return null;
+    return RentalFilters(
+      formFactors: [?rental.formFactor],
+      providers: [rental.providerId],
+    );
+  }
 
   /// One mile's rental filter: the vehicles picked for it, and the
   /// provider groups the rider limited rentals to (empty for any). A mile
