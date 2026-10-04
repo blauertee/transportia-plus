@@ -10,6 +10,24 @@ import '../journey/spine_row.dart';
 /// The first line of a stage's text, stated so [SpineRow] can centre it.
 const double kStageLineHeight = 16;
 
+/// A stage that can follow another one instead of being set on its own.
+class StageLink {
+  const StageLink({
+    required this.linked,
+    required this.label,
+    required this.onPressed,
+  });
+
+  /// Whether the stage follows the other one. A linked stage cannot be
+  /// opened: there is nothing of its own to set.
+  final bool linked;
+
+  /// What linking means, for screen readers: "Same as to the station".
+  final String label;
+
+  final VoidCallback onPressed;
+}
+
 /// One stage of the journey being planned, as a node on the same spine the
 /// itinerary is drawn with.
 ///
@@ -28,6 +46,7 @@ class JourneySegment extends StatelessWidget {
     required this.child,
     required this.color,
     this.dashed = false,
+    this.link,
   });
 
   /// Reflects the current choice, e.g. a bike once a bike is picked.
@@ -51,6 +70,12 @@ class JourneySegment extends StatelessWidget {
   /// Street stages are dotted: you are not on rails.
   final bool dashed;
 
+  /// Offered beside the chevron, open or closed, when the stage can follow
+  /// another one.
+  final StageLink? link;
+
+  bool get _linked => link?.linked ?? false;
+
   @override
   Widget build(BuildContext context) {
     return SpineRow(
@@ -61,24 +86,19 @@ class JourneySegment extends StatelessWidget {
       railDashed: dashed,
       railTopInset: JourneyMetrics.ring,
       firstLineHeight: kStageLineHeight,
-      meta: AnimatedRotation(
-        turns: isOpen ? 0.25 : 0,
-        duration: const Duration(milliseconds: 180),
-        child: Icon(
-          LucideIcons.chevronRight,
-          size: 14,
-          color: AppColors.black.withValues(alpha: 0.45),
-        ),
-      ),
+      meta: _meta(),
       // The whole row toggles — the ring, the summary, the chevron and the
-      // space between them — so nothing in it looks pressable and isn't.
-      onTap: () {
-        Haptics.lightTick();
-        onToggle();
-      },
+      // space between them — so nothing in it looks pressable and isn't. A
+      // linked stage has nothing to open.
+      onTap: _linked
+          ? null
+          : () {
+              Haptics.lightTick();
+              onToggle();
+            },
       body: Semantics(
-        button: true,
-        expanded: isOpen,
+        button: !_linked,
+        expanded: _linked ? null : isOpen,
         label: '$headline. $summary',
         child: Padding(
           // The gap between stages lives inside the row, so the rails of
@@ -98,9 +118,11 @@ class JourneySegment extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 1),
+              // Two lines rather than one cut short: with many sections on,
+              // each of them is worth reading.
               Text(
                 summary,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 14, color: AppColors.black),
               ),
@@ -126,6 +148,89 @@ class JourneySegment extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _meta() {
+    final chevron = AnimatedRotation(
+      turns: isOpen ? 0.25 : 0,
+      duration: const Duration(milliseconds: 180),
+      child: Icon(
+        LucideIcons.chevronRight,
+        size: 14,
+        color: AppColors.black.withValues(alpha: 0.45),
+      ),
+    );
+    final link = this.link;
+    if (link == null) return chevron;
+    return _LinkedMeta(
+      link: link,
+      // Linked, the chevron goes but keeps its room, so the link does not
+      // move out from under the finger that just tapped it.
+      chevron: Visibility(
+        visible: !link.linked,
+        maintainSize: true,
+        maintainAnimation: true,
+        maintainState: true,
+        child: chevron,
+      ),
+    );
+  }
+}
+
+/// The link and the chevron, centred together on the stage's first line.
+class _LinkedMeta extends StatelessWidget {
+  const _LinkedMeta({required this.link, required this.chevron});
+
+  final StageLink link;
+  final Widget chevron;
+
+  /// A finger's worth around the glyph, which is only a ring's icon wide.
+  static const double _target = 40;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = link.linked
+        ? AppColors.accentOf(context)
+        : AppColors.black.withValues(alpha: 0.45);
+    // Laid out at full height, then lifted so its middle sits on the first
+    // line, which is also the ring's middle. A transform moves the hit area
+    // with the paint; clipping it to the line instead would leave a target
+    // as short as the text.
+    return Transform.translate(
+      offset: const Offset(0, -(_target - kStageLineHeight) / 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            button: true,
+            toggled: link.linked,
+            label: link.label,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                Haptics.lightTick();
+                link.onPressed();
+              },
+              child: SizedBox.square(
+                dimension: _target,
+                child: Center(
+                  // Upright: the stages above and below are chained.
+                  child: RotatedBox(
+                    quarterTurns: 1,
+                    child: Icon(
+                      LucideIcons.link2,
+                      size: JourneyMetrics.iconSize,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          chevron,
+        ],
       ),
     );
   }

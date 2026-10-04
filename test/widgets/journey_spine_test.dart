@@ -10,6 +10,7 @@ import 'package:transportia/models/transitous/server_config.dart';
 import 'package:transportia/providers/theme_provider.dart';
 import 'package:transportia/widgets/options/icon_controls.dart';
 import 'package:transportia/theme/journey_metrics.dart';
+import 'package:transportia/utils/stage_summary.dart';
 import 'package:transportia/widgets/journey/spine_node.dart';
 import 'package:transportia/widgets/journey/spine_row.dart';
 import 'package:transportia/widgets/search/journey_segment.dart';
@@ -95,6 +96,10 @@ Future<_HostState> _pumpSpine(
   return tester.state<_HostState>(find.byType(_Host));
 }
 
+/// A stage's summary line, put together the way the card does it.
+Finder _summary(String what, String limit) =>
+    find.text(stageSummary(what, limit));
+
 /// An icon-only pick that is actually on screen.
 ///
 /// `AnimatedCrossFade` keeps the collapsed branch in the tree behind an
@@ -125,8 +130,8 @@ void main() {
     expect(find.text('FROM THE STATION'), findsOneWidget);
 
     // Both street legs default to a quarter-hour walk.
-    expect(find.text('Walk · 15 min'), findsNWidgets(2));
-    expect(find.text('All transport · unlimited changes'), findsOneWidget);
+    expect(_summary('Walk', '15 min'), findsNWidgets(2));
+    expect(_summary('All transport', 'unlimited changes'), findsOneWidget);
   });
 
   testWidgets('the summary names the sections that are on', (tester) async {
@@ -139,8 +144,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Walk, shared · 1 h 30'), findsOneWidget);
-    expect(find.text('Walk · 15 min'), findsOneWidget);
+    expect(_summary('Walk, shared', '1 h 30'), findsOneWidget);
+    expect(_summary('Walk', '15 min'), findsOneWidget);
   });
 
   testWidgets('opening one stage leaves the others closed', (tester) async {
@@ -276,7 +281,7 @@ void main() {
       slider.onChanged(30);
       await tester.pump();
       expect(host.options.maxFirstMileTime, const Duration(minutes: 30));
-      expect(find.text('Walk · 30 min'), findsOneWidget);
+      expect(_summary('Walk', '30 min'), findsOneWidget);
 
       slider.onChangeEnd!();
       await tester.pumpAndSettle();
@@ -303,7 +308,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Walk, bike · 15 min'), findsOneWidget);
+      expect(_summary('Walk, bike', '15 min'), findsOneWidget);
       final ring = tester.widget<SpineNode>(find.byType(SpineNode).first);
       expect(ring.icon, streetSectionIcons[StreetSection.ownBike]);
     });
@@ -319,14 +324,14 @@ void main() {
       await tester.tap(_pick('Boat'));
       await tester.pump();
 
-      expect(find.text('All transport · unlimited changes'), findsNothing);
+      expect(_summary('All transport', 'unlimited changes'), findsNothing);
       expect(host.options.transitModes, isNotEmpty);
       expect(host.options.transitModes, isNot(contains(TransitMode.ferry)));
 
       await tester.tap(_pick('Boat'));
       await tester.pump();
 
-      expect(find.text('All transport · unlimited changes'), findsOneWidget);
+      expect(_summary('All transport', 'unlimited changes'), findsOneWidget);
       // Everything on sends nothing, so a mode added upstream is not
       // silently excluded by an enumerated list.
       expect(host.options.transitModes, isEmpty);
@@ -361,7 +366,7 @@ void main() {
 
       expect(host.options.transitModes, isNotEmpty);
       expect(host.options.transitModes, isNot(contains(TransitMode.airplane)));
-      expect(find.text('All transport · unlimited changes'), findsNothing);
+      expect(_summary('All transport', 'unlimited changes'), findsNothing);
       await _quiet(tester);
     });
 
@@ -393,7 +398,7 @@ void main() {
       }
       expect(host.options.transitModes, contains(TransitMode.regionalRail));
       expect(host.options.transitModes, contains(TransitMode.bus));
-      expect(find.text('Regional only · unlimited changes'), findsOneWidget);
+      expect(_summary('Regional only', 'unlimited changes'), findsOneWidget);
       expect(tester.widget<IconPick>(_pick('Regional only')).selected, isTrue);
       expect(tester.widget<IconPick>(_pick('Rail')).partial, isTrue);
 
@@ -422,13 +427,13 @@ void main() {
       slider.onChanged(2);
       await tester.pump();
       expect(host.options.maxTransfers, 2);
-      expect(find.text('All transport · max 2 changes'), findsOneWidget);
+      expect(_summary('All transport', 'max 2 changes'), findsOneWidget);
 
       slider.onChanged(RoutingOptions.unlimitedTransfersSliderValue.toDouble());
       await tester.pump();
       // Unlimited omits the parameter rather than sending a large number.
       expect(host.options.maxTransfers, isNull);
-      expect(find.text('All transport · unlimited changes'), findsOneWidget);
+      expect(_summary('All transport', 'unlimited changes'), findsOneWidget);
       await _quiet(tester);
     });
   });
@@ -770,7 +775,7 @@ void main() {
       // The strip's own leading edge, not its chip's label, which sits
       // inside that chip's icon and padding.
       final strip = tester.getRect(find.byType(TravellerStrip));
-      final summary = tester.getRect(find.text('Walk · 15 min').first);
+      final summary = tester.getRect(_summary('Walk', '15 min').first);
       expect(strip.left, closeTo(summary.left, 0.5));
     });
 
@@ -871,6 +876,125 @@ void main() {
 
       expect(host.options, RoutingOptions.defaults);
       await _quiet(tester);
+    });
+  });
+
+  group('from the station can follow the way there', () {
+    Finder link() => find.byIcon(LucideIcons.link2).hitTestable();
+    Finder visible(String text) => find.text(text).hitTestable();
+
+    Future<void> tapLink(WidgetTester tester) async {
+      await tester.tap(link());
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('only the way from the station offers it', (tester) async {
+      await _pumpSpine(tester);
+      expect(link(), findsOneWidget);
+      final row = tester.getRect(find.text('FROM THE STATION'));
+      expect(tester.getCenter(link()).dy, closeTo(row.center.dy, 1));
+    });
+
+    testWidgets('linked, it says so and cannot be opened', (tester) async {
+      final host = await _pumpSpine(tester);
+      await tapLink(tester);
+      expect(host.options.lastMileSameAsFirst, isTrue);
+      expect(visible('Same as to the station'), findsOneWidget);
+      expect(find.text('From the station: same as to the station'), findsOne);
+
+      await tester.tap(find.text('FROM THE STATION'));
+      await tester.pumpAndSettle();
+      expect(visible('All options'), findsNothing);
+      await _quiet(tester);
+    });
+
+    testWidgets('linked, it follows what the way there uses', (tester) async {
+      final host = await _pumpSpine(tester);
+      await tapLink(tester);
+      await _open(tester, 'TO THE STATION');
+      await tester.tap(_pick('Own bike'));
+      await tester.pumpAndSettle();
+
+      expect(host.options.lastMileModesInUse, contains(TransitMode.bike));
+      expect(visible('Same as to the station'), findsOneWidget);
+      // Its ring shows how the rider will travel.
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is SpineNode && w.icon == LucideIcons.bike,
+        ),
+        findsNWidgets(2),
+      );
+      await _quiet(tester);
+    });
+
+    testWidgets('linking an open stage closes it', (tester) async {
+      await _pumpSpine(tester);
+      await _open(tester, 'FROM THE STATION');
+      expect(visible('All options'), findsOneWidget);
+
+      await tapLink(tester);
+      expect(visible('All options'), findsNothing);
+      await _quiet(tester);
+    });
+
+    testWidgets('unlinking opens it, starting from the way there', (
+      tester,
+    ) async {
+      final host = await _pumpSpine(
+        tester,
+        initial: RoutingOptions.defaults.copyWith(
+          firstMileModes: const [TransitMode.walk, TransitMode.bike],
+          lastMileSameAsFirst: true,
+        ),
+      );
+      await tapLink(tester);
+
+      expect(host.options.lastMileSameAsFirst, isFalse);
+      expect(host.options.lastMileModes, host.options.firstMileModes);
+      expect(visible('All options'), findsOneWidget);
+      expect(_summary('Walk, bike', '15 min'), findsNWidgets(2));
+      expect(find.text('From the station: set separately'), findsOne);
+      await _quiet(tester);
+    });
+
+    testWidgets('stays closed when the card opens everything', (tester) async {
+      await _pumpSpine(
+        tester,
+        initial: RoutingOptions.defaults.copyWith(lastMileSameAsFirst: true),
+        opening: SearchOptionsOpening.stagesOpen,
+      );
+      await tester.pumpAndSettle();
+      expect(visible('All options'), findsNWidgets(2));
+    });
+
+    testWidgets('the link is a finger wide, not a glyph wide', (tester) async {
+      final host = await _pumpSpine(tester);
+      final centre = tester.getCenter(link());
+      await tester.tapAt(centre + const Offset(0, 16));
+      await tester.pumpAndSettle();
+      expect(host.options.lastMileSameAsFirst, isTrue);
+      await _quiet(tester);
+    });
+
+    testWidgets('a long summary wraps instead of being cut short', (
+      tester,
+    ) async {
+      await _pumpSpine(
+        tester,
+        initial: RoutingOptions.defaults.copyWith(
+          lastMileModes: const [
+            TransitMode.walk,
+            TransitMode.bike,
+            TransitMode.car,
+            TransitMode.flex,
+          ],
+          maxLastMileTime: const Duration(minutes: 90),
+        ),
+      );
+      final text = tester.widget<Text>(
+        _summary('Walk, bike, car, other', '1 h 30'),
+      );
+      expect(text.maxLines, 2);
     });
   });
 }

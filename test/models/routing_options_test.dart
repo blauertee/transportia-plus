@@ -400,4 +400,77 @@ void main() {
       expect(sent['postTransitRentalProviderGroups'], isNull);
     });
   });
+
+  group('the way from the station can follow the way there', () {
+    final linked = RoutingOptions.defaults.copyWith(
+      firstMileModes: const [TransitMode.bike, TransitMode.rental],
+      firstMileRentalFormFactors: const [RentalFormFactor.scooterStanding],
+      maxFirstMileTime: const Duration(minutes: 25),
+      lastMileModes: const [TransitMode.car],
+      maxLastMileTime: const Duration(minutes: 5),
+      lastMileSameAsFirst: true,
+    );
+
+    test('off unless asked for', () {
+      expect(RoutingOptions.defaults.lastMileSameAsFirst, isFalse);
+      expect(RoutingOptions.fromJson(const {}).lastMileSameAsFirst, isFalse);
+    });
+
+    test('a search sends the first mile as the last mile too', () {
+      final sent = _query(linked);
+      expect(sent['postTransitModes'], sent['preTransitModes']);
+      expect(sent['maxPostTransitTime'], '${25 * 60}');
+      expect(sent['postTransitRentalFormFactors'], 'SCOOTER_STANDING');
+    });
+
+    test('so does a refresh', () {
+      final sent = linked.toRefreshParams().toQuery();
+      expect(sent['postTransitModes'], sent['preTransitModes']);
+      expect(sent['maxPostTransitTime'], sent['maxPreTransitTime']);
+    });
+
+    test('the rider\'s own last mile is kept while linked', () {
+      expect(linked.lastMileModes, [TransitMode.car]);
+      expect(linked.lastMileModesInUse, [TransitMode.bike, TransitMode.rental]);
+    });
+
+    test('a bike at the start is a bike at both ends', () {
+      // Carriage follows the modes searched with, not the ones set aside.
+      expect(linked.bikeAtBothEnds, isTrue);
+      expect(linked.requireBikeTransport, isTrue);
+      expect(linked.carAtBothEnds, isFalse);
+    });
+
+    test('a journey without transit gets both budgets as searched', () {
+      expect(linked.maxDirectTime, const Duration(minutes: 50));
+    });
+
+    test('unlinking keeps what was searched, to edit from there', () {
+      final unlinked = linked.withLastMileSameAsFirst(false);
+      expect(unlinked.lastMileSameAsFirst, isFalse);
+      expect(unlinked.lastMileModes, linked.firstMileModes);
+      expect(unlinked.maxLastMileTime, linked.maxFirstMileTime);
+      expect(
+        unlinked.lastMileRentalFormFactors,
+        linked.firstMileRentalFormFactors,
+      );
+      expect(_query(unlinked), _query(linked));
+    });
+
+    test('linking leaves the stored last mile alone', () {
+      final relinked = linked
+          .withLastMileSameAsFirst(false)
+          .copyWith(lastMileModes: const [TransitMode.walk])
+          .withLastMileSameAsFirst(true);
+      expect(relinked.lastMileModes, [TransitMode.walk]);
+      expect(relinked.lastMileModesInUse, linked.firstMileModes);
+    });
+
+    test('round-trips through storage', () {
+      final restored = RoutingOptions.fromJson(linked.toJson());
+      expect(restored.lastMileSameAsFirst, isTrue);
+      expect(restored, linked);
+      expect(restored == linked.withLastMileSameAsFirst(false), isFalse);
+    });
+  });
 }

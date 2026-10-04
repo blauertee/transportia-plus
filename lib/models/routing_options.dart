@@ -67,6 +67,7 @@ class RoutingOptions {
     this.maxLastMileTime = const Duration(minutes: 15),
     this.firstMileRentalFormFactors = const [],
     this.lastMileRentalFormFactors = const [],
+    this.lastMileSameAsFirst = false,
     this.walkingSpeedKmh = _defaultWalkingSpeedKmh,
     this.cyclingSpeedKmh = _defaultCyclingSpeedKmh,
     this.elevationCosts = ElevationCosts.none,
@@ -109,11 +110,11 @@ class RoutingOptions {
   /// rather than being left at the origin station.
   bool get bikeAtBothEnds =>
       firstMileModes.contains(TransitMode.bike) &&
-      lastMileModes.contains(TransitMode.bike);
+      lastMileModesInUse.contains(TransitMode.bike);
 
   bool get carAtBothEnds =>
       firstMileModes.contains(TransitMode.car) &&
-      lastMileModes.contains(TransitMode.car);
+      lastMileModesInUse.contains(TransitMode.car);
 
   /// The value actually sent.
   ///
@@ -146,9 +147,42 @@ class RoutingOptions {
   final List<TransitMode> firstMileModes;
   final Duration maxFirstMileTime;
 
-  /// How to travel from the last stop, and the budget for it.
+  /// How to travel from the last stop, and the budget for it, as the rider
+  /// set them for that leg. While [lastMileSameAsFirst] holds they are
+  /// kept but not used; read the `…InUse` getters for what is sent.
   final List<TransitMode> lastMileModes;
   final Duration maxLastMileTime;
+
+  /// The way from the last stop is the way to the first one: its modes,
+  /// shared vehicles and budget all follow the first mile, and change with
+  /// it.
+  final bool lastMileSameAsFirst;
+
+  /// The last mile as it is searched with.
+  List<TransitMode> get lastMileModesInUse =>
+      lastMileSameAsFirst ? firstMileModes : lastMileModes;
+
+  Duration get maxLastMileTimeInUse =>
+      lastMileSameAsFirst ? maxFirstMileTime : maxLastMileTime;
+
+  List<RentalFormFactor> get lastMileRentalFormFactorsInUse =>
+      lastMileSameAsFirst
+      ? firstMileRentalFormFactors
+      : lastMileRentalFormFactors;
+
+  /// Linked to the first mile, or set apart from it again.
+  ///
+  /// Unlinking starts the last mile from what it was just searched with, so
+  /// the tap alone changes nothing about the journey; the rider then edits
+  /// it from there.
+  RoutingOptions withLastMileSameAsFirst(bool same) => same
+      ? copyWith(lastMileSameAsFirst: true)
+      : copyWith(
+          lastMileSameAsFirst: false,
+          lastMileModes: lastMileModesInUse,
+          maxLastMileTime: maxLastMileTimeInUse,
+          lastMileRentalFormFactors: lastMileRentalFormFactorsInUse,
+        );
 
   /// How a journey with no transit at all may travel: however the rider
   /// would reach the station, plus walking.
@@ -171,7 +205,7 @@ class RoutingOptions {
 
   /// Budget for a journey with no transit: as long as the two street legs of
   /// a transit journey together. The server clamps it to its own limit.
-  Duration get maxDirectTime => maxFirstMileTime + maxLastMileTime;
+  Duration get maxDirectTime => maxFirstMileTime + maxLastMileTimeInUse;
 
   /// Which shared vehicles each mile's rental leg may use.
   ///
@@ -276,6 +310,7 @@ class RoutingOptions {
     Duration? maxLastMileTime,
     List<RentalFormFactor>? firstMileRentalFormFactors,
     List<RentalFormFactor>? lastMileRentalFormFactors,
+    bool? lastMileSameAsFirst,
     double? walkingSpeedKmh,
     double? cyclingSpeedKmh,
     ElevationCosts? elevationCosts,
@@ -312,6 +347,7 @@ class RoutingOptions {
           firstMileRentalFormFactors ?? this.firstMileRentalFormFactors,
       lastMileRentalFormFactors:
           lastMileRentalFormFactors ?? this.lastMileRentalFormFactors,
+      lastMileSameAsFirst: lastMileSameAsFirst ?? this.lastMileSameAsFirst,
       walkingSpeedKmh: walkingSpeedKmh ?? this.walkingSpeedKmh,
       cyclingSpeedKmh: cyclingSpeedKmh ?? this.cyclingSpeedKmh,
       elevationCosts: elevationCosts ?? this.elevationCosts,
@@ -355,8 +391,8 @@ class RoutingOptions {
       transitModes: transitModes,
       preTransitModes: firstMileModes,
       maxPreTransitTime: maxFirstMileTime,
-      postTransitModes: lastMileModes,
-      maxPostTransitTime: maxLastMileTime,
+      postTransitModes: lastMileModesInUse,
+      maxPostTransitTime: maxLastMileTimeInUse,
       directModes: directModes,
       maxDirectTime: maxDirectTime,
       directRentals: _rentalFilters(
@@ -368,7 +404,7 @@ class RoutingOptions {
         rentalProviderGroups,
       ),
       postTransitRentals: _rentalFilters(
-        lastMileRentalFormFactors,
+        lastMileRentalFormFactorsInUse,
         rentalProviderGroups,
       ),
       pedestrianSpeed: _msFrom(walkingSpeedKmh, _defaultWalkingSpeedKmh),
@@ -408,14 +444,14 @@ class RoutingOptions {
     transitModes: transitModes,
     preTransitModes: firstMileModes,
     maxPreTransitTime: maxFirstMileTime,
-    postTransitModes: lastMileModes,
-    maxPostTransitTime: maxLastMileTime,
+    postTransitModes: lastMileModesInUse,
+    maxPostTransitTime: maxLastMileTimeInUse,
     preTransitRentals: _rentalFilters(
       firstMileRentalFormFactors,
       rentalProviderGroups,
     ),
     postTransitRentals: _rentalFilters(
-      lastMileRentalFormFactors,
+      lastMileRentalFormFactorsInUse,
       rentalProviderGroups,
     ),
     pedestrianSpeed: _msFrom(walkingSpeedKmh, _defaultWalkingSpeedKmh),
@@ -477,6 +513,7 @@ class RoutingOptions {
     'lastMileRentalFormFactors': [
       for (final f in lastMileRentalFormFactors) f.wireName,
     ],
+    'lastMileSameAsFirst': lastMileSameAsFirst,
     'walkingSpeedKmh': walkingSpeedKmh,
     'cyclingSpeedKmh': cyclingSpeedKmh,
     'elevationCosts': elevationCosts.wireName,
@@ -532,6 +569,8 @@ class RoutingOptions {
       lastMileRentalFormFactors: _formFactors(
         json['lastMileRentalFormFactors'],
       ),
+      lastMileSameAsFirst:
+          json['lastMileSameAsFirst'] as bool? ?? fallback.lastMileSameAsFirst,
     );
   }
 

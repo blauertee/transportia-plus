@@ -31,7 +31,7 @@ class TravellerStrip extends StatelessWidget {
   /// A speed only matters when something in the journey travels at it.
   bool get _showsCyclingPace => [
     ...options.firstMileModes,
-    ...options.lastMileModes,
+    ...options.lastMileModesInUse,
   ].any((mode) => mode == TransitMode.bike || mode == TransitMode.rental);
 
   @override

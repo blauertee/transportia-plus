@@ -12,6 +12,7 @@ import '../journey/spine_row.dart';
 import '../../models/transitous/server_config.dart';
 import '../../providers/theme_provider.dart';
 import '../options/icon_controls.dart';
+import '../../utils/stage_summary.dart';
 import 'journey_segment.dart';
 import 'leg_panel.dart';
 import 'street_leg_section.dart';
@@ -227,6 +228,31 @@ class _JourneySpineState extends State<JourneySpine> {
     );
   }
 
+  /// Links the way from the station to the way there, or sets it apart.
+  ///
+  /// Linking closes the stage: there is nothing of its own left to set.
+  /// Unlinking opens it, since setting it apart is why anyone would.
+  void _toggleLastMileLink(RoutingOptions options) {
+    final linking = !options.lastMileSameAsFirst;
+    _tooltips.hide();
+    setState(() {
+      _touched = true;
+      _views.remove(_Stage.fromStation);
+      if (linking) {
+        _open.remove(_Stage.fromStation);
+      } else {
+        _open.add(_Stage.fromStation);
+      }
+    });
+    widget.onChanged(options.withLastMileSameAsFirst(linking));
+    _announce(
+      linking
+          ? 'From the station: same as to the station'
+          : 'From the station: set separately',
+      icon: LucideIcons.link2,
+    );
+  }
+
   void _setView(_Stage stage, LegView view) {
     _tooltips.hide();
     setState(() {
@@ -264,9 +290,10 @@ class _JourneySpineState extends State<JourneySpine> {
           color: accent,
           icon: LucideIcons.trainFront,
           headline: 'Public transport',
-          summary:
-              '${options.transitSelection.summary()} · '
-              '${_changesText(options.maxTransfers)}',
+          summary: stageSummary(
+            options.transitSelection.summary(),
+            _changesText(options.maxTransfers),
+          ),
           isOpen: _open.contains(_Stage.transport),
           onToggle: () => _toggleStage(_Stage.transport),
           child: TransitSection(
@@ -286,23 +313,29 @@ class _JourneySpineState extends State<JourneySpine> {
           headline: 'From the station',
           where: 'from the station',
           choice: StreetLegChoice(
-            modes: options.lastMileModes,
-            formFactors: options.lastMileRentalFormFactors,
+            modes: options.lastMileModesInUse,
+            formFactors: options.lastMileRentalFormFactorsInUse,
           ),
-          budget: options.maxLastMileTime,
+          budget: options.maxLastMileTimeInUse,
           onChanged: (choice) => options.copyWith(
             lastMileModes: choice.modes,
             lastMileRentalFormFactors: choice.formFactors,
           ),
           onBudgetChanged: (budget) =>
               options.copyWith(maxLastMileTime: budget),
+          link: StageLink(
+            linked: options.lastMileSameAsFirst,
+            label: 'Same as to the station',
+            onPressed: () => _toggleLastMileLink(options),
+          ),
         ),
       ],
     );
   }
 
   /// A street stage: the two differ only in which half of the options they
-  /// read and write.
+  /// read and write, and in that the way from the station can be [link]ed to
+  /// the way there.
   Widget _streetStage({
     required _Stage stage,
     required String headline,
@@ -311,15 +344,23 @@ class _JourneySpineState extends State<JourneySpine> {
     required Duration budget,
     required RoutingOptions Function(StreetLegChoice) onChanged,
     required RoutingOptions Function(Duration) onBudgetChanged,
+    StageLink? link,
   }) {
+    final linked = link?.linked ?? false;
     return JourneySegment(
       color: kStreetLegColor,
       dashed: true,
+      // Linked, [choice] is the way there, so the ring shows how the rider
+      // will actually travel.
       icon: streetLegIcon(choice),
       headline: headline,
-      summary: '${choice.summary} · ${budgetSummaryText(budget)}',
-      isOpen: _open.contains(stage),
+      summary: linked
+          ? link!.label
+          : stageSummary(choice.summary, budgetSummaryText(budget)),
+      // A linked stage stays closed whatever the opening setting says.
+      isOpen: !linked && _open.contains(stage),
       onToggle: () => _toggleStage(stage),
+      link: link,
       child: StreetLegSection(
         choice: choice,
         budget: budget,
