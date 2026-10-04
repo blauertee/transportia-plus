@@ -23,6 +23,7 @@ import '../utils/stop_time_utils.dart';
 import '../widgets/buttons/pill_button.dart';
 import '../widgets/delayed_time.dart';
 import '../widgets/error_notice.dart';
+import '../widgets/gtfs_fields_row.dart';
 import '../widgets/route_badge_pill.dart';
 import '../widgets/buttons/primary_button.dart';
 import '../widgets/skeletons/skeleton_list.dart';
@@ -815,6 +816,12 @@ class _StopTimeCard extends StatelessWidget {
                     style: AppText.listTitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  GtfsFieldsRow(
+                    fields: {
+                      'trip': stopTime.tripId,
+                      'stop': stopTime.place.stopId,
+                    },
                   ),
                 ],
               ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:transportia/screens/advanced_settings_screen.dart';
 import 'package:transportia/screens/appearance_screen.dart';
 import 'package:transportia/screens/developer_info_screen.dart';
 import 'package:transportia/screens/statistics_screen.dart';
@@ -161,6 +162,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onPressed: () {
                       Navigator.of(context).push(
                         CustomPageRoute(child: const SearchOptionsScreen()),
+                      );
+                    },
+                  ),
+                  SettingsTile(
+                    icon: LucideIcons.terminal,
+                    title: 'Advanced',
+                    subtitle: 'Technical details for debugging',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        CustomPageRoute(child: const AdvancedSettingsScreen()),
                       );
                     },
                   ),

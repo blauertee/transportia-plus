@@ -21,6 +21,7 @@ import '../utils/polyline_utils.dart';
 import '../utils/reported_time.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/delayed_time.dart';
+import '../widgets/gtfs_fields_row.dart';
 import '../utils/leg_notices.dart';
 import '../widgets/journey/leg_notice_stack.dart';
 import '../widgets/stop_departures_sheet.dart';
@@ -1064,6 +1065,13 @@ class _LegCarouselCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppText.subtitle,
+          ),
+          GtfsFieldsRow(
+            fields: {
+              'trip': leg.tripId,
+              'from stop': leg.fromStopId,
+              'to stop': leg.toStopId,
+            },
           ),
           const SizedBox(height: 12),
           _LegStopRow(

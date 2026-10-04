@@ -32,6 +32,7 @@ import '../utils/time_utils.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_card.dart';
 import '../utils/leg_notices.dart';
+import '../widgets/gtfs_fields_row.dart';
 import '../widgets/journey/leg_notice_stack.dart';
 import '../widgets/journey/spine_node.dart';
 import '../widgets/journey/spine_row.dart';
@@ -1578,6 +1579,7 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
               ),
             ),
           ],
+          GtfsFieldsRow(fields: {'stop': stop.stopId}),
         ],
       ),
     );
@@ -1623,9 +1625,23 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
       metadata.add(const InfoChip(icon: LucideIcons.link, label: 'Interlined'));
     }
 
-    if (metadata.isEmpty) return const SizedBox.shrink();
+    final gtfsFields = GtfsFieldsRow(
+      fields: {
+        'trip': widget.leg.tripId,
+        'from stop': widget.leg.fromStopId,
+        'to stop': widget.leg.toStopId,
+      },
+    );
 
-    return Wrap(spacing: 8, runSpacing: 8, children: metadata);
+    if (metadata.isEmpty) return gtfsFields;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(spacing: 8, runSpacing: 8, children: metadata),
+        gtfsFields,
+      ],
+    );
   }
 
   Widget _buildTitleWidget() {

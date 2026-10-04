@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/vehicle_position.dart';
 import '../../utils/reported_time.dart';
 import '../delayed_time.dart';
+import '../gtfs_fields_row.dart';
 import '../timeline_indicator_box.dart';
 
 /// Called when a rider taps a stop with a known id.
@@ -279,6 +280,7 @@ class _StopContents extends StatelessWidget {
                 ),
               ),
             ],
+            GtfsFieldsRow(fields: {'stop': stop.stopId}),
           ],
         ),
       ),

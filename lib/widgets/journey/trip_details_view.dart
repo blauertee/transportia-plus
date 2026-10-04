@@ -13,6 +13,7 @@ import '../../utils/vehicle_position.dart';
 import '../alert_notice.dart';
 import '../custom_card.dart';
 import '../empty_state.dart';
+import '../gtfs_fields_row.dart';
 import '../info_chip.dart';
 import 'trip_timeline.dart';
 import '../../theme/app_text.dart';
@@ -231,6 +232,13 @@ class _TripInfoCard extends StatelessWidget {
           const _CardTitle('Information'),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: _buildChips()),
+          GtfsFieldsRow(
+            fields: {
+              'trip': leg.tripId,
+              'from stop': leg.fromStopId,
+              'to stop': leg.toStopId,
+            },
+          ),
         ],
       ),
     );

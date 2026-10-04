@@ -15,6 +15,10 @@ class PrefsKeys {
   static const String searchOptionsOpening = 'search_options_opening';
   static const String showCalories = 'show_calories';
 
+  /// Whether raw GTFS trip and stop ids are printed on trip and departure
+  /// screens. Absent means off.
+  static const String showGtfsFields = 'show_gtfs_fields';
+
   static const String mapShowStops = 'map_show_stops';
   static const String mapQuickButton = 'map_quick_button';
   static const String mapShowVehicles = 'map_show_vehicles';
