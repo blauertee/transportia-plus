@@ -74,6 +74,8 @@ void main() {
       final legs = result.itinerary.legs;
 
       expect(legs.map((l) => l.mode), ['BIKE', 'SUBURBAN', 'BIKE']);
+      // A bike to and from the station is no change of vehicle.
+      expect(result.itinerary.transfers, 0);
       expect(legs.any((l) => l.cancelled), isFalse);
       expect(legs.expand((l) => l.alerts), isEmpty);
       expect(
@@ -128,18 +130,35 @@ void main() {
     });
 
     test('out of reach is a changed connection', () async {
-      // Nothing within reach: one cancelled RENTAL placeholder stands for
-      // the whole walk-ride-walk.
       final result = await _refresh(
         planned,
         _fixture('refresh_itinerary_rental_none.json'),
       );
-      final firstMile = result.itinerary.firstMileLegs;
-
-      expect(firstMile.single.mode, 'RENTAL');
-      expect(firstMile.single.cancelled, isTrue);
       expect(result.freshness, ItineraryFreshness.changed);
     });
+
+    test(
+      'out of reach keeps the planned way there, vehicle cancelled',
+      () async {
+        // The server sends one nameless, pathless RENTAL placeholder for the
+        // whole walk-ride-walk; the planned stretch says the same and more.
+        final none = _fixture('refresh_itinerary_rental_none.json');
+        expect(none.firstMileLegs.single.mode, 'RENTAL');
+        expect(none.firstMileLegs.single.from.name, isEmpty);
+
+        final result = await _refresh(planned, none);
+        final firstMile = result.itinerary.firstMileLegs;
+
+        expect(firstMile.map((l) => l.mode), ['WALK', 'RENTAL', 'WALK']);
+        expect(firstMile.map((l) => l.cancelled), [false, true, false]);
+        expect(firstMile[1].rental?.providerId, 'de-DottBerlin');
+        expect(firstMile[1].alerts, isEmpty);
+        expect(
+          firstMile[1].legGeometry?.points,
+          planned.firstMileLegs[1].legGeometry?.points,
+        );
+      },
+    );
 
     test('out of reach leaves the walk at the other end alone', () async {
       // The same capture's last walk was a placeholder too, for the same
@@ -186,6 +205,39 @@ void main() {
       expect(result.itinerary.legs[3].cancelled, isTrue);
       expect(result.itinerary.legs[3].tripId, 's3');
     });
+
+    test(
+      'a ride the server cannot find again keeps the operator\'s say',
+      () async {
+        // The stand-in's only alert is the server's error text, which is not
+        // something to show a rider.
+        final withAlert = Leg.fromJson({
+          'mode': 'SUBURBAN',
+          'startTime': _t0.add(const Duration(minutes: 20)).toIso8601String(),
+          'endTime': _t0.add(const Duration(minutes: 30)).toIso8601String(),
+          'duration': 600,
+          'cancelled': true,
+          'alerts': [
+            {'headerText': 'adjacent transit leg couldn\'t be reconstructed'},
+          ],
+          'from': {'name': '', 'lat': 52.5, 'lon': 13.4, 'cancelled': true},
+          'to': {'name': '', 'lat': 52.4, 'lon': 13.5, 'cancelled': true},
+        });
+        final result = await _refresh(
+          planned,
+          _itinerary([
+            _leg('WALK', from: 0, to: 5),
+            _leg('SUBWAY', tripId: 'u5', from: 5, to: 15),
+            _leg('WALK', from: 15, to: 18),
+            withAlert,
+            _leg('WALK', from: 30, to: 34),
+          ]),
+        );
+
+        expect(result.itinerary.legs[3].cancelled, isTrue);
+        expect(result.itinerary.legs[3].alerts, isEmpty);
+      },
+    );
 
     test('a change with no way through is a changed connection', () async {
       // A footpath the server cannot route — a lift out of order on the only

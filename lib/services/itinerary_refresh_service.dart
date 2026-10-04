@@ -201,8 +201,9 @@ class ItineraryRefreshService {
   /// A shared vehicle is taken as the server now finds it: the planned one
   /// may be gone, and the one in its place stands somewhere else, reached
   /// another way, which is why the refresh fetched its shape. When none is in
-  /// reach the placeholder stays, since that is news: the rider cannot leave
-  /// the way the itinerary says.
+  /// reach that is news — the rider cannot leave the way the itinerary says —
+  /// so the planned stretch stays, with its vehicle marked cancelled. The
+  /// server's stand-in would say the same with no names and no path.
   ///
   /// The rider's own feet, bike or car do not go anywhere. A placeholder for
   /// one only means the server could not find the stretch again within the
@@ -210,8 +211,14 @@ class ItineraryRefreshService {
   /// it takes the new times — the server moves it with a delayed ride — and
   /// keeps its shape.
   static List<Leg> _mergeStreetStretch(List<Leg> planned, List<Leg> fresh) {
-    if (planned.any((leg) => leg.rental != null)) return fresh;
     final notFoundAgain = fresh.any((leg) => leg.cancelled);
+    if (planned.any((leg) => leg.rental != null)) {
+      if (!notFoundAgain) return fresh;
+      return [
+        for (final leg in planned)
+          leg.rental != null ? leg.withCancelled() : leg,
+      ];
+    }
     if (notFoundAgain || fresh.length != planned.length) return planned;
     return [for (final (i, leg) in planned.indexed) _mergeLeg(leg, fresh[i])];
   }
