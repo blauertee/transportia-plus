@@ -69,7 +69,18 @@ List<String> _legLines(Leg leg, {required bool isLast, required String to}) {
     '${_kIndent}from ${_stop(leg.fromName, leg.fromTrack)}',
     '${_kIndent}to ${_stop(leg.toName, leg.toTrack)}, '
         'arrives ${formatTime(leg.endTime)}',
+    '$_kIndent${_rideSize(leg)}',
   ];
+}
+
+/// How long a ride is and how many stops it makes, for a rider who wants to
+/// count them off. The stop they get off at is one of them: it is the last
+/// one to count, and the one that matters.
+String _rideSize(Leg leg) {
+  final stops = leg.intermediateStops.length + 1;
+  final noun = stops == 1 ? 'stop' : 'stops';
+  return '${formatDuration(leg.duration)}, $stops $noun '
+      'counting where you get off';
 }
 
 String _stop(String name, String? track) {
