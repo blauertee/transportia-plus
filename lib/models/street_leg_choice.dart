@@ -1,59 +1,39 @@
+import 'quick_access_layout.dart';
 import 'routing_options.dart';
 import 'transit_mode_group.dart';
 import 'transitous/enums.dart';
 
-/// The ways of getting to or from a station, as the search card groups them.
+/// One thing a street leg can use: a way of getting about, or a kind of
+/// shared vehicle.
 ///
-/// A section is a set of street modes and shared vehicles switched on and off
-/// together. Shared cars sit with cars rather than with the bikes and
-/// scooters: what matters to a rider is what they will be driving or riding,
-/// not whether it is rented.
-enum StreetSection {
-  walk('Walk', 'Walk', modes: [TransitMode.walk]),
-  ownBike('Own bike', 'Bike', modes: [TransitMode.bike]),
-  shared(
-    'Shared bikes & scooters',
-    'Shared',
-    formFactors: [
-      RentalFormFactor.bicycle,
-      RentalFormFactor.cargoBicycle,
-      RentalFormFactor.scooterStanding,
-      RentalFormFactor.scooterSeated,
-      RentalFormFactor.moped,
-      RentalFormFactor.other,
-    ],
-  ),
-  car(
-    'Car',
-    'Car',
-    modes: [TransitMode.car, TransitMode.carParking, TransitMode.carDropoff],
-    formFactors: [RentalFormFactor.car],
-  ),
-  other(
-    'Other',
-    'Other',
-    modes: [TransitMode.odm, TransitMode.flex, TransitMode.hgv],
-  );
+/// Both kinds sit side by side in the search card's sections, so a section
+/// can hold driving and shared cars alike. Renting itself is not an item: it
+/// follows the vehicles (see [StreetLegChoice]).
+sealed class StreetItem {
+  const StreetItem();
 
-  const StreetSection(
-    this.title,
-    this.shortLabel, {
-    this.modes = const [],
-    this.formFactors = const [],
-  });
+  /// Every item, in the order the pickers read: the modes, then the shared
+  /// vehicles.
+  static final List<StreetItem> all = [
+    for (final mode in RoutingOptions.streetModeChoices)
+      if (mode != TransitMode.rental) StreetMode(mode),
+    for (final factor in RentalFormFactor.values) SharedVehicle(factor),
+  ];
 
-  /// The heading in the full view.
-  final String title;
+  /// What a choice is called under its section's heading.
+  String get label;
 
-  /// Its name in the one-line summary of the leg.
-  final String shortLabel;
+  /// How it is stored: stable across releases, unlike its position.
+  String get key;
 
-  final List<TransitMode> modes;
-  final List<RentalFormFactor> formFactors;
+  /// The item stored as [key], if this build knows it.
+  static StreetItem? fromKey(String key) {
+    for (final item in all) {
+      if (item.key == key) return item;
+    }
+    return null;
+  }
 
-  int get _size => modes.length + formFactors.length;
-
-  /// What one choice within a section is called.
   static String modeLabel(TransitMode mode) => switch (mode) {
     TransitMode.walk => 'Walk',
     TransitMode.bike => 'Bike',
@@ -78,6 +58,43 @@ enum StreetSection {
   };
 }
 
+final class StreetMode extends StreetItem {
+  const StreetMode(this.mode);
+
+  final TransitMode mode;
+
+  @override
+  String get label => StreetItem.modeLabel(mode);
+
+  @override
+  String get key => 'mode:${mode.wireName}';
+
+  @override
+  bool operator ==(Object other) => other is StreetMode && other.mode == mode;
+
+  @override
+  int get hashCode => mode.hashCode;
+}
+
+final class SharedVehicle extends StreetItem {
+  const SharedVehicle(this.factor);
+
+  final RentalFormFactor factor;
+
+  @override
+  String get label => StreetItem.formFactorLabel(factor);
+
+  @override
+  String get key => 'vehicle:${factor.wireName}';
+
+  @override
+  bool operator ==(Object other) =>
+      other is SharedVehicle && other.factor == factor;
+
+  @override
+  int get hashCode => factor.hashCode;
+}
+
 /// What one street leg may use: its modes and which shared vehicles count.
 ///
 /// One value rather than two, because the rental mode follows the vehicles —
@@ -92,28 +109,45 @@ class StreetLegChoice {
   bool has(TransitMode mode) => modes.contains(mode);
   bool rents(RentalFormFactor factor) => formFactors.contains(factor);
 
-  GroupState stateOf(StreetSection section) => GroupState.of(
-    section.modes.where(has).length + section.formFactors.where(rents).length,
-    section._size,
-  );
+  bool uses(StreetItem item) => switch (item) {
+    StreetMode(:final mode) => has(mode),
+    SharedVehicle(:final factor) => rents(factor),
+  };
+
+  /// How much of a section is on.
+  GroupState stateOf(List<StreetItem> items) =>
+      GroupState.of(items.where(uses).length, items.length);
 
   /// Switches a whole section: off when all of it is on, otherwise all on,
   /// so a partly-on section is completed rather than cleared.
-  StreetLegChoice toggleSection(StreetSection section) {
-    final on = stateOf(section) != GroupState.all;
+  StreetLegChoice toggleAll(List<StreetItem> items) {
+    final on = stateOf(items) != GroupState.all;
+    final modes = {
+      for (final item in items)
+        if (item case StreetMode(:final mode)) mode,
+    };
+    final factors = {
+      for (final item in items)
+        if (item case SharedVehicle(:final factor)) factor,
+    };
     return _with(
       modes: {
-        for (final m in modes)
-          if (!section.modes.contains(m)) m,
-        if (on) ...section.modes,
+        for (final m in this.modes)
+          if (!modes.contains(m)) m,
+        if (on) ...modes,
       },
       formFactors: {
         for (final f in formFactors)
-          if (!section.formFactors.contains(f)) f,
-        if (on) ...section.formFactors,
+          if (!factors.contains(f)) f,
+        if (on) ...factors,
       },
     );
   }
+
+  StreetLegChoice toggle(StreetItem item) => switch (item) {
+    StreetMode(:final mode) => toggleMode(mode),
+    SharedVehicle(:final factor) => toggleFormFactor(factor),
+  };
 
   StreetLegChoice toggleMode(TransitMode mode) => _with(
     modes: has(mode) ? ({...modes}..remove(mode)) : {...modes, mode},
@@ -146,20 +180,27 @@ class StreetLegChoice {
     );
   }
 
-  /// The sections that are at least partly on, in card order.
-  List<StreetSection> get sectionsOn => [
-    for (final section in StreetSection.values)
-      if (stateOf(section) != GroupState.none) section,
+  /// Whether any shared vehicle is picked, so a provider limit applies.
+  bool get rentsAnything => formFactors.isNotEmpty;
+
+  /// The sections of [sections] that are at least partly on, in card order.
+  List<QuickGroup<StreetItem>> sectionsOn(
+    List<QuickGroup<StreetItem>> sections,
+  ) => [
+    for (final section in sections)
+      if (section.items.isNotEmpty && stateOf(section.items) != GroupState.none)
+        section,
   ];
 
-  /// The leg in a line, as the collapsed stage shows it.
-  String get summary {
-    final on = sectionsOn;
-    if (on.isEmpty) return StreetSection.walk.shortLabel;
+  /// The leg in a line, as the collapsed stage shows it: the sections on,
+  /// named by their headings.
+  String summary(List<QuickGroup<StreetItem>> sections) {
+    final on = sectionsOn(sections);
+    if (on.isEmpty) return StreetItem.modeLabel(TransitMode.walk);
     // A list in a sentence: only its first word is capitalised.
     return [
-      on.first.shortLabel,
-      for (final section in on.skip(1)) section.shortLabel.toLowerCase(),
+      on.first.title,
+      for (final section in on.skip(1)) section.title.toLowerCase(),
     ].join(', ');
   }
 }

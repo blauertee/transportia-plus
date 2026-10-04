@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:transportia/models/transit_mode_group.dart';
+import 'package:transportia/widgets/app_toggle_switch.dart';
 import 'package:transportia/widgets/options/icon_controls.dart';
 import 'package:transportia/widgets/search/leg_panel.dart';
 
@@ -241,6 +242,83 @@ void main() {
       final letter = tester.getCenter(find.text('R')).dx;
       final icon = tester.getCenter(find.byIcon(LucideIcons.trainFront)).dx;
       expect(letter, closeTo(icon, 0.5));
+    });
+  });
+
+  group('full view only', () {
+    Future<List<String>> pumpWith(WidgetTester tester, LegView view) async {
+      final log = <String>[];
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: MediaQuery(
+            data: const MediaQueryData(),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 360,
+                child: LegPanel(
+                  tooltips: OptionTooltipController(),
+                  view: view,
+                  onViewChanged: (_) {},
+                  sections: [
+                    LegSection(
+                      mark: const Icon(LucideIcons.footprints),
+                      title: 'Walk',
+                      state: GroupState.all,
+                      onToggle: () => log.add('walk'),
+                    ),
+                    LegSection(
+                      mark: const Icon(LucideIcons.shapes),
+                      title: 'Other',
+                      state: GroupState.none,
+                      onToggle: () => log.add('other'),
+                      inCompactRow: false,
+                    ),
+                  ],
+                  options: [
+                    LegOption.switchRow(
+                      icon: LucideIcons.userCheck,
+                      title: 'Only my sharing providers',
+                      subtitle: 'Dott, VOI',
+                      on: false,
+                      onToggle: () => log.add('providers'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return log;
+    }
+
+    testWidgets('a section can stay off the compact row', (tester) async {
+      await pumpWith(tester, LegView.compact);
+      expect(_pick('Walk'), findsOneWidget);
+      expect(_pick('Other'), findsNothing);
+    });
+
+    testWidgets('but is still listed with everything else', (tester) async {
+      final log = await pumpWith(tester, LegView.full);
+      await tester.tap(find.text('OTHER'));
+      expect(log, ['other']);
+    });
+
+    testWidgets('a switch row is a sentence, not a heading', (tester) async {
+      await pumpWith(tester, LegView.compact);
+      expect(find.text('Only my sharing providers'), findsNothing);
+
+      final log = await pumpWith(tester, LegView.full);
+      expect(find.text('Only my sharing providers'), findsOneWidget);
+      expect(find.text('ONLY MY SHARING PROVIDERS'), findsNothing);
+      expect(find.text('Dott, VOI'), findsOneWidget);
+
+      // The whole row is the target, the switch included.
+      await tester.tap(find.text('Dott, VOI'));
+      await tester.tap(find.byType(AppToggleSwitch));
+      expect(log, ['providers', 'providers']);
     });
   });
 }

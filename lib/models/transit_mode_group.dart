@@ -1,3 +1,4 @@
+import 'quick_access_layout.dart';
 import 'transitous/enums.dart';
 
 /// The four transport groups the search screen offers as icons.
@@ -203,18 +204,21 @@ class TransitSelection {
     return TransitSelection(next);
   }
 
-  /// Modes that are on but that nothing on screen is showing, so they need a
-  /// chip of their own for the row to carry the whole selection.
+  /// Modes that are on but that no lit section accounts for, so a summary
+  /// has to name them one by one.
   ///
-  /// A mode is covered when everything it belongs to is on: its group, whose
-  /// icon is then lit, or the extras taken together, which are all on unless
-  /// somebody narrowed them.
-  List<TransitMode> get uncoveredModes => [
+  /// A mode is covered when everything it belongs to is on: its section in
+  /// [groups], or the modes no section holds taken together, which are all
+  /// on unless somebody narrowed them.
+  List<TransitMode> uncoveredModes(List<QuickGroup<TransitMode>> groups) => [
     for (final mode in TransitModeGroup.allSelectable)
-      if (modes.contains(mode) && !_isCovered(mode)) mode,
+      if (modes.contains(mode) && !_isCovered(mode, groups)) mode,
   ];
 
-  bool get _allExtrasOn => TransitModeGroup.extras.every(modes.contains);
+  bool _allOthersOn(List<QuickGroup<TransitMode>> groups) => TransitModeGroup
+      .allSelectable
+      .where((mode) => !groups.any((g) => g.items.contains(mode)))
+      .every(modes.contains);
 
   bool get _isEverythingRegional =>
       isRegionalOnly &&
@@ -224,13 +228,13 @@ class TransitSelection {
             TransitModeGroup.longDistance.contains(mode),
       );
 
-  bool _isCovered(TransitMode mode) {
-    for (final group in TransitModeGroup.values) {
-      if (group.modes.contains(mode)) {
-        return group.stateIn(modes) == GroupState.all;
+  bool _isCovered(TransitMode mode, List<QuickGroup<TransitMode>> groups) {
+    for (final group in groups) {
+      if (group.items.contains(mode)) {
+        return stateOfModes(group.items) == GroupState.all;
       }
     }
-    return _allExtrasOn;
+    return _allOthersOn(groups);
   }
 
   /// Flat mode list for `/plan`.
@@ -262,17 +266,21 @@ class TransitSelection {
   ///
   /// Says "All transport" rather than listing everything: enumerating twenty
   /// modes truncates mid-word in the common case where nothing is excluded.
-  /// Whole groups are named by their group, so narrowing to rail reads "Rail"
-  /// rather than five rail modes.
-  String summary() {
+  /// Whole sections are named by their heading, so narrowing to rail reads
+  /// "Rail" rather than five rail modes. [groups] are the sections, Other
+  /// left out: it is "more".
+  String summary(List<QuickGroup<TransitMode>> groups) {
     if (isEverything) return 'All transport';
     if (isEmpty) return 'No transport';
     if (_isEverythingRegional) return 'Regional only';
     return [
-      for (final group in TransitModeGroup.values)
-        if (group.stateIn(modes) == GroupState.all) group.label,
-      if (_allExtrasOn) 'more',
-      for (final mode in uncoveredModes) TransitModeGroup.modeLabel(mode),
+      for (final group in groups)
+        if (group.items.isNotEmpty &&
+            stateOfModes(group.items) == GroupState.all)
+          group.title,
+      if (_allOthersOn(groups)) 'more',
+      for (final mode in uncoveredModes(groups))
+        TransitModeGroup.modeLabel(mode),
     ].join(', ');
   }
 

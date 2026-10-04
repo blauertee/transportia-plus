@@ -264,7 +264,7 @@ class RoutingOptions {
 
   /// Every mode a street leg may use, in the order the pickers read.
   ///
-  /// The search card files each of them under a `StreetSection`; a journey
+  /// The search card files each of them under a section of its layout; a journey
   /// without transit picks from the same list.
   static const List<TransitMode> streetModeChoices = [
     TransitMode.walk,

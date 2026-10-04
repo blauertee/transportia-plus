@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/journey_metrics.dart';
+import '../../utils/app_icons.dart';
 import '../../utils/haptics.dart';
 import '../journey/spine_node.dart';
 import '../journey/spine_row.dart';
@@ -50,7 +51,7 @@ class JourneySegment extends StatelessWidget {
   });
 
   /// Reflects the current choice, e.g. a bike once a bike is picked.
-  final IconData icon;
+  final AppIcon icon;
 
   /// Names the stage: "To the station", "Public transport".
   final String headline;
@@ -81,7 +82,7 @@ class JourneySegment extends StatelessWidget {
     return SpineRow(
       timeColumn: 0,
       padding: EdgeInsets.zero,
-      node: SpineNode(icon: icon, color: color, semanticLabel: headline),
+      node: SpineNode.app(icon: icon, color: color, semanticLabel: headline),
       railColor: color,
       railDashed: dashed,
       railTopInset: JourneyMetrics.ring,

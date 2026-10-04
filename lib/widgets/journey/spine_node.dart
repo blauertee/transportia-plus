@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/journey_metrics.dart';
+import '../../utils/app_icons.dart';
+import '../app_icon_view.dart';
 
 /// The ring on the line that carries a mode glyph.
 ///
@@ -12,13 +14,25 @@ import '../../theme/journey_metrics.dart';
 class SpineNode extends StatelessWidget {
   const SpineNode({
     super.key,
-    required this.icon,
+    required IconData this.icon,
     required this.color,
     this.filled = false,
     this.semanticLabel,
-  });
+  }) : appIcon = null;
 
-  final IconData icon;
+  /// A ring carrying an icon picked by name, which may be composed of two
+  /// glyphs: the search card's street stages.
+  const SpineNode.app({
+    super.key,
+    required AppIcon icon,
+    required this.color,
+    this.semanticLabel,
+  }) : icon = null,
+       appIcon = icon,
+       filled = false;
+
+  final IconData? icon;
+  final AppIcon? appIcon;
   final Color color;
 
   /// Filled for a terminus, where the ring is the end of the line rather than
@@ -40,8 +54,8 @@ class SpineNode extends StatelessWidget {
         border: Border.all(color: color, width: JourneyMetrics.stroke),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        icon,
+      child: AppIconView(
+        appIcon ?? GlyphIcon(icon!),
         size: JourneyMetrics.iconSize * 0.72,
         color: filled ? AppColors.white : color,
       ),

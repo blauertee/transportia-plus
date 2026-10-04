@@ -1,29 +1,20 @@
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../models/quick_access_layout.dart';
 import '../../models/routing_options.dart';
 import '../../models/transit_mode_group.dart';
 import '../../models/transitous/enums.dart';
+import '../app_icon_view.dart';
 import '../options/icon_controls.dart';
 import 'leg_panel.dart';
-
-/// The icon each transport group shows.
-const Map<TransitModeGroup, IconData> _groupIcons = {
-  TransitModeGroup.rail: LucideIcons.trainFront,
-  TransitModeGroup.metro: LucideIcons.trainFrontTunnel,
-  TransitModeGroup.bus: LucideIcons.bus,
-  TransitModeGroup.boat: LucideIcons.ship,
-};
-
-/// The modes no group covers, as a section of their own so every mode has a
-/// switch on the compact row.
-const IconData _otherIcon = LucideIcons.shapes;
 
 /// The ride: which transport it may use, and the settings that belong to the
 /// vehicle rather than to either street leg.
 class TransitSection extends StatelessWidget {
   const TransitSection({
     super.key,
+    required this.sections,
     required this.options,
     required this.view,
     required this.onViewChanged,
@@ -31,6 +22,11 @@ class TransitSection extends StatelessWidget {
     required this.onChanged,
     required this.onViaPressed,
   });
+
+  /// The transport sections, Other last; see
+  /// [QuickAccessLayout.transitSections]. Other keeps its quick icon here:
+  /// wanting every kind of transport is a real request.
+  final List<QuickGroup<TransitMode>> sections;
 
   final RoutingOptions options;
   final LegView view;
@@ -51,33 +47,20 @@ class TransitSection extends StatelessWidget {
       view: view,
       onViewChanged: onViewChanged,
       sections: [
-        for (final group in TransitModeGroup.values)
-          _section(
-            icon: _groupIcons[group]!,
-            title: group.label,
-            modes: group.modes,
-          ),
-        _section(
-          icon: _otherIcon,
-          title: 'Other',
-          modes: TransitModeGroup.extras,
-        ),
+        for (final section in sections)
+          if (section.items.isNotEmpty) _section(section),
       ],
       options: _options(),
     );
   }
 
-  LegSection _section({
-    required IconData icon,
-    required String title,
-    required List<TransitMode> modes,
-  }) => LegSection(
-    mark: Icon(icon),
-    title: title,
-    state: _selection.stateOfModes(modes),
-    onToggle: () => _select(_selection.toggleModes(modes)),
+  LegSection _section(QuickGroup<TransitMode> section) => LegSection(
+    mark: AppIconView(section.icon),
+    title: section.title,
+    state: _selection.stateOfModes(section.items),
+    onToggle: () => _select(_selection.toggleModes(section.items)),
     choices: [
-      for (final mode in modes)
+      for (final mode in section.items)
         LegChoice(
           label: TransitModeGroup.modeLabel(mode),
           selected: _selection.has(mode),

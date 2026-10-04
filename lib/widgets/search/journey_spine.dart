@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../models/quick_access_layout.dart';
 import '../../models/routing_options.dart';
 import '../../models/street_leg_choice.dart';
 import '../../models/transit_mode_group.dart';
@@ -12,6 +13,7 @@ import '../journey/spine_row.dart';
 import '../../models/transitous/server_config.dart';
 import '../../providers/theme_provider.dart';
 import '../options/icon_controls.dart';
+import '../../utils/app_icons.dart';
 import '../../utils/stage_summary.dart';
 import 'journey_segment.dart';
 import 'leg_panel.dart';
@@ -35,9 +37,10 @@ class JourneySpine extends StatefulWidget {
     required this.onChanged,
     required this.onAddViaStop,
     required this.limitToMyProviders,
-    required this.hasRentalProviders,
+    required this.rentalProviderNames,
     required this.onLimitToMyProvidersChanged,
     this.opening = SearchOptionsOpening.closed,
+    this.layout,
   });
 
   final RoutingOptions options;
@@ -55,9 +58,14 @@ class JourneySpine extends StatefulWidget {
   /// search.
   final bool limitToMyProviders;
 
-  /// Whether any provider has been named in the settings. Without one the
-  /// limit has nothing to keep to, so turning it on is refused with a hint.
-  final bool hasRentalProviders;
+  /// The providers named in the settings, as the switch lists them. With
+  /// none the limit has nothing to keep to, so turning it on is refused with
+  /// a hint.
+  final List<String> rentalProviderNames;
+
+  /// How the modes are grouped into sections; the defaults until the rider
+  /// changes them.
+  final QuickAccessLayout? layout;
 
   final ValueChanged<bool> onLimitToMyProvidersChanged;
 
@@ -111,6 +119,8 @@ class _JourneySpineState extends State<JourneySpine> {
 
   LegView _viewOf(_Stage stage) => _views[stage] ?? _defaultView;
 
+  QuickAccessLayout get _layout => widget.layout ?? QuickAccessLayout.defaults;
+
   OptionAnnouncement? _announcement;
   Timer? _announcementTimer;
 
@@ -156,7 +166,7 @@ class _JourneySpineState extends State<JourneySpine> {
 
   void _toggleProviderLimit() {
     _tooltips.hide();
-    if (!widget.hasRentalProviders) {
+    if (widget.rentalProviderNames.isEmpty) {
       _announce(
         'No providers set. Add yours in Search and routing options',
         icon: LucideIcons.circleAlert,
@@ -288,15 +298,16 @@ class _JourneySpineState extends State<JourneySpine> {
         ),
         JourneySegment(
           color: accent,
-          icon: LucideIcons.trainFront,
+          icon: const GlyphIcon(LucideIcons.trainFront),
           headline: 'Public transport',
           summary: stageSummary(
-            options.transitSelection.summary(),
+            options.transitSelection.summary(_layout.transit),
             _changesText(options.maxTransfers),
           ),
           isOpen: _open.contains(_Stage.transport),
           onToggle: () => _toggleStage(_Stage.transport),
           child: TransitSection(
+            sections: _layout.transitSections,
             options: options,
             tooltips: _tooltips,
             view: _viewOf(_Stage.transport),
@@ -352,16 +363,20 @@ class _JourneySpineState extends State<JourneySpine> {
       dashed: true,
       // Linked, [choice] is the way there, so the ring shows how the rider
       // will actually travel.
-      icon: streetLegIcon(choice),
+      icon: streetLegIcon(choice, _layout.streetSections),
       headline: headline,
       summary: linked
           ? link!.label
-          : stageSummary(choice.summary, budgetSummaryText(budget)),
+          : stageSummary(
+              choice.summary(_layout.streetSections),
+              budgetSummaryText(budget),
+            ),
       // A linked stage stays closed whatever the opening setting says.
       isOpen: !linked && _open.contains(stage),
       onToggle: () => _toggleStage(stage),
       link: link,
       child: StreetLegSection(
+        sections: _layout.streetSections,
         choice: choice,
         budget: budget,
         maxBudget: _mileCeiling,
@@ -374,6 +389,7 @@ class _JourneySpineState extends State<JourneySpine> {
         },
         onBudgetChanged: (next) => _apply(onBudgetChanged(next)),
         limitToMyProviders: widget.limitToMyProviders,
+        providerNames: widget.rentalProviderNames,
         onLimitToMyProvidersPressed: _toggleProviderLimit,
       ),
     );
@@ -386,14 +402,19 @@ class _JourneySpineState extends State<JourneySpine> {
     StreetLegChoice after,
     String where,
   ) {
-    for (final section in StreetSection.values) {
-      final wasOn = before.stateOf(section) != GroupState.none;
-      if (wasOn == (after.stateOf(section) != GroupState.none)) continue;
+    for (final section in _layout.streetSections) {
+      final wasOn = before.stateOf(section.items) != GroupState.none;
+      if (wasOn == (after.stateOf(section.items) != GroupState.none)) continue;
       _announce(
         wasOn
             ? 'No ${section.title.toLowerCase()} $where'
             : '${section.title} $where',
-        icon: streetSectionIcons[section],
+        // An announcement has room for one glyph; a composed icon gives its
+        // main one.
+        icon: switch (section.icon) {
+          GlyphIcon(:final data) => data,
+          BadgedIcon(:final base) => base,
+        },
       );
       return;
     }
@@ -448,7 +469,7 @@ class _JourneySpineState extends State<JourneySpine> {
       return;
     }
     if (after.transitSelection != before.transitSelection) {
-      _announce(after.transitSelection.summary());
+      _announce(after.transitSelection.summary(_layout.transit));
     }
   }
 

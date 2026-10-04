@@ -1,29 +1,26 @@
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../models/quick_access_layout.dart';
 import '../../models/routing_options.dart';
 import '../../models/street_leg_choice.dart';
+import '../../utils/app_icons.dart';
+import '../app_icon_view.dart';
 import '../options/icon_controls.dart';
 import 'leg_panel.dart';
 
-/// Each section's mark. The scooter stands for every light shared vehicle,
-/// bikes included; a shared car is a car.
-const Map<StreetSection, IconData> streetSectionIcons = {
-  StreetSection.walk: LucideIcons.footprints,
-  StreetSection.ownBike: LucideIcons.bike,
-  StreetSection.shared: LucideIcons.scooter,
-  StreetSection.car: LucideIcons.car,
-  StreetSection.other: LucideIcons.shapes,
-};
+/// What a leg's ring shows with nothing on: it is still walking.
+const AppIcon _walking = GlyphIcon(LucideIcons.footprints);
 
-/// The icon standing for a whole leg: the last section that is on, as the
-/// row reads — picking up a bike on the way out should change it; which was
-/// chosen first should not decide it forever.
-IconData streetLegIcon(StreetLegChoice choice) {
-  final on = choice.sectionsOn;
-  return on.isEmpty
-      ? streetSectionIcons[StreetSection.walk]!
-      : streetSectionIcons[on.last]!;
+/// The icon standing for a whole leg: the last of [sections] that is on, as
+/// the row reads — picking up a bike on the way out should change it; which
+/// was chosen first should not decide it forever.
+AppIcon streetLegIcon(
+  StreetLegChoice choice,
+  List<QuickGroup<StreetItem>> sections,
+) {
+  final on = choice.sectionsOn(sections);
+  return on.isEmpty ? _walking : on.last.icon;
 }
 
 /// A budget spelled out: minutes below an hour, hours past it.
@@ -42,6 +39,7 @@ String budgetSummaryText(Duration budget) {
 class StreetLegSection extends StatelessWidget {
   const StreetLegSection({
     super.key,
+    required this.sections,
     required this.choice,
     required this.budget,
     required this.maxBudget,
@@ -51,8 +49,12 @@ class StreetLegSection extends StatelessWidget {
     required this.onChanged,
     required this.onBudgetChanged,
     required this.limitToMyProviders,
+    required this.providerNames,
     required this.onLimitToMyProvidersPressed,
   });
+
+  /// The street sections, Other last; see [QuickAccessLayout.streetSections].
+  final List<QuickGroup<StreetItem>> sections;
 
   final StreetLegChoice choice;
   final Duration budget;
@@ -71,6 +73,9 @@ class StreetLegSection extends StatelessWidget {
   /// setting for the whole journey, shown on both legs because it sits with
   /// the rest of the rental choices.
   final bool limitToMyProviders;
+
+  /// The providers named in the settings, empty when there are none.
+  final List<String> providerNames;
   final VoidCallback onLimitToMyProvidersPressed;
 
   @override
@@ -79,8 +84,23 @@ class StreetLegSection extends StatelessWidget {
       tooltips: tooltips,
       view: view,
       onViewChanged: onViewChanged,
-      sections: [for (final section in StreetSection.values) _section(section)],
+      sections: [
+        for (final section in sections)
+          if (section.items.isNotEmpty) _section(section),
+      ],
       options: [
+        // Whichever sections the shared vehicles sit in, the limit applies
+        // to all of them, so it shows whenever anything is rented.
+        if (choice.rentsAnything)
+          LegOption.switchRow(
+            icon: LucideIcons.userCheck,
+            title: 'Only my sharing providers',
+            subtitle: providerNames.isEmpty
+                ? 'None set yet'
+                : providerNames.join(', '),
+            on: limitToMyProviders,
+            onToggle: onLimitToMyProvidersPressed,
+          ),
         LegOption.value(
           icon: LucideIcons.clock,
           title: 'Time budget',
@@ -96,34 +116,23 @@ class StreetLegSection extends StatelessWidget {
     );
   }
 
-  LegSection _section(StreetSection section) => LegSection(
-    mark: Icon(streetSectionIcons[section]),
+  LegSection _section(QuickGroup<StreetItem> section) => LegSection(
+    mark: AppIconView(section.icon),
     title: section.title,
-    state: choice.stateOf(section),
-    onToggle: () => onChanged(choice.toggleSection(section)),
-    // A section that is one mode has nothing to choose between.
-    choices: section.modes.length + section.formFactors.length < 2
+    state: choice.stateOf(section.items),
+    onToggle: () => onChanged(choice.toggleAll(section.items)),
+    // Lorries and on-demand rides are not one way of travelling, and no one
+    // wants all of them at once: listed, but no quick icon.
+    inCompactRow: section.id != QuickAccessLayout.otherId,
+    // A section of one has nothing to choose between.
+    choices: section.items.length < 2
         ? const []
         : [
-            for (final mode in section.modes)
+            for (final item in section.items)
               LegChoice(
-                label: StreetSection.modeLabel(mode),
-                selected: choice.has(mode),
-                onPressed: () => onChanged(choice.toggleMode(mode)),
-              ),
-            for (final factor in section.formFactors)
-              LegChoice(
-                label: StreetSection.formFactorLabel(factor),
-                selected: choice.rents(factor),
-                onPressed: () => onChanged(choice.toggleFormFactor(factor)),
-              ),
-            // Last and apart from the vehicles: which providers, not which
-            // kind. Switching the section leaves it as it is.
-            if (section == StreetSection.shared)
-              LegChoice(
-                label: 'Only my providers',
-                selected: limitToMyProviders,
-                onPressed: onLimitToMyProvidersPressed,
+                label: item.label,
+                selected: choice.uses(item),
+                onPressed: () => onChanged(choice.toggle(item)),
               ),
           ],
   );

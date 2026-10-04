@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transportia/models/quick_access_layout.dart';
 import 'package:transportia/models/street_leg_choice.dart';
 import 'package:transportia/models/transitous/enums.dart';
 import 'package:transportia/widgets/options/icon_controls.dart';
@@ -13,16 +14,23 @@ Future<void> _pumpLeg(
   bool budgetOpen = false,
   ValueChanged<Duration>? onBudgetChanged,
 }) {
+  // Tall enough for the full view's six sections.
+  tester.view.physicalSize = const Size(400, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   return tester.pumpWidget(
     Directionality(
       textDirection: TextDirection.ltr,
       child: MediaQuery(
-        data: const MediaQueryData(size: Size(400, 800)),
+        data: const MediaQueryData(size: Size(400, 1400)),
         child: Align(
           alignment: Alignment.topCenter,
           child: SizedBox(
             width: 380,
             child: StreetLegSection(
+              sections: QuickAccessLayout.defaults.streetSections,
+              providerNames: const [],
               choice: const StreetLegChoice(
                 modes: [TransitMode.walk],
                 formFactors: [],

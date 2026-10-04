@@ -150,7 +150,7 @@ class _BottomCardState extends State<BottomCard> {
         onChanged: widget.onOptionsChanged,
         onAddViaStop: widget.onAddViaStop,
         limitToMyProviders: providers.isActive,
-        hasRentalProviders: providers.groups.isNotEmpty,
+        rentalProviderNames: [for (final group in providers.groups) group.name],
         onLimitToMyProvidersChanged: RentalProvidersService.setLimit,
         opening: context.select<ThemeProvider, SearchOptionsOpening>(
           (theme) => theme.searchOptionsOpening,

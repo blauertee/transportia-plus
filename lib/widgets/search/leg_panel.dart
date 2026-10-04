@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/transit_mode_group.dart';
 import '../../theme/app_colors.dart';
+import '../app_toggle_switch.dart';
 import '../options/icon_controls.dart';
 import '../options/selectable_tick.dart';
 
@@ -15,6 +16,7 @@ class LegSection {
     required this.state,
     required this.onToggle,
     this.choices = const [],
+    this.inCompactRow = true,
   });
 
   /// An [Icon], coloured and sized by the panel.
@@ -25,6 +27,10 @@ class LegSection {
 
   /// Empty for a section that is a single mode, such as walking.
   final List<LegChoice> choices;
+
+  /// False for a section no one would switch as a whole, such as the odds
+  /// and ends of a street leg: it is listed in the full view only.
+  final bool inCompactRow;
 }
 
 /// One tick under a section's heading.
@@ -52,7 +58,8 @@ class LegOption {
     this.inCompactRow = true,
   }) : icon = null,
        value = null,
-       slider = null;
+       slider = null,
+       subtitle = null;
 
   /// A number, set with the slider [slider] builds. [value] null means no
   /// limit, shown as the infinity sign.
@@ -64,7 +71,22 @@ class LegOption {
   }) : mark = null,
        on = null,
        onToggle = null,
+       subtitle = null,
        inCompactRow = true;
+
+  /// On or off, with a line saying what it applies to: drawn as a sentence
+  /// with a switch, so it cannot be read as one more section. Full view
+  /// only.
+  const LegOption.switchRow({
+    required IconData this.icon,
+    required this.title,
+    required String this.subtitle,
+    required bool this.on,
+    required VoidCallback this.onToggle,
+  }) : mark = null,
+       value = null,
+       slider = null,
+       inCompactRow = false;
 
   final Widget? mark;
   final IconData? icon;
@@ -73,12 +95,14 @@ class LegOption {
   final VoidCallback? onToggle;
   final String? value;
   final SliderBuilder? slider;
+  final String? subtitle;
 
   /// False for an action rather than a switch, such as picking a stop to
   /// travel through: it lives in the full view only.
   final bool inCompactRow;
 
   bool get isValue => slider != null;
+  bool get isSwitchRow => subtitle != null;
 }
 
 /// Builds a value option's slider. [onChangeEnd] is called when the rider
@@ -176,17 +200,18 @@ class LegPanel extends StatelessWidget {
         runSpacing: 6,
         children: [
           for (final section in sections)
-            SizedBox(
-              width: 42,
-              child: IconPick.glyph(
-                glyph: section.mark,
-                label: section.title,
-                selected: section.state == GroupState.all,
-                partial: section.state == GroupState.some,
-                tooltips: tooltips,
-                onPressed: section.onToggle,
+            if (section.inCompactRow)
+              SizedBox(
+                width: 42,
+                child: IconPick.glyph(
+                  glyph: section.mark,
+                  label: section.title,
+                  selected: section.state == GroupState.all,
+                  partial: section.state == GroupState.some,
+                  tooltips: tooltips,
+                  onPressed: section.onToggle,
+                ),
               ),
-            ),
         ],
       ),
       if (compactOptions.isNotEmpty) ...[
@@ -288,7 +313,9 @@ class LegPanel extends StatelessWidget {
             ),
             child: option.slider!(null),
           ),
-        ] else
+        ] else if (option.isSwitchRow)
+          _SwitchRow(option)
+        else
           LegHeading(
             mark: option.mark!,
             title: option.title,
@@ -300,6 +327,66 @@ class LegPanel extends StatelessWidget {
   ];
 
   static const double _sliderInset = 16;
+}
+
+/// A [LegOption.switchRow]: the mark in the headings' column, then a
+/// sentence and what it applies to, then the switch. The whole row toggles.
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow(this.option);
+
+  final LegOption option;
+
+  @override
+  Widget build(BuildContext context) {
+    final faint = AppColors.black.withValues(alpha: 0.55);
+    return Semantics(
+      button: true,
+      toggled: option.on,
+      label: '${option.title}. ${option.subtitle}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: option.onToggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: LegHeading.markColumn,
+                child: Center(child: Icon(option.icon, size: 19, color: faint)),
+              ),
+              const SizedBox(width: LegHeading.gap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      option.subtitle!,
+                      style: TextStyle(fontSize: 12.5, color: faint),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              AppToggleSwitch(
+                value: option.on!,
+                onChanged: (_) => option.onToggle!(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// How a heading is coloured: a switch that is on or off, or a value, which
@@ -329,11 +416,13 @@ class LegHeading extends StatelessWidget {
   /// its slider.
   final VoidCallback? onPressed;
 
-  static const double _markColumn = 26;
-  static const double _gap = 10;
+  /// The marks' column and the space after it, which rows that line up with
+  /// the headings share.
+  static const double markColumn = 26;
+  static const double gap = 10;
 
   /// Where a heading's text starts, and so where anything under it starts.
-  static const double textIndent = _markColumn + _gap;
+  static const double textIndent = markColumn + gap;
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +436,7 @@ class LegHeading extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: _markColumn,
+            width: markColumn,
             // Centred, not started: an icon fills its box and so centres
             // itself, but a letter such as the regional R is only as wide
             // as it is and would sit at the left, as if indented under the
@@ -362,7 +451,7 @@ class LegHeading extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: _gap),
+          const SizedBox(width: gap),
           Expanded(
             child: Text(
               title.toUpperCase(),

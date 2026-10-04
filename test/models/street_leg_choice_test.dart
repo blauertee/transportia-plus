@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transportia/models/quick_access_layout.dart';
 import 'package:transportia/models/routing_options.dart';
 import 'package:transportia/models/street_leg_choice.dart';
 import 'package:transportia/models/transit_mode_group.dart';
@@ -6,63 +7,85 @@ import 'package:transportia/models/transitous/enums.dart';
 
 const _walking = StreetLegChoice(modes: [TransitMode.walk], formFactors: []);
 
-void main() {
-  test('every street mode and shared vehicle sits in exactly one section', () {
-    // One the defaults editor can store but no section holds would light
-    // nothing and could not be turned off here.
-    final modes = [
-      for (final section in StreetSection.values) ...section.modes,
-    ];
-    final factors = [
-      for (final section in StreetSection.values) ...section.formFactors,
-    ];
-    expect(
-      modes.toSet(),
-      RoutingOptions.streetModeChoices.toSet()..remove(TransitMode.rental),
-    );
-    expect(modes.length, modes.toSet().length);
-    expect(factors.toSet(), RentalFormFactor.values.toSet());
-    expect(factors.length, factors.toSet().length);
-  });
+final _sections = QuickAccessLayout.defaults.streetSections;
 
-  test('a shared car is a car, not a scooter', () {
-    expect(StreetSection.car.formFactors, [RentalFormFactor.car]);
-    expect(
-      StreetSection.shared.formFactors,
-      isNot(contains(RentalFormFactor.car)),
-    );
+List<StreetItem> _items(String id) =>
+    _sections.firstWhere((s) => s.id == id).items;
+
+void main() {
+  group('street items', () {
+    test('are every street mode but renting, and every shared vehicle', () {
+      expect(
+        [
+          for (final item in StreetItem.all)
+            if (item case StreetMode(:final mode)) mode,
+        ],
+        [
+          for (final mode in RoutingOptions.streetModeChoices)
+            if (mode != TransitMode.rental) mode,
+        ],
+      );
+      expect([
+        for (final item in StreetItem.all)
+          if (item case SharedVehicle(:final factor)) factor,
+      ], RentalFormFactor.values);
+    });
+
+    test('keep their key across a round trip', () {
+      for (final item in StreetItem.all) {
+        expect(StreetItem.fromKey(item.key), item);
+      }
+      expect(StreetItem.fromKey('mode:TELEPORT'), isNull);
+    });
   });
 
   group('a section', () {
     test('is on, partly on or off', () {
-      expect(_walking.stateOf(StreetSection.walk), GroupState.all);
-      expect(_walking.stateOf(StreetSection.car), GroupState.none);
+      expect(_walking.stateOf(_items('walk')), GroupState.all);
+      expect(_walking.stateOf(_items('own-car')), GroupState.none);
       final dropOff = _walking.toggleMode(TransitMode.carDropoff);
-      expect(dropOff.stateOf(StreetSection.car), GroupState.some);
+      expect(dropOff.stateOf(_items('own-car')), GroupState.some);
     });
 
     test('switches on whole, then off whole', () {
-      final on = _walking.toggleSection(StreetSection.car);
-      expect(on.stateOf(StreetSection.car), GroupState.all);
-      expect(on.modes, containsAll(StreetSection.car.modes));
-      expect(on.formFactors, [RentalFormFactor.car]);
+      final on = _walking.toggleAll(_items('shared-car'));
+      expect(on.stateOf(_items('shared-car')), GroupState.all);
+      expect(on.formFactors, [RentalFormFactor.car, RentalFormFactor.moped]);
+      expect(on.modes, contains(TransitMode.rental));
 
-      final off = on.toggleSection(StreetSection.car);
-      expect(off.stateOf(StreetSection.car), GroupState.none);
+      final off = on.toggleAll(_items('shared-car'));
+      expect(off.stateOf(_items('shared-car')), GroupState.none);
       expect(off.modes, [TransitMode.walk]);
     });
 
     test('partly on is completed rather than cleared', () {
       final some = _walking.toggleFormFactor(RentalFormFactor.bicycle);
-      final completed = some.toggleSection(StreetSection.shared);
-      expect(completed.stateOf(StreetSection.shared), GroupState.all);
+      final completed = some.toggleAll(_items('shared-light'));
+      expect(completed.stateOf(_items('shared-light')), GroupState.all);
     });
 
     test('leaves the other sections as they were', () {
       final withBike = _walking.toggleMode(TransitMode.bike);
-      final both = withBike.toggleSection(StreetSection.shared);
+      final both = withBike.toggleAll(_items('shared-light'));
       expect(both.has(TransitMode.walk), isTrue);
       expect(both.has(TransitMode.bike), isTrue);
+    });
+
+    test('of nothing is off, and switching it changes nothing', () {
+      expect(_walking.stateOf(const []), GroupState.none);
+      final same = _walking.toggleAll(const []);
+      expect(same.modes, _walking.modes);
+      expect(same.formFactors, _walking.formFactors);
+    });
+
+    test('an item switches by itself, whichever kind it is', () {
+      final driving = _walking.toggle(const StreetMode(TransitMode.car));
+      expect(driving.uses(const StreetMode(TransitMode.car)), isTrue);
+      final renting = driving.toggle(
+        const SharedVehicle(RentalFormFactor.moped),
+      );
+      expect(renting.rents(RentalFormFactor.moped), isTrue);
+      expect(renting.rentsAnything, isTrue);
     });
   });
 
@@ -78,12 +101,7 @@ void main() {
           .toggleFormFactor(RentalFormFactor.scooterStanding);
       expect(next.modes, isNot(contains(TransitMode.rental)));
       expect(next.formFactors, isEmpty);
-    });
-
-    test('a shared car counts as a vehicle to rent', () {
-      final next = _walking.toggleFormFactor(RentalFormFactor.car);
-      expect(next.modes, contains(TransitMode.rental));
-      expect(next.stateOf(StreetSection.shared), GroupState.none);
+      expect(next.rentsAnything, isFalse);
     });
   });
 
@@ -101,16 +119,24 @@ void main() {
   });
 
   group('summary', () {
-    test('names the sections on, as a sentence', () {
+    test('names the sections on by their headings, as a sentence', () {
       final next = _walking
           .toggleFormFactor(RentalFormFactor.bicycle)
           .toggleMode(TransitMode.carParking);
-      expect(next.summary, 'Walk, shared, car');
+      expect(next.summary(_sections), 'Walk, shared bikes & scooters, own car');
     });
 
     test('with nothing on it is still walking', () {
       const empty = StreetLegChoice(modes: [], formFactors: []);
-      expect(empty.summary, 'Walk');
+      expect(empty.summary(_sections), 'Walk');
+    });
+
+    test('names Other when only its modes are on', () {
+      const flexible = StreetLegChoice(
+        modes: [TransitMode.flex],
+        formFactors: [],
+      );
+      expect(flexible.summary(_sections), 'Other');
     });
   });
 }

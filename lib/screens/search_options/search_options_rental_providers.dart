@@ -179,7 +179,7 @@ class _SuggestionRow extends StatelessWidget {
     final accent = AppColors.accentOf(context);
     final vehicles = [
       for (final factor in group.formFactors)
-        StreetSection.formFactorLabel(factor),
+        StreetItem.formFactorLabel(factor),
     ].join(' · ');
     final details = [if (nearby) 'Near you', if (vehicles.isNotEmpty) vehicles];
 

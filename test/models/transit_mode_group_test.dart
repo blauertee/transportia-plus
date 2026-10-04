@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transportia/models/quick_access_layout.dart';
 import 'package:transportia/models/transit_mode_group.dart';
 import 'package:transportia/models/transitous/enums.dart';
 
 TransitSelection _of(List<TransitMode> modes) =>
     TransitSelection(modes.toSet());
+
+final _groups = QuickAccessLayout.defaults.transit;
 
 void main() {
   group('the selectable list', () {
@@ -92,12 +95,12 @@ void main() {
   group('what the icons cannot show', () {
     test('a fully lit group contributes no chips', () {
       final rail = _of(TransitModeGroup.rail.modes);
-      expect(rail.uncoveredModes, isEmpty);
+      expect(rail.uncoveredModes(_groups), isEmpty);
     });
 
     test('a partial group names its selected members', () {
       final selection = _of([TransitMode.longDistance, TransitMode.nightRail]);
-      expect(selection.uncoveredModes, [
+      expect(selection.uncoveredModes(_groups), [
         TransitMode.longDistance,
         TransitMode.nightRail,
       ]);
@@ -108,7 +111,7 @@ void main() {
         ...TransitModeGroup.rail.modes,
         TransitMode.airplane,
       ]);
-      expect(selection.uncoveredModes, [TransitMode.airplane]);
+      expect(selection.uncoveredModes(_groups), [TransitMode.airplane]);
     });
   });
 
@@ -164,15 +167,18 @@ void main() {
 
   group('summary', () {
     test('says all transport rather than listing everything', () {
-      expect(TransitSelection.everything.summary(), 'All transport');
+      expect(TransitSelection.everything.summary(_groups), 'All transport');
     });
 
     test('names a whole group by its group', () {
-      expect(_of(TransitModeGroup.rail.modes).summary(), 'Rail');
+      expect(_of(TransitModeGroup.rail.modes).summary(_groups), 'Rail');
     });
 
     test('names the modes when a group is only partly on', () {
-      expect(_of([TransitMode.longDistance]).summary(), 'Intercity rail');
+      expect(
+        _of([TransitMode.longDistance]).summary(_groups),
+        'Intercity rail',
+      );
     });
 
     test('mixes group names and mode names', () {
@@ -180,11 +186,11 @@ void main() {
         ...TransitModeGroup.bus.modes,
         TransitMode.airplane,
       ]);
-      expect(selection.summary(), 'Bus, Flights');
+      expect(selection.summary(_groups), 'Bus, Flights');
     });
 
     test('says so when nothing is on', () {
-      expect(_of(const []).summary(), 'No transport');
+      expect(_of(const []).summary(_groups), 'No transport');
     });
   });
 
@@ -222,11 +228,11 @@ void main() {
     });
 
     test('says so in the summary, but only for the full regional set', () {
-      expect(everything.toggleRegionalOnly().summary(), 'Regional only');
+      expect(everything.toggleRegionalOnly().summary(_groups), 'Regional only');
       final narrower = everything.toggleRegionalOnly().toggleMode(
         TransitMode.ferry,
       );
-      expect(narrower.summary(), isNot('Regional only'));
+      expect(narrower.summary(_groups), isNot('Regional only'));
     });
   });
 
