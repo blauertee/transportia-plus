@@ -71,7 +71,7 @@ IzzyOnDroid:
 
 ## Suggestions, issues, or bugs
 
-Feel free to leave suggestion or report bugs.
+Feel free to leave suggestions or report bugs.
 
 When reporting a bug, include:
 - device + OS version
@@ -94,7 +94,7 @@ the use case, not just the feature. That way we can discuss it first, and you
 don't end up with a big PR that I have to push back on. Otherwise you can always
 just maintain your own fork.
 
-**Keep PRs small.** One feature or fix per PR. If a PR does five things and we 
+**Keep PRs small.** One feature or fix per PR. If a PR does five things and we
 agree on three of them, I can't just merge those three. Small PRs get reviewed
 and merged fast; big ones get stuck on whichever part we disagree on.
 
@@ -102,14 +102,15 @@ and merged fast; big ones get stuck on whichever part we disagree on.
 client that supports the complete feature set of the API while offering
 maximal usability. Customization in the settings is a good thing where a
 compromise that fits most people can't be reached, but an app that doesn't
-need users to go into the settings at all is always superior. So the solution 
-to not agreeing on needed Features isn't always solved by an off toggle in the 
+need users to go into the settings at all is always superior. So the solution
+to not agreeing on needed features isn't always an off toggle in the
 settings.
 
 **The practical bits:**
-- Open PRs against **TODO** - branch and release structure not fully set up yet.
-  (Probably master in the future, rn dev-build, dev-build will become nightly,
-  anything merged into dev-build will trigger a relase on the f-droid repo rn)
+- Open PRs against **TODO**: the branch and release structure isn't fully set up
+  yet. (Probably `master` in the future; right now it's `dev-build`, which will
+  become nightly. Anything merged into `dev-build` currently triggers a release
+  on the F-Droid repo.)
 - Run `flutter analyze`, `flutter test` and `dart format .` before pushing.
 - Add screenshots for anything the user can see.
 - If you code with an agent, point it at [AGENTS.md](AGENTS.md); it has the
