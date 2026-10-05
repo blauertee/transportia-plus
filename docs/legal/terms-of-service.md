@@ -5,7 +5,8 @@ _Last updated: 5 October 2026_
 Transportia+ is a free, open-source public transport app maintained by
 blauertee ([github.com/blauertee](https://github.com/blauertee)). It is a fork
 of [Transportia](https://github.com/Wafler1/transportia) by Wafler.one. By
-using the app you agree to these terms.
+using the app you agree to these terms. They apply to every version of
+Transportia+ that links to them.
 
 ## Licence
 
@@ -13,6 +14,13 @@ Transportia+ is free software, released under the
 [GNU General Public License v3.0](https://github.com/blauertee/transportia-plus/blob/master/LICENSE.md).
 You may use, study, share and modify it under that licence. Nothing in these
 terms limits the rights the licence gives you.
+
+## Using the app
+
+Use the app in line with the laws that apply to you. Do not misuse it or the
+services behind it: no excessive or automated requests, scraping, or anything
+else that loads the routing, map or place servers beyond what normal use of the
+app does. These servers are run for free by others and are shared by everyone.
 
 ## No charge
 
@@ -27,6 +35,10 @@ OpenStreetMap) and from the transport operators' data behind them. They can
 be incomplete, delayed or wrong. Always check important journeys with the
 operator, and follow signs, announcements and staff on the way. Do not use the
 app while driving or in any way that puts you or others at risk.
+
+## Availability
+
+The app may be changed, or its development stopped, at any time.
 
 ## Third-party services
 

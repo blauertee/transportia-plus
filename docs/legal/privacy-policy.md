@@ -5,7 +5,8 @@ _Last updated: 5 October 2026_
 Transportia+ is a free, open-source app maintained by blauertee
 ([github.com/blauertee](https://github.com/blauertee)). It is a fork of
 [Transportia](https://github.com/Wafler1/transportia) by Wafler.one, and is
-maintained separately from it. This policy covers Transportia+ only.
+maintained separately from it. This policy covers Transportia+ only, in every
+version that links to it.
 
 ## The short version
 
@@ -63,7 +64,8 @@ reaches them.
 
 ## Children
 
-Transportia+ collects no personal data and is suitable for all ages.
+Transportia+ is not directed at children under 13, and, as it collects no
+personal data from anyone, collects none from children either.
 
 ## Changes to this policy
 
