@@ -1,24 +1,26 @@
-name: "Dev Build"
+name: "Nightly Build"
 
-# Lives only on the dev-build branch, so it never reaches master or the
-# upstream pull request. Every push publishes a GitHub Release whose APKs
-# anyone can download without a GitHub account.
+# Every push to nightly publishes a GitHub Release whose APKs anyone can
+# download without a GitHub account, and points the F-Droid repo at it.
+# The file also lives on master, so the job checks the branch: a manual run
+# started on any other branch must not publish a release.
 on:
   push:
     branches:
-      - dev-build
+      - nightly
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: dev-build
+  group: nightly
   cancel-in-progress: true
 
 jobs:
   release:
     name: Build and Release
+    if: github.ref == 'refs/heads/nightly'
     runs-on: ubuntu-latest
 
     steps:
@@ -52,7 +54,7 @@ jobs:
           echo "storeFile=keystore.jks" >> android/key.properties
 
       # The versionCode is the run number, not the pubspec build number, so
-      # every dev build installs over the previous one. It restarts at 1 if
+      # every nightly build installs over the previous one. It restarts at 1 if
       # this file is renamed; phones would then refuse the update.
       - name: Get version
         run: |

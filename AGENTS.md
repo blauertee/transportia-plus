@@ -89,9 +89,11 @@
 - For bigger redesignd, send drafts before writing tests or wiring it up; the design usually moves once the user sees it.
 
 ## Branches & Releases
-- Every push to `dev-build` publishes a release to friends' phones. Never
-  push or merge to `dev-build` yourself; open a PR and leave merging to the
-  owner.
+- `master` is the default branch; open PRs against it.
+- Every push to `nightly` publishes a release to friends' phones through the
+  F-Droid repo. `nightly` is updated from `master` by PR.
+- Never push or merge to `master` or `nightly` yourself; open a PR and leave
+  merging to the owner.
 
 ## Commit & Pull Request Guidelines
 - Commits: concise, imperative subject (e.g., “Improve welcome transition”).
