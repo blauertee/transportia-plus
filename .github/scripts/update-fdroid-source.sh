@@ -28,7 +28,7 @@ repo=$ssh_dir/fdroid
 git clone --quiet --branch main git@github.com:blauertee/fdroid.git "$repo"
 
 {
-  echo "# Written by blauertee/transportia's dev-build workflow. Do not edit by hand."
+  echo "# Written by blauertee/transportia's nightly workflow. Do not edit by hand."
   echo "repo: blauertee/transportia"
   echo "tag: \"$tag\""
   echo "commit: \"$commit\""
@@ -40,7 +40,7 @@ git clone --quiet --branch main git@github.com:blauertee/fdroid.git "$repo"
 } > "$repo/$source_file"
 
 cd "$repo"
-git config user.name "transportia dev-build"
+git config user.name "transportia nightly"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git add "$source_file"
 if git diff --cached --quiet; then

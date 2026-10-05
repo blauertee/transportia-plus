@@ -55,7 +55,7 @@ class LegalScreen extends StatelessWidget {
                 icon: LucideIcons.fileText,
                 title: 'Terms of Service',
                 description:
-                    'Review our terms and conditions for using ${Environment.appName}',
+                    'The terms and conditions for using ${Environment.appName}',
                 onTap: () => _openUrl(context, Environment.termsUrl),
               ),
               const SizedBox(height: 12),
@@ -63,7 +63,7 @@ class LegalScreen extends StatelessWidget {
                 context: context,
                 icon: LucideIcons.shieldCheck,
                 title: 'Privacy Policy',
-                description: 'Learn how we collect, use, and protect your data',
+                description: 'What the app does and does not do with your data',
                 onTap: () => _openUrl(context, Environment.privacyUrl),
               ),
               const SizedBox(height: 32),
@@ -87,12 +87,12 @@ class LegalScreen extends StatelessWidget {
                           color: AppColors.accentOf(context),
                         ),
                         const SizedBox(width: 8),
-                        Text('Data We Collect', style: AppText.heading),
+                        Text('Data Collected', style: AppText.heading),
                       ],
                     ),
                     const SizedBox(height: 12),
                     _buildDataItem(
-                      'That\'s the best part, we don\'t!',
+                      'None at all, that\'s the best part!',
                       context,
                     ),
                     _buildDataItem(
@@ -106,12 +106,12 @@ class LegalScreen extends StatelessWidget {
                       context,
                     ),
                     _buildDataItem(
-                      'For more details, refer to our Privacy Policy',
+                      'For more details, see the Privacy Policy',
                       context,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'We never sell your data to third parties.',
+                      'Your data is never sold to third parties.',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -126,7 +126,12 @@ class LegalScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      '© ${year} Wafler.one. All rights reserved.',
+                      '© $year Wafler.one and blauertee',
+                      style: AppText.subtitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Free software under the GPL-3.0',
                       style: AppText.subtitle,
                     ),
                   ],

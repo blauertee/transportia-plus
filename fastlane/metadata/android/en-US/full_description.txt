@@ -1,7 +1,7 @@
 Transportia+ is a fork of Wafler1/transportia, a travel companion for public
 transportation. It installs side by side with the original app.
 
-What Transportia offers:
+What Transportia+ offers:
 
 * Plan routes with confidence — compare step-by-step options, see transfers
   and timing at a glance

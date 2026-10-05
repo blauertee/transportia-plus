@@ -37,8 +37,15 @@
 </p>
 
 ## Install
+A release on GooglePlay is not planned.
 
+### Nightly
 Add the F-Droid repo: **https://blauertee.github.io/fdroid/**
+
+### Stable
+*TBD*
+
+
 
 ## What Transportia offers
 
@@ -71,19 +78,49 @@ IzzyOnDroid:
 
 ## Suggestions, issues, or bugs
 
-For this fork, open an issue here:
-
-- https://github.com/blauertee/transportia/issues/new/choose
-
-For the upstream app, use Wafler1's tracker instead:
-
-- https://github.com/Wafler1/transportia/issues/new/choose
+Feel free to leave suggestions or report bugs.
 
 When reporting a bug, include:
 - device + OS version
 - steps to reproduce
 - expected vs actual behavior
 - screenshots or screen recordings if possible
+
+**[Issue Tracker](https://github.com/blauertee/transportia-plus/issues/new/choose)**
+
+## Contributing
+
+Contributions are welcome! It'd be nice not to work on this alone. A few
+things that make maintaining this a lot easier:
+
+**Open an issue before you build.** With LLM assisted coding, adding features
+has become VERY simple, so writing the code isn't the difficult part anymore.
+Agreeing on what the app should be is. Before you pour a lot of work into
+something, open an issue and describe what you're planning and why. Tell me
+the use case, not just the feature. That way we can discuss it first, and you
+don't end up with a big PR that I have to push back on. Otherwise you can always
+just maintain your own fork.
+
+**Keep PRs small.** One feature or fix per PR. If a PR does five things and we
+agree on three of them, I can't just merge those three. Small PRs get reviewed
+and merged fast; big ones get stuck on whichever part we disagree on.
+
+**Where I want the app to go.** I want to keep it focused and minimal: a MOTIS
+client that supports the complete feature set of the API while offering
+maximal usability. Customization in the settings is a good thing where a
+compromise that fits most people can't be reached, but an app that doesn't
+need users to go into the settings at all is always superior. So the solution
+to not agreeing on needed features isn't always an off toggle in the
+settings.
+
+**The practical bits:**
+- Open PRs against `master`. `master` is merged into `nightly` from time to
+  time, and every change on `nightly` publishes a nightly release on the
+  F-Droid repo. There is no stable release channel yet.
+- Run `flutter analyze`, `flutter test` and `dart format .` before pushing.
+- Add screenshots for anything the user can see.
+- If you code with an agent, point it at [AGENTS.md](AGENTS.md); it has the
+  repo's conventions.
 
 ## Thanks to
 
