@@ -126,7 +126,12 @@ class LegalScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(
-                      '© ${year} Wafler.one. All rights reserved.',
+                      '© $year Wafler.one and blauertee',
+                      style: AppText.subtitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Free software under the GPL-3.0',
                       style: AppText.subtitle,
                     ),
                   ],

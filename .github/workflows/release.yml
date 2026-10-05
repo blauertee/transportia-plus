@@ -50,7 +50,7 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "APP_VERSION_NAME=$APP_VERSION_NAME" >> $GITHUB_ENV
           echo "RELEASE_TAG=v$APP_VERSION" >> $GITHUB_ENV
-          echo "RELEASE_TITLE=Transportia $APP_VERSION_NAME" >> $GITHUB_ENV
+          echo "RELEASE_TITLE=Transportia+ $APP_VERSION_NAME" >> $GITHUB_ENV
 
       - name: Build ARM APK
         run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"

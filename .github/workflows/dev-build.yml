@@ -89,7 +89,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             transportia-arm64-v8a.apk \
             transportia-armeabi-v7a.apk \
-            --title "Transportia $APP_VERSION_NAME" \
+            --title "Transportia+ $APP_VERSION_NAME" \
             --notes "Dev build from branch '${{ github.ref_name }}' at commit ${{ github.sha }}." \
             --target "${{ github.sha }}" \
             --latest

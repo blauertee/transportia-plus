@@ -55,19 +55,16 @@ class InfoScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const SectionTitle(text: 'Issue Tracker'),
+              const SectionTitle(text: 'Contact'),
               const SizedBox(height: 12),
               _buildContactItem(
                 context,
-                'GitHub Issues',
+                'Issue Tracker',
                 'github.com/blauertee/transportia-plus/issues',
                 LucideIcons.github,
                 Environment.issueTrackerUrl,
               ),
-              if (Environment.contactEmail.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                const SectionTitle(text: 'Contact'),
-                const SizedBox(height: 12),
+              if (Environment.contactEmail.isNotEmpty)
                 _buildContactItem(
                   context,
                   'Email',
@@ -75,7 +72,6 @@ class InfoScreen extends StatelessWidget {
                   LucideIcons.mail,
                   'mailto:${Environment.contactEmail}',
                 ),
-              ],
               const SizedBox(height: 24),
               const SectionTitle(text: 'Open Source Credits'),
               const SizedBox(height: 12),

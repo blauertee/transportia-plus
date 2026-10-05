@@ -14,8 +14,10 @@ class Environment {
   /// secret, so the address never sits in the source for scrapers to find.
   /// Empty in local builds and tests; the About screen then hides it.
   static const String contactEmail = String.fromEnvironment('CONTACT_EMAIL');
-  static const String privacyUrl = 'https://wafler.one/transportia/privacy';
-  static const String termsUrl = 'https://wafler.one/transportia/terms';
+  static const String privacyUrl =
+      '$repoUrl/blob/master/docs/legal/privacy-policy.md';
+  static const String termsUrl =
+      '$repoUrl/blob/master/docs/legal/terms-of-service.md';
 
   static const bool showBackendSettings = true;
 
