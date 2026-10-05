@@ -21,7 +21,7 @@
     `skeletons/`.
   - `lib/providers/`, `lib/theme/`, `lib/constants/`, `lib/animations/`:
     app state, colours, preference keys, shared curves.
-- `docs/`: the privacy policy and terms the app links to (`legal/`), audit trackers (`doc-contradictions.md`, `unused-code.md`) and
+- `docs/`: audit trackers (`doc-contradictions.md`, `unused-code.md`) and
   the measurements behind tuned constants (`geocode-place-bias.md`).
 - `linux/drafting/`: renders app screens to PNGs for design review; see its
   README. Unrelated to the Linux desktop runner beside it.
