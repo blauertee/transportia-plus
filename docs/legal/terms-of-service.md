@@ -1,74 +1,59 @@
-# Transportia+ Terms of Service
+# Terms of Service
 
-_Last updated: 5 October 2026_
+_Last updated: 2026-10-05_
 
-Transportia+ is a free, open-source public transport app maintained by
-blauertee ([github.com/blauertee](https://github.com/blauertee)). It is a fork
-of [Transportia](https://github.com/Wafler1/transportia) by Wafler.one. By
-using the app you agree to these terms. They apply to every version of
-Transportia+ that links to them.
+These Terms govern your use of Transportia+ ("App"), a fork of
+[Transportia](https://github.com/Wafler1/transportia) by Wafler.one, maintained
+by [blauertee](https://github.com/blauertee). By using the App, you agree to
+these Terms. They apply to every version of the App that links to them.
 
-## Licence
+## 1. Licence
 
-Transportia+ is free software, released under the
+The App is free software under the
 [GNU General Public License v3.0](https://github.com/blauertee/transportia-plus/blob/master/LICENSE.md).
-You may use, study, share and modify it under that licence. Nothing in these
-terms limits the rights the licence gives you.
+Nothing in these Terms limits the rights that licence gives you.
 
-## Using the app
+## 2. Use of the App
 
-Use the app in line with the laws that apply to you. Do not misuse it or the
-services behind it: no excessive or automated requests, scraping, or anything
-else that loads the routing, map or place servers beyond what normal use of the
-app does. These servers are run for free by others and are shared by everyone.
+- Comply with the laws that apply to you.
+- Do not abuse the services behind the App, including excessive requests,
+  automated scraping, or spamming them. Others run them for free.
 
-## No charge
+## 3. Service Availability
 
-The app is free of charge. There are no purchases, subscriptions or
-advertising.
+The App may be updated, changed, or discontinued at any time. We do not
+guarantee uninterrupted or error-free operation.
 
-## Travel information
+## 4. Third-Party Services
 
-Routes, timetables, departures, vehicle positions, fares and place details
-come from third-party services (by default Transitous, OpenFreeMap and
-OpenStreetMap) and from the transport operators' data behind them. They can
-be incomplete, delayed or wrong. Always check important journeys with the
-operator, and follow signs, announcements and staff on the way. Do not use the
-app while driving or in any way that puts you or others at risk.
+The App gets transit, map and place information from third-party services (by
+default Transitous, OpenFreeMap and OpenStreetMap). We do not control them and
+are not responsible for their content, accuracy, or availability. Your use of
+them is subject to their terms.
 
-## Availability
+## 5. Content and Accuracy
 
-The app may be changed, or its development stopped, at any time.
+Transit data can be incomplete, delayed, or inaccurate. Do not rely on the App
+for time-sensitive or safety-critical decisions.
 
-## Third-party services
+## 6. Disclaimer of Warranties
 
-The app relies on services the maintainer does not run or control. They may
-change, limit or stop their service at any time, and your use of them is
-subject to their own terms. If you choose a different routing server in the
-settings, you are responsible for using it in line with its operator's terms.
+THE APP IS PROVIDED "AS IS", WITHOUT WARRANTIES OF ANY KIND, AS SET OUT IN
+SECTIONS 15 AND 16 OF THE GPL-3.0.
 
-## No warranty
+## 7. Limitation of Liability
 
-The app is provided "as is", without warranty of any kind, as set out in
-sections 15 and 16 of the GPL-3.0. The maintainer does not guarantee that it
-is available, error-free, or fit for any particular purpose.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE ARE NOT LIABLE FOR ANY DAMAGES
+ARISING FROM YOUR USE OF THE APP. LIABILITY THAT CANNOT BE EXCLUDED BY LAW, SUCH
+AS FOR INTENT OR GROSS NEGLIGENCE, IS UNAFFECTED.
 
-## Limitation of liability
+## 8. Changes to These Terms
 
-To the extent permitted by law, the maintainer is not liable for any loss or
-damage arising from using the app or relying on its information, including
-missed connections, delays, costs of alternative travel, or lost data stored
-on your device. Liability that cannot be excluded by law, such as for intent
-or gross negligence, remains unaffected.
+Updates are posted in this file; its history is public. Continued use of the App
+after a change means you accept the updated Terms.
 
-## Changes
+## 9. Contact
 
-These terms may change as the app does. Changes are published in this file in
-the app's public repository, where its full history can be read. Continuing to
-use the app after a change means you accept the new terms.
-
-## Questions
-
-Open an issue on the
-[issue tracker](https://github.com/blauertee/transportia-plus/issues), or use
-the contact details shown under About Transportia+ in the app.
+Questions? Use the
+[issue tracker](https://github.com/blauertee/transportia-plus/issues) or the
+contact under About Transportia+ in the App.
