@@ -71,19 +71,15 @@ IzzyOnDroid:
 
 ## Suggestions, issues, or bugs
 
-For this fork, open an issue here:
-
-- https://github.com/blauertee/transportia/issues/new/choose
-
-For the upstream app, use Wafler1's tracker instead:
-
-- https://github.com/Wafler1/transportia/issues/new/choose
+Feel free to leave suggestion or report bugs.
 
 When reporting a bug, include:
 - device + OS version
 - steps to reproduce
 - expected vs actual behavior
 - screenshots or screen recordings if possible
+
+**[Issue Tracker](https://github.com/blauertee/transportia/issues/new/choose)**
 
 ## Contributing
 
@@ -95,29 +91,25 @@ has become VERY simple, so writing the code isn't the expensive part anymore.
 Agreeing on what the app should be is. Before you pour a lot of work into
 something, open an issue and describe what you're planning and why. Tell me
 the use case, not just the feature. That way we can discuss it first, and you
-don't end up with a big PR that I have to push back on.
+don't end up with a big PR that I have to push back on. Otherwise you can always
+just maintain your own fork.
 
-**Keep PRs small.** One feature or fix per PR. If a PR does five things and I
-like three of them, I can't just merge those three. Small PRs get reviewed and
-merged fast; big ones get stuck on whichever part we disagree on.
+**Keep PRs small.** One feature or fix per PR. If a PR does five things and we 
+agree on three of them, I can't just merge those three. Small PRs get reviewed
+and merged fast; big ones get stuck on whichever part we disagree on.
 
 **Where I want the app to go.** I want to keep it focused and minimal: a MOTIS
 client that supports the complete feature set of the API while offering
 maximal usability. Customization in the settings is a good thing where a
 compromise that fits most people can't be reached, but an app that doesn't
-need users to go into the settings at all is always superior. When in doubt,
-let's learn from the people with money for usability in UI design (Google
-Maps). I also prefer simple, predictable solutions over clever heuristics
-that can be wrong, especially when they cost battery or add a lot of
-complexity.
-
-And honestly: given how easy it is to vibe-fork this app, maintaining your own
-version is a perfectly fine option where we can't find a compromise. No hard
-feelings.
+need users to go into the settings at all is always superior. So the solution 
+to not agreeing on needed Features isn't always solved by an off toggle in the 
+settings.
 
 **The practical bits:**
-- Open PRs against `dev-build`. Every merge there ships a release to testers,
-  so I do the merging.
+- Open PRs against **TODO** - branch and release structure not fully set up yet.
+  (Probably master in the future, rn dev-build, dev-build will become nightly,
+  anything merged into dev-build will trigger a relase on the f-droid repo rn)
 - Run `flutter analyze`, `flutter test` and `dart format .` before pushing.
 - Add screenshots for anything the user can see.
 - If you code with an agent, point it at [AGENTS.md](AGENTS.md); it has the
