@@ -54,7 +54,10 @@ void main() {
     await c.client.lookup(_rewe);
 
     // Nominatim's policy blocks stock library User-Agents.
-    expect(c.requests.single.headers['User-Agent'], startsWith('Transportia/'));
+    expect(
+      c.requests.single.headers['User-Agent'],
+      startsWith('Transportia+/'),
+    );
   });
 
   test('asks the configured server', () async {

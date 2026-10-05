@@ -70,7 +70,10 @@ jobs:
             --target-platform android-arm,android-arm64 \
             --build-name "$APP_VERSION_NAME" \
             --build-number "$APP_VERSION_CODE" \
-            --split-debug-info=build/symbols
+            --split-debug-info=build/symbols \
+            --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       # Fixed asset names keep
       # releases/latest/download/transportia-arm64-v8a.apk a stable link.
@@ -86,7 +89,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             transportia-arm64-v8a.apk \
             transportia-armeabi-v7a.apk \
-            --title "Transportia $APP_VERSION_NAME" \
+            --title "Transportia+ $APP_VERSION_NAME" \
             --notes "Dev build from branch '${{ github.ref_name }}' at commit ${{ github.sha }}." \
             --target "${{ github.sha }}" \
             --latest

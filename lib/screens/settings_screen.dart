@@ -8,12 +8,10 @@ import 'package:transportia/screens/legal_screen.dart';
 import 'package:transportia/screens/location_settings_screen.dart';
 import 'package:transportia/utils/custom_page_route.dart';
 import 'package:transportia/screens/search_options_screen.dart';
-import 'package:transportia/widgets/validation_toast.dart';
 import 'package:transportia/environment.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
@@ -21,7 +19,6 @@ import '../widgets/settings_section.dart';
 import '../utils/app_version.dart';
 import '../widgets/settings_tile.dart';
 import '../widgets/icon_badge.dart';
-import '../widgets/custom_card.dart';
 import '../theme/app_text.dart';
 
 /// How long the version line has to be held to open the developer screen.
@@ -93,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'User',
+                          'Settings',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
@@ -103,7 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'Settings & Information',
+                          'User Preferences & Information',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
@@ -115,86 +112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: GestureDetector(
-                  onTap: () async {
-                    try {
-                      final uri = Uri.parse(Environment.sponsorUrl);
-                      await launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    } catch (e) {
-                      showValidationToast(context, "Unable to open link.");
-                    }
-                  },
-                  child: CustomCard(
-                    margin: EdgeInsets.zero,
-                    padding: const EdgeInsets.all(18),
-                    borderRadius: BorderRadius.circular(16),
-                    borderColor: AppColors.hairline,
-                    child: Row(
-                      children: [
-                        const IconBadge(
-                          icon: LucideIcons.sparkles,
-                          size: 44,
-                          iconSize: 22,
-                          backgroundColor: Color(0x1FFC970A),
-                          iconColor: Color(0xFFFC970A),
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    'Created by ',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.black.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    'Wafler.one',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFFFC970A),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Helping you travel smarter',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.black.withValues(alpha: 0.4),
-                                  height: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
 
               SettingsSection(
                 title: 'Analytics',
@@ -303,6 +220,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       'Version ${AppVersion.current}',
                       style: AppText.subtitle,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Created by Wafler.one, plussed by blauertee',
+                      style: AppText.subtitle.copyWith(fontSize: 12),
                     ),
                     const SizedBox(height: 112),
                   ],

@@ -45,13 +45,19 @@ jobs:
           echo "storeFile=keystore.jks" >> android/key.properties
         
       - name: Build APK arm
-        run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols
+        run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       - name: Build APK arm64
-        run: flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols
+        run: flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       - name: Build appBundle
-        run: flutter build appbundle
+        run: flutter build appbundle --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       - name: Validate Fastlane Supply Metadata
         uses: ashutoshgngwr/validate-fastlane-supply-metadata@v2.1.0
