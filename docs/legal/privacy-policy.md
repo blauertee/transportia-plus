@@ -4,11 +4,11 @@ _Last updated: 2026-10-05_
 
 Transportia+ ("App") is a fork of
 [Transportia](https://github.com/Wafler1/transportia) by Wafler.one, maintained
-by [blauertee](https://github.com/blauertee). This policy explains what
+by [blauertee](https://github.com/blauertee) and contributors. This policy explains what
 information is (and is not) collected, and applies to every version of the App
 that links to it.
 
-## 1. Data We Do Not Collect
+## 1. Data Not Collected
 
 The App has no server of its own. It does not collect, store, or sell personal
 data, and runs no analytics or advertising SDKs.
@@ -29,7 +29,8 @@ each request needs:
 - OpenStreetMap's [Nominatim](https://nominatim.openstreetmap.org): a place you
   tap on the map (can be turned off under Location).
 
-We do not control how they process data. Please review their privacy policies.
+The maintainers do not control how they process data. Please review their
+privacy policies.
 
 ## 4. Location
 

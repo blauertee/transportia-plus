@@ -4,7 +4,7 @@ _Last updated: 2026-10-05_
 
 These Terms govern your use of Transportia+ ("App"), a fork of
 [Transportia](https://github.com/Wafler1/transportia) by Wafler.one, maintained
-by [blauertee](https://github.com/blauertee). By using the App, you agree to
+by [blauertee](https://github.com/blauertee) and contributors. By using the App, you agree to
 these Terms. They apply to every version of the App that links to them.
 
 ## 1. Licence
@@ -21,15 +21,15 @@ Nothing in these Terms limits the rights that licence gives you.
 
 ## 3. Service Availability
 
-The App may be updated, changed, or discontinued at any time. We do not
-guarantee uninterrupted or error-free operation.
+The App may be updated, changed, or discontinued at any time. Uninterrupted or
+error-free operation is not guaranteed.
 
 ## 4. Third-Party Services
 
 The App gets transit, map and place information from third-party services (by
-default Transitous, OpenFreeMap and OpenStreetMap). We do not control them and
-are not responsible for their content, accuracy, or availability. Your use of
-them is subject to their terms.
+default Transitous, OpenFreeMap and OpenStreetMap). The maintainers do not
+control them and are not responsible for their content, accuracy, or
+availability. Your use of them is subject to their terms.
 
 ## 5. Content and Accuracy
 
@@ -43,9 +43,10 @@ SECTIONS 15 AND 16 OF THE GPL-3.0.
 
 ## 7. Limitation of Liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE ARE NOT LIABLE FOR ANY DAMAGES
-ARISING FROM YOUR USE OF THE APP. LIABILITY THAT CANNOT BE EXCLUDED BY LAW, SUCH
-AS FOR INTENT OR GROSS NEGLIGENCE, IS UNAFFECTED.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE MAINTAINERS AND CONTRIBUTORS ARE
+NOT LIABLE FOR ANY DAMAGES ARISING FROM YOUR USE OF THE APP. LIABILITY THAT
+CANNOT BE EXCLUDED BY LAW, SUCH AS FOR INTENT OR GROSS NEGLIGENCE, IS
+UNAFFECTED.
 
 ## 8. Changes to These Terms
 
