@@ -107,10 +107,9 @@ to not agreeing on needed features isn't always an off toggle in the
 settings.
 
 **The practical bits:**
-- Open PRs against **TODO**: the branch and release structure isn't fully set up
-  yet. (Probably `master` in the future; right now it's `dev-build`, which will
-  become nightly. Anything merged into `dev-build` currently triggers a release
-  on the F-Droid repo.)
+- Open PRs against `master`. `master` is merged into `nightly` from time to
+  time, and every change on `nightly` publishes a nightly release on the
+  F-Droid repo. There is no stable release channel yet.
 - Run `flutter analyze`, `flutter test` and `dart format .` before pushing.
 - Add screenshots for anything the user can see.
 - If you code with an agent, point it at [AGENTS.md](AGENTS.md); it has the
