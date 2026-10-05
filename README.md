@@ -84,7 +84,7 @@ When reporting a bug, include:
 ## Contributing
 
 Contributions are welcome! It'd be nice not to work on this alone. A few
-things that make it easier for both of us:
+things that make maintaining this a lot easier:
 
 **Open an issue before you build.** With LLM assisted coding, adding features
 has become VERY simple, so writing the code isn't the expensive part anymore.
