@@ -98,7 +98,7 @@ class ShareTripSheet extends StatelessWidget {
             title: 'App link',
             subtitle: link == null
                 ? unavailable
-                : 'Opens in Transportia or another MOTIS app',
+                : 'Opens in Transportia+ or another MOTIS app',
             onTap: link == null ? null : () => _send(link.shareLink.toString()),
           ),
           _ShareOption(

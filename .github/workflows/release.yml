@@ -53,10 +53,14 @@ jobs:
           echo "RELEASE_TITLE=Transportia $APP_VERSION_NAME" >> $GITHUB_ENV
 
       - name: Build ARM APK
-        run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols
+        run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       - name: Build ARM64 APK
-        run: flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols
+        run: flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
+        env:
+          CONTACT_EMAIL: ${{ secrets.CONTACT_EMAIL }}
 
       - name: Rename APK files
         run: |

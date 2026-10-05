@@ -6,12 +6,16 @@ import 'utils/app_version.dart';
 class Environment {
   const Environment._();
 
-  static const String appName = 'Transportia';
-  static const String contactEmail = 'contact@wafler.one';
-  static const String contactUrl = 'https://wafler.one';
+  static const String appName = 'Transportia+';
+  static const String repoUrl = 'https://github.com/blauertee/transportia-plus';
+  static const String issueTrackerUrl = '$repoUrl/issues';
+
+  /// Filled in at build time (`--dart-define=CONTACT_EMAIL=...`) from a CI
+  /// secret, so the address never sits in the source for scrapers to find.
+  /// Empty in local builds and tests; the About screen then hides it.
+  static const String contactEmail = String.fromEnvironment('CONTACT_EMAIL');
   static const String privacyUrl = 'https://wafler.one/transportia/privacy';
   static const String termsUrl = 'https://wafler.one/transportia/terms';
-  static const String sponsorUrl = 'http://wafler.one?ref=transportia';
 
   static const bool showBackendSettings = true;
 
@@ -46,7 +50,7 @@ class Environment {
   static String get geocodeApiVersion => versionFor(TransitousEndpoint.geocode);
 
   static String get transitousUserAgent =>
-      '$appName/${AppVersion.current} (+$contactUrl; $contactEmail)';
+      '$appName/${AppVersion.current} (+$repoUrl)';
 
   static Map<String, String> transitousHeaders({bool acceptJson = true}) {
     final headers = <String, String>{};

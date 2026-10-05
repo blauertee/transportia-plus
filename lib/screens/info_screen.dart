@@ -37,12 +37,16 @@ class InfoScreen extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 32),
-              const SectionTitle(text: 'Our Purpose'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               _buildCard(
                 child: Text(
-                  '$appName is a modern travel companion designed to make public transportation easier and more accessible. $appName aims to provide all of this free of charge and utilising only open-source software without sacrificing user privacy.',
+                  '$appName is a frontend for any MOTIS server. MOTIS does the '
+                  'hard work of finding routes and timetables; $appName shows '
+                  'everything MOTIS gives you in a way that is easy to read. '
+                  'On top of that it offers the comforts only an app on your '
+                  'phone can, such as saved trips and your own preferences. '
+                  'Whatever is better solved on the server, $appName leaves '
+                  'to MOTIS.',
                   style: TextStyle(
                     fontSize: 15,
                     height: 1.5,
@@ -51,22 +55,27 @@ class InfoScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const SectionTitle(text: 'Contact Us'),
+              const SectionTitle(text: 'Issue Tracker'),
               const SizedBox(height: 12),
               _buildContactItem(
                 context,
-                'Email',
-                Environment.contactEmail,
-                LucideIcons.mail,
-                'mailto:${Environment.contactEmail}',
+                'GitHub Issues',
+                'github.com/blauertee/transportia-plus/issues',
+                LucideIcons.github,
+                Environment.issueTrackerUrl,
               ),
-              _buildContactItem(
-                context,
-                'Website',
-                'wafler.one',
-                LucideIcons.globe,
-                Environment.sponsorUrl,
-              ),
+              if (Environment.contactEmail.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const SectionTitle(text: 'Contact'),
+                const SizedBox(height: 12),
+                _buildContactItem(
+                  context,
+                  'Email',
+                  Environment.contactEmail,
+                  LucideIcons.mail,
+                  'mailto:${Environment.contactEmail}',
+                ),
+              ],
               const SizedBox(height: 24),
               const SectionTitle(text: 'Open Source Credits'),
               const SizedBox(height: 12),
