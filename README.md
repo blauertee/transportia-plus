@@ -87,7 +87,7 @@ Contributions are welcome! It'd be nice not to work on this alone. A few
 things that make maintaining this a lot easier:
 
 **Open an issue before you build.** With LLM assisted coding, adding features
-has become VERY simple, so writing the code isn't the expensive part anymore.
+has become VERY simple, so writing the code isn't the difficult part anymore.
 Agreeing on what the app should be is. Before you pour a lot of work into
 something, open an issue and describe what you're planning and why. Tell me
 the use case, not just the feature. That way we can discuss it first, and you
