@@ -79,7 +79,7 @@ When reporting a bug, include:
 - expected vs actual behavior
 - screenshots or screen recordings if possible
 
-**[Issue Tracker](https://github.com/blauertee/transportia/issues/new/choose)**
+**[Issue Tracker](https://github.com/blauertee/transportia-plus/issues/new/choose)**
 
 ## Contributing
 
