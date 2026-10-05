@@ -37,8 +37,15 @@
 </p>
 
 ## Install
+A release on GooglePlay is not planned.
 
+### Nightly
 Add the F-Droid repo: **https://blauertee.github.io/fdroid/**
+
+### Stable
+*TBD*
+
+
 
 ## What Transportia offers
 
