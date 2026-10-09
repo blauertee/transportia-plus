@@ -33,7 +33,7 @@ Future<void> _pumpExpanded(WidgetTester tester, FareLegInfo fare) async {
         textDirection: TextDirection.ltr,
         child: MediaQuery(
           data: const MediaQueryData(size: Size(900, 1600)),
-          child: TicketInfoCard(ticketInfo: [fare]),
+          child: TicketInfoSection(ticketInfo: [fare]),
         ),
       ),
     ),
@@ -96,7 +96,7 @@ void main() {
         create: (_) => ThemeProvider(),
         child: Directionality(
           textDirection: TextDirection.ltr,
-          child: TicketInfoCard(
+          child: TicketInfoSection(
             ticketInfo: [_fare(ticketUrl: 'https://t.example/buy')],
           ),
         ),
