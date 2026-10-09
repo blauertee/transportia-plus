@@ -26,6 +26,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _searchOptionsOpeningKey = PrefsKeys.searchOptionsOpening;
   static const String _showCaloriesKey = PrefsKeys.showCalories;
   static const String _showGtfsFieldsKey = PrefsKeys.showGtfsFields;
+  static const String _showNearbyDeparturesKey = PrefsKeys.showNearbyDepartures;
 
   static const Color defaultAccentColor = Color.fromARGB(255, 0, 113, 133);
   static const String defaultMapStyle = 'default';
@@ -36,6 +37,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       SearchOptionsOpening.closed;
   static const bool defaultShowCalories = true;
   static const bool defaultShowGtfsFields = false;
+  static const bool defaultShowNearbyDepartures = true;
 
   static const Color lightBackground = Color(0xFFFFFFFF);
   static const Color darkBackground = Color(0xFF161616);
@@ -59,6 +61,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   SearchOptionsOpening _searchOptionsOpening = defaultSearchOptionsOpening;
   bool _showCalories = defaultShowCalories;
   bool _showGtfsFields = defaultShowGtfsFields;
+  bool _showNearbyDepartures = defaultShowNearbyDepartures;
   bool _isInitialized = false;
 
   static ThemeProvider? get instance => _instance;
@@ -76,6 +79,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   SearchOptionsOpening get searchOptionsOpening => _searchOptionsOpening;
   bool get showCalories => _showCalories;
   bool get showGtfsFields => _showGtfsFields;
+  bool get showNearbyDepartures => _showNearbyDepartures;
 
   /// The rider's choice, as the appearance toggle shows it.
   bool get searchMapEnabled => _searchMapEnabled;
@@ -147,6 +151,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _showGtfsFields =
         await prefs.getBool(_showGtfsFieldsKey) ?? defaultShowGtfsFields;
+
+    _showNearbyDepartures =
+        await prefs.getBool(_showNearbyDeparturesKey) ??
+        defaultShowNearbyDepartures;
 
     _isInitialized = true;
     notifyListeners();
@@ -241,6 +249,16 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final prefs = SharedPreferencesAsync();
     await prefs.setBool(_showGtfsFieldsKey, show);
+  }
+
+  Future<void> setShowNearbyDepartures(bool show) async {
+    if (_showNearbyDepartures == show) return;
+
+    _showNearbyDepartures = show;
+    notifyListeners();
+
+    final prefs = SharedPreferencesAsync();
+    await prefs.setBool(_showNearbyDeparturesKey, show);
   }
 
   @override

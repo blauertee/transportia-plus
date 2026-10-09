@@ -12,7 +12,6 @@ import 'package:transportia/models/transitous/place.dart';
 import 'package:transportia/providers/theme_provider.dart';
 import 'package:transportia/services/transitous_map_service.dart';
 import 'package:transportia/widgets/nearby_departures_section.dart';
-import 'package:transportia/widgets/route_badge_pill.dart';
 
 List<MapStop> _berlinStops() => [
   for (final json
@@ -28,6 +27,10 @@ List<StopTime> _departures() => StopTimesResponse.fromJson(
       as Map<String, dynamic>,
 ).stopTimes;
 
+Widget _row(MapStop stop, List<String> departures) => Column(
+  children: [Text(stop.name), for (final line in departures) Text(line)],
+);
+
 const LatLng _centre = LatLng(52.5155, 13.4039);
 
 /// A few minutes before the capture's first departure.
@@ -38,7 +41,6 @@ Future<void> _pump(
   LatLng? center = _centre,
   NearbyStopsFetcher? fetchStops,
   NearbyDeparturesFetcher? fetchDepartures,
-  ValueChanged<MapStop>? onStopTap,
 }) async {
   tester.view.physicalSize = const Size(900, 1600);
   tester.view.devicePixelRatio = 1;
@@ -55,7 +57,8 @@ Future<void> _pump(
           child: SingleChildScrollView(
             child: NearbyDeparturesSection(
               center: center,
-              onStopTap: onStopTap ?? (_) {},
+              buildRow: _row,
+              buildMessage: Text.new,
               fetchStops: fetchStops ?? (_) async => _berlinStops(),
               fetchDepartures: fetchDepartures ?? (_, _) async => _departures(),
               clock: () => _now,
@@ -81,7 +84,6 @@ void main() {
   testWidgets('says why when there is no position', (tester) async {
     await _pump(tester, center: null);
 
-    expect(find.text('No departures to show'), findsOneWidget);
     expect(find.textContaining('Allow location access'), findsOneWidget);
   });
 
@@ -89,7 +91,7 @@ void main() {
     await _pump(tester);
 
     expect(find.text('Neumannsgasse (Berlin)'), findsOneWidget);
-    expect(find.text('S Spandau Bhf (Berlin)'), findsWidgets);
+    expect(find.text('S3 to S Spandau Bhf (Berlin)'), findsWidgets);
   });
 
   testWidgets('lists a stop split into several ids only once', (tester) async {
@@ -108,7 +110,7 @@ void main() {
     );
 
     // The capture holds many more than three; the section is a glance.
-    expect(find.byType(RouteBadgePill), findsNWidgets(3));
+    expect(find.textContaining(' to '), findsNWidgets(3));
   });
 
   testWidgets('leaves out departures that have already gone', (tester) async {
@@ -125,7 +127,8 @@ void main() {
           textDirection: TextDirection.ltr,
           child: NearbyDeparturesSection(
             center: _centre,
-            onStopTap: (_) {},
+            buildRow: _row,
+            buildMessage: Text.new,
             fetchStops: (_) async => _berlinStops(),
             fetchDepartures: (_, _) async => _departures(),
             clock: () => later,
@@ -136,28 +139,18 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('No departures to show'), findsOneWidget);
+    expect(find.text('No departures nearby.'), findsOneWidget);
   });
 
   testWidgets('says so when no stop has anything leaving', (tester) async {
     await _pump(tester, fetchDepartures: (_, _) async => const []);
 
-    expect(find.text('No departures to show'), findsOneWidget);
-    expect(find.textContaining('nearby'), findsOneWidget);
+    expect(find.text('No departures nearby.'), findsOneWidget);
   });
 
   testWidgets('survives the lookups failing', (tester) async {
     await _pump(tester, fetchStops: (_) async => throw Exception('offline'));
 
-    expect(find.text('No departures to show'), findsOneWidget);
-  });
-
-  testWidgets('hands back the stop that was tapped', (tester) async {
-    MapStop? tapped;
-    await _pump(tester, onStopTap: (stop) => tapped = stop);
-
-    await tester.tap(find.text('Neumannsgasse (Berlin)'));
-
-    expect(tapped?.name, 'Neumannsgasse (Berlin)');
+    expect(find.text('No departures nearby.'), findsOneWidget);
   });
 }

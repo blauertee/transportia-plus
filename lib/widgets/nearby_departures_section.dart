@@ -1,23 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/stop_time.dart';
 import '../services/stop_times_service.dart';
 import '../services/transitous_map_service.dart';
-import '../theme/app_colors.dart';
-import '../theme/app_text.dart';
-import '../utils/color_utils.dart';
 import '../utils/geo_utils.dart';
 import '../utils/nearby_stops.dart';
-import '../utils/reported_time.dart';
 import '../utils/stop_time_utils.dart';
-import 'delayed_time.dart';
-import 'gtfs_fields_row.dart';
-import 'route_badge_pill.dart';
-import 'skeletons/skeleton_shimmer.dart';
+
+/// Builds the nearby list with the rows and note of the list it sits in.
+typedef NearbySectionBuilder =
+    Widget Function(
+      Widget Function(MapStop stop, List<String> departures) buildRow,
+      Widget Function(String message) buildMessage,
+    );
 
 /// Looks up the stops in a box. Injected so tests need no network.
 typedef NearbyStopsFetcher =
@@ -61,14 +59,21 @@ class NearbyDeparturesSection extends StatefulWidget {
   const NearbyDeparturesSection({
     super.key,
     required this.center,
-    required this.onStopTap,
+    required this.buildRow,
+    required this.buildMessage,
     this.fetchStops = _fetchStops,
     this.fetchDepartures = _fetchDepartures,
     this.clock = DateTime.now,
   });
 
   final LatLng? center;
-  final ValueChanged<MapStop> onStopTap;
+
+  /// Draws one stop, given its next departures as lines of text, so the list
+  /// looks like the rows around it.
+  final Widget Function(MapStop stop, List<String> departures) buildRow;
+
+  /// Draws a one-line note where there is nothing to list.
+  final Widget Function(String message) buildMessage;
   final NearbyStopsFetcher fetchStops;
   final NearbyDeparturesFetcher fetchDepartures;
 
@@ -199,202 +204,22 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
   @override
   Widget build(BuildContext context) {
     if (widget.center == null) {
-      return const _EmptyMessage(
-        message: 'Allow location access to see departures near you.',
-      );
+      return widget.buildMessage('Allow location access to see departures.');
     }
     if (_isLoading && _departuresByStopId.isEmpty) {
-      return const _DeparturesSkeleton();
+      return widget.buildMessage('Looking for departures…');
     }
     final stops = _listedStops;
-    if (stops.isEmpty) {
-      return const _EmptyMessage(message: 'No departures from stops nearby.');
-    }
+    if (stops.isEmpty) return widget.buildMessage('No departures nearby.');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final stop in stops)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _StopDeparturesGroup(
-              stop: stop,
-              departures: _departuresByStopId[stop.stopId] ?? const [],
-              onTap: () => widget.onStopTap(stop),
-            ),
-          ),
+          widget.buildRow(stop, [
+            for (final departure in _departuresByStopId[stop.stopId]!)
+              departureLine(departure),
+          ]),
       ],
-    );
-  }
-}
-
-class _StopDeparturesGroup extends StatelessWidget {
-  const _StopDeparturesGroup({
-    required this.stop,
-    required this.departures,
-    required this.onTap,
-  });
-
-  final MapStop stop;
-  final List<StopTime> departures;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Departures at ${stop.name}',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.black.withValues(alpha: 0.02),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.hairline),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    LucideIcons.mapPin,
-                    size: 16,
-                    color: AppColors.accentOf(context),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      stop.name,
-                      style: AppText.heading,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 16,
-                    color: AppColors.black.withValues(alpha: 0.3),
-                  ),
-                ],
-              ),
-              GtfsFieldsRow(fields: {'stop': stop.stopId}),
-              const SizedBox(height: 10),
-              for (var i = 0; i < departures.length; i++) ...[
-                _DepartureRow(stopTime: departures[i]),
-                if (i != departures.length - 1) const SizedBox(height: 8),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DepartureRow extends StatelessWidget {
-  const _DepartureRow({required this.stopTime});
-
-  final StopTime stopTime;
-
-  @override
-  Widget build(BuildContext context) {
-    final place = stopTime.place;
-    final label = stopTime.displayName.isNotEmpty
-        ? stopTime.displayName
-        : stopTime.routeShortName;
-
-    return Row(
-      children: [
-        RouteBadgePill(
-          label: label,
-          background: parseHexColorOrAccent(context, stopTime.routeColor),
-          foreground: parseHexColorOr(
-            stopTime.routeTextColor,
-            AppColors.solidWhite,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          minWidth: RouteBadgePill.stackedMinWidth,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            stopTime.headsign,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppText.bodyStrong,
-          ),
-        ),
-        const SizedBox(width: 8),
-        DelayedTime.end(
-          ReportedTime.from(
-            place.departure ?? place.arrival,
-            place.scheduledDeparture ?? place.scheduledArrival,
-            isLive: stopTime.realTime,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EmptyMessage extends StatelessWidget {
-  const _EmptyMessage({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.accentOf(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.accentWash(accent),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(LucideIcons.clock, size: 24, color: accent),
-          ),
-          const SizedBox(height: 12),
-          Text('No departures to show', style: AppText.heading),
-          const SizedBox(height: 4),
-          Text(message, textAlign: TextAlign.center, style: AppText.subtitle),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeparturesSkeleton extends StatelessWidget {
-  const _DeparturesSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return SkeletonShimmer(
-      child: Column(
-        children: List.generate(
-          2,
-          (index) => Container(
-            height: 84,
-            margin: EdgeInsets.only(bottom: index == 1 ? 0 : 12),
-            decoration: BoxDecoration(
-              color: const Color(0x14000000),
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
