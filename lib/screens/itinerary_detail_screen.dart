@@ -1169,18 +1169,24 @@ class _TicketFaresState extends State<TicketFares> {
     final isTicketLink = legInfo.ticketUrl != null;
     final url = legInfo.ticketUrl ?? legInfo.fareUrl!;
     final accent = AppColors.accentOf(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: PressableHighlight(
-        onPressed: () => unawaited(_openFareUrl(url)),
-        borderRadius: BorderRadius.circular(8),
-        enableHaptics: false,
-        child: Text(
-          isTicketLink ? 'Buy tickets' : 'More info',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: accent,
+    // Under the prices it buys, on their right edge. The highlight pads its
+    // text by 10, so the row is nudged out by that much for the text itself
+    // to line up.
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Transform.translate(
+        offset: const Offset(10, 0),
+        child: PressableHighlight(
+          onPressed: () => unawaited(_openFareUrl(url)),
+          borderRadius: BorderRadius.circular(8),
+          enableHaptics: false,
+          child: Text(
+            isTicketLink ? 'Buy tickets' : 'More info',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: accent,
+            ),
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/models/stop_time.dart';
+import 'package:transportia/models/transitous/enums.dart';
 import 'package:transportia/models/transitous/place.dart';
 import 'package:transportia/providers/theme_provider.dart';
 import 'package:transportia/services/transitous_map_service.dart';
@@ -27,9 +28,10 @@ List<StopTime> _departures() => StopTimesResponse.fromJson(
       as Map<String, dynamic>,
 ).stopTimes;
 
-Widget _row(MapStop stop, List<String> departures) => Column(
-  children: [Text(stop.name), for (final line in departures) Text(line)],
-);
+Widget _row(MapStop stop, List<String> departures, List<TransitMode> _) =>
+    Column(
+      children: [Text(stop.name), for (final line in departures) Text(line)],
+    );
 
 const LatLng _centre = LatLng(52.5155, 13.4039);
 
