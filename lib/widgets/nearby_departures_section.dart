@@ -50,9 +50,6 @@ const int _kDeparturesPerStop = 3;
 /// is drawn from what calls there and not only from the next three.
 const int _kDeparturesFetched = 10;
 
-/// How often the lists are fetched again while on screen.
-const Duration _kRefreshInterval = Duration(seconds: 30);
-
 /// How far the rider has to move before the stops are looked up again.
 const double _kRelookupMetres = 150;
 
@@ -94,7 +91,6 @@ class NearbyDeparturesSection extends StatefulWidget {
 }
 
 class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
-  Timer? _refreshTimer;
   int _requestId = 0;
   bool _isLoading = true;
   List<MapStop> _stops = const [];
@@ -107,11 +103,9 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
     super.initState();
     // Nothing to load without a position, so nothing to wait for either.
     _isLoading = widget.center != null;
+    // Once per showing, and never on a timer: each load sends where the
+    // rider is, so it happens when they open the list and not behind it.
     unawaited(_load(lookUpStops: true));
-    _refreshTimer = Timer.periodic(
-      _kRefreshInterval,
-      (_) => unawaited(_load(lookUpStops: false)),
-    );
   }
 
   @override
@@ -120,12 +114,6 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
     if (_hasMovedFar(oldWidget.center, widget.center)) {
       unawaited(_load(lookUpStops: true));
     }
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
   }
 
   static bool _hasMovedFar(LatLng? from, LatLng? to) {

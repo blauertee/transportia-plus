@@ -41,6 +41,7 @@ Future<void> _pump(
   LatLng? center = _centre,
   NearbyStopsFetcher? fetchStops,
   NearbyDeparturesFetcher? fetchDepartures,
+  NearbyRowBuilder buildRow = _row,
 }) async {
   tester.view.physicalSize = const Size(900, 1600);
   tester.view.devicePixelRatio = 1;
@@ -57,7 +58,7 @@ Future<void> _pump(
           child: SingleChildScrollView(
             child: NearbyDeparturesSection(
               center: center,
-              buildRow: _row,
+              buildRow: buildRow,
               buildMessage: Text.new,
               fetchStops: fetchStops ?? (_) async => _berlinStops(),
               fetchDepartures: fetchDepartures ?? (_, _) async => _departures(),
@@ -156,5 +157,45 @@ void main() {
     await _pump(tester, fetchStops: (_) async => throw Exception('offline'));
 
     expect(find.text('No departures nearby.'), findsOneWidget);
+  });
+
+  testWidgets('loads once when shown, never on a timer', (tester) async {
+    var stopLookups = 0;
+    var departureLookups = 0;
+    await _pump(
+      tester,
+      fetchStops: (_) async {
+        stopLookups++;
+        return [_berlinStops().first];
+      },
+      fetchDepartures: (_, _) async {
+        departureLookups++;
+        return _departures();
+      },
+    );
+
+    // Each load sends where the rider is; sitting on the screen sends nothing.
+    await tester.pump(const Duration(minutes: 5));
+
+    expect(stopLookups, 1);
+    expect(departureLookups, 1);
+  });
+
+  testWidgets('hands each row the modes that call there', (tester) async {
+    final modesByStop = <String, List<TransitMode>>{};
+    await _pump(
+      tester,
+      fetchStops: (_) async => [_berlinStops().first],
+      fetchDepartures: (_, _) async => [
+        for (final departure in _departures())
+          if (departure.mode == 'SUBWAY') departure,
+      ],
+      buildRow: (stop, lines, modes) {
+        modesByStop[stop.name] = modes;
+        return Text(stop.name);
+      },
+    );
+
+    expect(modesByStop.values.single, [TransitMode.subway]);
   });
 }
