@@ -4,16 +4,26 @@ import 'package:flutter/widgets.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/stop_time.dart';
+import '../models/transitous/enums.dart';
 import '../services/stop_times_service.dart';
 import '../services/transitous_map_service.dart';
 import '../utils/geo_utils.dart';
 import '../utils/nearby_stops.dart';
 import '../utils/stop_time_utils.dart';
 
+/// Draws one stop near the rider: its next departures as lines of text, and
+/// the modes seen calling there, so the list looks like the rows around it.
+typedef NearbyRowBuilder =
+    Widget Function(
+      MapStop stop,
+      List<String> departures,
+      List<TransitMode> modes,
+    );
+
 /// Builds the nearby list with the rows and note of the list it sits in.
 typedef NearbySectionBuilder =
     Widget Function(
-      Widget Function(MapStop stop, List<String> departures) buildRow,
+      NearbyRowBuilder buildRow,
       Widget Function(String message) buildMessage,
     );
 
@@ -31,7 +41,7 @@ Future<List<MapStop>> _fetchStops(LatLngBounds bounds) =>
 Future<List<StopTime>> _fetchDepartures(String stopId, DateTime now) async {
   final response = await StopTimesService.fetchStopTimes(
     stopId: stopId,
-    n: _kDeparturesPerStop,
+    n: _kDeparturesFetched,
     startTime: now,
   );
   return response.stopTimes;
@@ -39,6 +49,10 @@ Future<List<StopTime>> _fetchDepartures(String stopId, DateTime now) async {
 
 /// Departures listed per stop.
 const int _kDeparturesPerStop = 3;
+
+/// Departures asked for per stop: more than are listed, so a stop's icon
+/// is drawn from what calls there and not only from the next three.
+const int _kDeparturesFetched = 10;
 
 /// How often the lists are fetched again while on screen.
 const Duration _kRefreshInterval = Duration(seconds: 30);
@@ -68,9 +82,7 @@ class NearbyDeparturesSection extends StatefulWidget {
 
   final LatLng? center;
 
-  /// Draws one stop, given its next departures as lines of text, so the list
-  /// looks like the rows around it.
-  final Widget Function(MapStop stop, List<String> departures) buildRow;
+  final NearbyRowBuilder buildRow;
 
   /// Draws a one-line note where there is nothing to list.
   final Widget Function(String message) buildMessage;
@@ -91,6 +103,7 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
   bool _isLoading = true;
   List<MapStop> _stops = const [];
   Map<String, List<StopTime>> _departuresByStopId = const {};
+  Map<String, List<TransitMode>> _modesByStopId = const {};
 
   @override
   void initState() {
@@ -171,7 +184,15 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
       _stops = stops;
       _departuresByStopId = {
         for (var i = 0; i < stops.length; i++)
-          if (results[i].isNotEmpty) stops[i].stopId!: results[i],
+          if (results[i].isNotEmpty)
+            stops[i].stopId!: results[i].take(_kDeparturesPerStop).toList(),
+      };
+      _modesByStopId = {
+        for (var i = 0; i < stops.length; i++)
+          stops[i].stopId!: [
+            for (final mode in {for (final d in results[i]) d.mode})
+              ?TransitMode.fromWire(mode),
+          ],
       };
       _isLoading = false;
     });
@@ -185,7 +206,7 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
         for (final entry in deduplicateStopTimes(departures))
           if (departureKey(entry)?.isAfter(cutoff) ?? false) entry,
       ]..sort((a, b) => departureKey(a)!.compareTo(departureKey(b)!));
-      return upcoming.take(_kDeparturesPerStop).toList();
+      return upcoming;
     } catch (_) {
       return const [];
     }
@@ -218,7 +239,7 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
           widget.buildRow(stop, [
             for (final departure in _departuresByStopId[stop.stopId]!)
               departureLine(departure),
-          ]),
+          ], _modesByStopId[stop.stopId] ?? const []),
       ],
     );
   }

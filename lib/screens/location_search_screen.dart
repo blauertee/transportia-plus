@@ -8,6 +8,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/my_location.dart';
 import '../models/saved_place.dart';
+import '../models/transitous/enums.dart';
 import '../services/favorites_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transitous_geocode_service.dart';
@@ -798,7 +799,11 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
 
   /// A stop near the rider: a stop like any other, its next departures under
   /// its name.
-  Widget _buildNearbyRow(MapStop stop, List<String> departures) {
+  Widget _buildNearbyRow(
+    MapStop stop,
+    List<String> departures,
+    List<TransitMode> modes,
+  ) {
     final place = TransitousLocationSuggestion(
       id: 'nearby:${stop.id}',
       name: stop.name,
@@ -806,9 +811,10 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
       lon: stop.lon,
       type: 'STOP',
       stopId: stop.stopId,
+      modes: modes,
     );
     return _ResultRow(
-      icon: placeIcon(place.type),
+      icon: placeIcon(place.type, modes: modes),
       title: place.name,
       subtitle: departures.join('\n'),
       subtitleLines: departures.length,
