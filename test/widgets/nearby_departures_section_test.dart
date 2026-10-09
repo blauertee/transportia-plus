@@ -28,10 +28,8 @@ List<StopTime> _departures() => StopTimesResponse.fromJson(
       as Map<String, dynamic>,
 ).stopTimes;
 
-Widget _row(MapStop stop, List<String> departures, List<TransitMode> _) =>
-    Column(
-      children: [Text(stop.name), for (final line in departures) Text(line)],
-    );
+Widget _row(MapStop stop, List<String> lines, List<TransitMode> _) =>
+    Column(children: [Text(stop.name), Text(lines.join(', '))]);
 
 const LatLng _centre = LatLng(52.5155, 13.4039);
 
@@ -93,7 +91,7 @@ void main() {
     await _pump(tester);
 
     expect(find.text('Neumannsgasse (Berlin)'), findsOneWidget);
-    expect(find.text('S3 to S Spandau Bhf (Berlin)'), findsWidgets);
+    expect(find.textContaining('S3, S5'), findsWidgets);
   });
 
   testWidgets('lists a stop split into several ids only once', (tester) async {
@@ -104,15 +102,19 @@ void main() {
     expect(find.text('Neumannsgasse (Berlin)'), findsOneWidget);
   });
 
-  testWidgets('keeps three departures to a stop', (tester) async {
+  testWidgets('names each line once', (tester) async {
     await _pump(
       tester,
       fetchStops: (_) async => [_berlinStops().first],
       fetchDepartures: (_, _) async => _departures(),
     );
 
-    // The capture holds many more than three; the section is a glance.
-    expect(find.textContaining(' to '), findsNWidgets(3));
+    // The capture runs several trips of each line; the row names a line once.
+    final lines = tester
+        .widget<Text>(find.textContaining('S3, '))
+        .data!
+        .split(', ');
+    expect(lines.toSet().length, lines.length);
   });
 
   testWidgets('leaves out departures that have already gone', (tester) async {

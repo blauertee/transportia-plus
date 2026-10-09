@@ -79,11 +79,13 @@ String departuresSignature(String stopName, List<StopTime> departures) {
   return '${stopName.trim().toLowerCase()}::$trips';
 }
 
-/// One departure as the nearby list says it: "S5 to S Westkreuz".
-String departureLine(StopTime departure) {
-  final line = departure.displayName.isNotEmpty
-      ? departure.displayName
-      : departure.routeShortName;
-  final towards = departure.headsign.trim();
-  return towards.isEmpty ? line : '$line to $towards';
-}
+/// The lines that call in [departures], each once, soonest first: what the
+/// nearby list says under a stop ("S3, S5, U2").
+List<String> lineNames(List<StopTime> departures) => {
+  for (final departure in departures)
+    if ((departure.displayName.isNotEmpty
+            ? departure.displayName
+            : departure.routeShortName)
+        case final name when name.isNotEmpty)
+      name,
+}.toList();

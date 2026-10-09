@@ -11,14 +11,10 @@ import '../utils/geo_utils.dart';
 import '../utils/nearby_stops.dart';
 import '../utils/stop_time_utils.dart';
 
-/// Draws one stop near the rider: its next departures as lines of text, and
-/// the modes seen calling there, so the list looks like the rows around it.
+/// Draws one stop near the rider: the lines and modes seen calling there,
+/// so the list looks like the rows around it.
 typedef NearbyRowBuilder =
-    Widget Function(
-      MapStop stop,
-      List<String> departures,
-      List<TransitMode> modes,
-    );
+    Widget Function(MapStop stop, List<String> lines, List<TransitMode> modes);
 
 /// Builds the nearby list with the rows and note of the list it sits in.
 typedef NearbySectionBuilder =
@@ -103,6 +99,7 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
   bool _isLoading = true;
   List<MapStop> _stops = const [];
   Map<String, List<StopTime>> _departuresByStopId = const {};
+  Map<String, List<String>> _linesByStopId = const {};
   Map<String, List<TransitMode>> _modesByStopId = const {};
 
   @override
@@ -187,6 +184,10 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
           if (results[i].isNotEmpty)
             stops[i].stopId!: results[i].take(_kDeparturesPerStop).toList(),
       };
+      _linesByStopId = {
+        for (var i = 0; i < stops.length; i++)
+          stops[i].stopId!: lineNames(results[i]),
+      };
       _modesByStopId = {
         for (var i = 0; i < stops.length; i++)
           stops[i].stopId!: [
@@ -236,10 +237,11 @@ class _NearbyDeparturesSectionState extends State<NearbyDeparturesSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final stop in stops)
-          widget.buildRow(stop, [
-            for (final departure in _departuresByStopId[stop.stopId]!)
-              departureLine(departure),
-          ], _modesByStopId[stop.stopId] ?? const []),
+          widget.buildRow(
+            stop,
+            _linesByStopId[stop.stopId] ?? const [],
+            _modesByStopId[stop.stopId] ?? const [],
+          ),
       ],
     );
   }
