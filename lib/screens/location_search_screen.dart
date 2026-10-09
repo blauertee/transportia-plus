@@ -102,6 +102,7 @@ class LocationSearchBody extends StatefulWidget {
     this.showMyLocation = false,
     this.mapPickerTitle = 'Select a place',
     this.mapPickerConfirmLabel = 'Select',
+    this.nearby,
   });
 
   /// Heading and button of the map picker the field's map icon opens.
@@ -111,6 +112,11 @@ class LocationSearchBody extends StatefulWidget {
   /// What to do with the place that was chosen. The pushed screen pops it;
   /// the timetable tab opens its departures.
   final ValueChanged<TransitousLocationSuggestion> onPicked;
+
+  /// What is around the rider, listed under the favourites and above the
+  /// recents. Only the timetable search has one: a departure is an answer
+  /// there, and anywhere else it is not what was asked.
+  final Widget? nearby;
 
   /// The pushed screen opens for the sake of typing, so it takes the keyboard.
   /// A tab that merely happens to start here should not.
@@ -675,6 +681,11 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
             SliverList.list(
               children: [
                 if (widget.showFavourites) const SizedBox(height: 20),
+                if (widget.nearby case final nearby?) ...[
+                  _sectionHeading('Near you'),
+                  nearby,
+                  const SizedBox(height: 8),
+                ],
                 if (recents.isNotEmpty) ...[
                   _sectionHeading('Recent'),
                   for (final place in recents.take(8))
