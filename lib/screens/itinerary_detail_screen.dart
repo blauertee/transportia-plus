@@ -666,8 +666,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     JourneyProgress progress,
   ) {
     return [
-      if (_itinerary.hasTicketInfo)
-        () => TicketInfoCard(ticketInfo: _itinerary.ticketInfo),
       if (displayLegs.isEmpty)
         _buildNoStepsMessage
       else
@@ -1007,6 +1005,12 @@ class JourneyOverviewWidget extends StatelessWidget {
               ),
             ],
           ),
+          // With the fare chip above it and boxless like the rest of the
+          // head: the tickets are for the whole journey, not for a leg.
+          if (itinerary.hasTicketInfo) ...[
+            const SizedBox(height: 12),
+            TicketInfoSection(ticketInfo: itinerary.ticketInfo),
+          ],
           // Above the rule, because it is a fact about this journey rather
           // than a note appended to it: whatever the times below say, they
           // stop being true here.
@@ -1055,60 +1059,53 @@ class JourneyOverviewWidget extends StatelessWidget {
   }
 }
 
-class TicketInfoCard extends StatefulWidget {
+class TicketInfoSection extends StatefulWidget {
   final List<FareLegInfo> ticketInfo;
 
-  const TicketInfoCard({super.key, required this.ticketInfo});
+  const TicketInfoSection({super.key, required this.ticketInfo});
 
   @override
-  State<TicketInfoCard> createState() => _TicketInfoCardState();
+  State<TicketInfoSection> createState() => _TicketInfoSectionState();
 }
 
-class _TicketInfoCardState extends State<TicketInfoCard> {
+class _TicketInfoSectionState extends State<TicketInfoSection> {
   bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => _isExpanded = !_isExpanded),
-      child: CustomCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  LucideIcons.ticket,
-                  size: 18,
-                  color: AppColors.accentOf(context),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('Ticket information', style: AppText.bodyStrong),
-                ),
-                Icon(
-                  _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 16,
-                  color: AppColors.accentOf(context),
-                ),
-              ],
-            ),
-            if (_isExpanded) ...[
-              const SizedBox(height: 12),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: SizedBox(
-                  height: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: Color(0x33000000)),
-                  ),
+    final accent = AppColors.accentOf(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Row(
+            children: [
+              Icon(LucideIcons.ticket, size: 16, color: accent),
+              const SizedBox(width: 4),
+              Text(
+                'Ticket information',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: accent,
                 ),
               ),
-              ...widget.ticketInfo.map(_buildFareLegOptions),
+              const SizedBox(width: 2),
+              Icon(
+                _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                size: 16,
+                color: accent,
+              ),
             ],
-          ],
+          ),
         ),
-      ),
+        if (_isExpanded) ...[
+          const SizedBox(height: 12),
+          ...widget.ticketInfo.map(_buildFareLegOptions),
+        ],
+      ],
     );
   }
 
