@@ -52,7 +52,8 @@ const double _kRelookupMetres = 150;
 /// platform and in a feed are not exactly the same.
 const Duration _kDepartureGrace = Duration(minutes: 1);
 
-/// The next departures from the stops around [center], for the home screen.
+/// The next departures from the stops around [center], for the timetable
+/// search.
 ///
 /// [center] is the rider's position; without one there is nothing to be near,
 /// and the section says so rather than guessing.
