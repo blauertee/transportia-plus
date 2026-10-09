@@ -841,7 +841,7 @@ class _JourneyNotice extends StatelessWidget {
   }
 }
 
-class JourneyOverviewWidget extends StatelessWidget {
+class JourneyOverviewWidget extends StatefulWidget {
   final Itinerary itinerary;
 
   /// Every change in the journey, already judged.
@@ -871,6 +871,18 @@ class JourneyOverviewWidget extends StatelessWidget {
     return '$first ${rest == 1 ? '1 more change' : '$rest more changes'} '
         'after it will not be made either.';
   }
+
+  @override
+  State<JourneyOverviewWidget> createState() => _JourneyOverviewWidgetState();
+}
+
+class _JourneyOverviewWidgetState extends State<JourneyOverviewWidget> {
+  /// Whether the fares under the price are showing.
+  bool _ticketsOpen = false;
+
+  Itinerary get itinerary => widget.itinerary;
+  List<Changeover> get changeovers => widget.changeovers;
+  VoidCallback? get onFindAlternatives => widget.onFindAlternatives;
 
   @override
   Widget build(BuildContext context) {
@@ -965,7 +977,10 @@ class JourneyOverviewWidget extends StatelessWidget {
                         '${itinerary.calories}',
                         'cal',
                       ),
-                    if (itinerary.fare != null && itinerary.fare!.amount > 0)
+                    if (itinerary.hasTicketInfo)
+                      _buildTicketChip()
+                    else if (itinerary.fare != null &&
+                        itinerary.fare!.amount > 0)
                       _buildStatChip(
                         LucideIcons.banknote,
                         '${itinerary.fare!.amount.toStringAsFixed(2)}',
@@ -1005,11 +1020,11 @@ class JourneyOverviewWidget extends StatelessWidget {
               ),
             ],
           ),
-          // With the fare chip above it and boxless like the rest of the
+          // Under the price that opens them and boxless like the rest of the
           // head: the tickets are for the whole journey, not for a leg.
-          if (itinerary.hasTicketInfo) ...[
+          if (_ticketsOpen) ...[
             const SizedBox(height: 12),
-            TicketInfoSection(ticketInfo: itinerary.ticketInfo),
+            TicketFares(ticketInfo: itinerary.ticketInfo),
           ],
           // Above the rule, because it is a fact about this journey rather
           // than a note appended to it: whatever the times below say, they
@@ -1022,7 +1037,7 @@ class JourneyOverviewWidget extends StatelessWidget {
             const SizedBox(height: 14),
             _JourneyNotice(
               icon: LucideIcons.triangleAlert,
-              message: missedChangeMessage(missed),
+              message: JourneyOverviewWidget.missedChangeMessage(missed),
               tint: kMissedChangeColor,
               margin: EdgeInsets.zero,
               // The same words the cancelled-trip notice uses, since it is
@@ -1037,6 +1052,41 @@ class JourneyOverviewWidget extends StatelessWidget {
           Container(height: 1, color: AppColors.black.withValues(alpha: 0.08)),
           const SizedBox(height: 18),
         ],
+      ),
+    );
+  }
+
+  /// The price, in the accent colour because it opens the fares. Says
+  /// "tickets" where the planner gave fares but no total.
+  Widget _buildTicketChip() {
+    final accent = AppColors.accentOf(context);
+    final fare = itinerary.fare;
+    final price = fare != null && fare.amount > 0
+        ? '${fare.amount.toStringAsFixed(2)} ${fare.currency}'
+        : 'Tickets';
+    return Semantics(
+      button: true,
+      expanded: _ticketsOpen,
+      label: 'Ticket information, $price',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _ticketsOpen = !_ticketsOpen),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.banknote, size: 16, color: accent),
+            const SizedBox(width: 4),
+            Text(
+              price,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1059,53 +1109,23 @@ class JourneyOverviewWidget extends StatelessWidget {
   }
 }
 
-class TicketInfoSection extends StatefulWidget {
+/// The fares the planner gave for a journey, each with what it is valid
+/// for and where to buy it.
+class TicketFares extends StatefulWidget {
   final List<FareLegInfo> ticketInfo;
 
-  const TicketInfoSection({super.key, required this.ticketInfo});
+  const TicketFares({super.key, required this.ticketInfo});
 
   @override
-  State<TicketInfoSection> createState() => _TicketInfoSectionState();
+  State<TicketFares> createState() => _TicketFaresState();
 }
 
-class _TicketInfoSectionState extends State<TicketInfoSection> {
-  bool _isExpanded = false;
-
+class _TicketFaresState extends State<TicketFares> {
   @override
   Widget build(BuildContext context) {
-    final accent = AppColors.accentOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _isExpanded = !_isExpanded),
-          child: Row(
-            children: [
-              Icon(LucideIcons.ticket, size: 16, color: accent),
-              const SizedBox(width: 4),
-              Text(
-                'Ticket information',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Icon(
-                _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                size: 16,
-                color: accent,
-              ),
-            ],
-          ),
-        ),
-        if (_isExpanded) ...[
-          const SizedBox(height: 12),
-          ...widget.ticketInfo.map(_buildFareLegOptions),
-        ],
-      ],
+      children: widget.ticketInfo.map(_buildFareLegOptions).toList(),
     );
   }
 
@@ -1155,24 +1175,13 @@ class _TicketInfoSectionState extends State<TicketInfoSection> {
         onPressed: () => unawaited(_openFareUrl(url)),
         borderRadius: BorderRadius.circular(8),
         enableHaptics: false,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isTicketLink ? LucideIcons.ticket : LucideIcons.info,
-              size: 14,
-              color: accent,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              isTicketLink ? 'Buy tickets' : 'More info',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: accent,
-              ),
-            ),
-          ],
+        child: Text(
+          isTicketLink ? 'Buy tickets' : 'More info',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: accent,
+          ),
         ),
       ),
     );

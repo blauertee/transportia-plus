@@ -78,3 +78,12 @@ String departuresSignature(String stopName, List<StopTime> departures) {
       .join('|');
   return '${stopName.trim().toLowerCase()}::$trips';
 }
+
+/// One departure as the nearby list says it: "S5 to S Westkreuz".
+String departureLine(StopTime departure) {
+  final line = departure.displayName.isNotEmpty
+      ? departure.displayName
+      : departure.routeShortName;
+  final towards = departure.headsign.trim();
+  return towards.isEmpty ? line : '$line to $towards';
+}

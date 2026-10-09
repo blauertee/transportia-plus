@@ -19,6 +19,10 @@ class PrefsKeys {
   /// screens. Absent means off.
   static const String showGtfsFields = 'show_gtfs_fields';
 
+  /// Whether the timetable search lists departures near the rider, which
+  /// sends their position. Absent means on.
+  static const String showNearbyDepartures = 'show_nearby_departures';
+
   static const String mapShowStops = 'map_show_stops';
   static const String mapQuickButton = 'map_quick_button';
   static const String mapShowVehicles = 'map_show_vehicles';

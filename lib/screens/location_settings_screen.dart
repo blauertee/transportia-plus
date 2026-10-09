@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -86,6 +88,7 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
   Widget _buildContent() {
     final accent = AppColors.accentOf(context);
     final backend = context.watch<BackendProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -160,6 +163,20 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
             ),
             const SizedBox(height: 16),
             const PlaceSearchLocationToggle(),
+            const SizedBox(height: 32),
+            const SectionTitle(text: 'Timetables'),
+            const SizedBox(height: 16),
+            ToggleCard(
+              icon: LucideIcons.mapPin,
+              title: 'Departures near you',
+              subtitle: themeProvider.showNearbyDepartures
+                  ? 'Lists the next departures from stops around you, which '
+                        'sends your position when you open Timetables'
+                  : 'Your location is not sent when you open Timetables',
+              value: themeProvider.showNearbyDepartures,
+              onChanged: (show) =>
+                  unawaited(themeProvider.setShowNearbyDepartures(show)),
+            ),
             const SizedBox(height: 32),
             const SectionTitle(text: 'Place details'),
             const SizedBox(height: 8),

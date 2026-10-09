@@ -15,7 +15,6 @@ import '../services/saved_places_service.dart';
 import '../services/stop_times_service.dart';
 import '../screens/location_search_screen.dart';
 import '../services/transitous_geocode_service.dart';
-import '../services/transitous_map_service.dart';
 import '../utils/color_utils.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/leg_helper.dart' show getLegIcon;
@@ -43,19 +42,22 @@ class TimetablesScreen extends StatefulWidget {
 
   final TransitousLocationSuggestion? initialStop;
 
-  /// Builds the Near you list; swapped in drafts and tests, which have no
-  /// position and no network.
+  /// Builds the Near you list around a position; swapped in drafts and
+  /// tests, which have no position and no network.
   final NearbyBuilder buildNearby;
 
-  static Widget _buildNearby(LatLng? center, ValueChanged<MapStop> onStopTap) =>
-      NearbyDeparturesSection(center: center, onStopTap: onStopTap);
+  static NearbySectionBuilder _buildNearby(LatLng? center) =>
+      (buildRow, buildMessage) => NearbyDeparturesSection(
+        center: center,
+        buildRow: buildRow,
+        buildMessage: buildMessage,
+      );
 
   @override
   State<TimetablesScreen> createState() => _TimetablesScreenState();
 }
 
-typedef NearbyBuilder =
-    Widget Function(LatLng? center, ValueChanged<MapStop> onStopTap);
+typedef NearbyBuilder = NearbySectionBuilder Function(LatLng? center);
 
 class _TimetablesScreenState extends State<TimetablesScreen> {
   final TextEditingController _searchController = TextEditingController();
@@ -154,21 +156,11 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
       type: 'STOP',
       autofocus: false,
       onPicked: _onSuggestionSelected,
-      nearby: widget.buildNearby(_lastUserLatLng, _onNearbyStopTap),
-    );
-  }
-
-  /// A stop from the Near you list opens its board, as a picked one does.
-  void _onNearbyStopTap(MapStop stop) {
-    _onSuggestionSelected(
-      TransitousLocationSuggestion(
-        id: 'nearby:${stop.id}',
-        name: stop.name,
-        lat: stop.lat,
-        lon: stop.lon,
-        type: 'STOP',
-        stopId: stop.stopId,
-      ),
+      // Off, the section is not there at all, and nothing near the rider is
+      // asked for.
+      nearby: context.read<ThemeProvider>().showNearbyDepartures
+          ? widget.buildNearby(_lastUserLatLng)
+          : null,
     );
   }
 

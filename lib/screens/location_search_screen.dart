@@ -11,6 +11,7 @@ import '../models/saved_place.dart';
 import '../services/favorites_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transitous_geocode_service.dart';
+import '../services/transitous_map_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/favorite_icons.dart';
@@ -20,6 +21,7 @@ import '../utils/place_icons.dart';
 import '../widgets/app_page_scaffold.dart';
 import '../widgets/buttons/heart_button.dart';
 import '../widgets/edit_favorite_overlay.dart';
+import '../widgets/nearby_departures_section.dart';
 import 'map_place_picker/map_place_picker_screen.dart';
 import '../theme/app_text.dart';
 
@@ -113,10 +115,11 @@ class LocationSearchBody extends StatefulWidget {
   /// the timetable tab opens its departures.
   final ValueChanged<TransitousLocationSuggestion> onPicked;
 
-  /// What is around the rider, listed under the favourites and above the
-  /// recents. Only the timetable search has one: a departure is an answer
-  /// there, and anywhere else it is not what was asked.
-  final Widget? nearby;
+  /// The stops around the rider, listed under the favourites and above the
+  /// recents in the same rows. Only the timetable search has them: a
+  /// departure is an answer there, and anywhere else it is not what was
+  /// asked. Null leaves the section out, heading and all.
+  final NearbySectionBuilder? nearby;
 
   /// The pushed screen opens for the sake of typing, so it takes the keyboard.
   /// A tab that merely happens to start here should not.
@@ -683,8 +686,8 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
                 if (widget.showFavourites) const SizedBox(height: 20),
                 if (widget.nearby case final nearby?) ...[
                   _sectionHeading('Near you'),
-                  nearby,
-                  const SizedBox(height: 8),
+                  nearby(_buildNearbyRow, _note),
+                  const SizedBox(height: 12),
                 ],
                 if (recents.isNotEmpty) ...[
                   _sectionHeading('Recent'),
@@ -791,6 +794,33 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
     subtitle: subtitle,
     onTap: () => _pick(place),
     trailing: _heartFor(place),
+  );
+
+  /// A stop near the rider: a stop like any other, its next departures under
+  /// its name.
+  Widget _buildNearbyRow(MapStop stop, List<String> departures) {
+    final place = TransitousLocationSuggestion(
+      id: 'nearby:${stop.id}',
+      name: stop.name,
+      lat: stop.lat,
+      lon: stop.lon,
+      type: 'STOP',
+      stopId: stop.stopId,
+    );
+    return _ResultRow(
+      icon: placeIcon(place.type),
+      title: place.name,
+      subtitle: departures.join('\n'),
+      subtitleLines: departures.length,
+      onTap: () => _pick(place),
+      trailing: _heartFor(place),
+    );
+  }
+
+  /// A section with nothing in it, said in one line rather than a block.
+  Widget _note(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(text, style: AppText.caption),
   );
 
   Widget _sectionHeading(String text) => Padding(
@@ -945,12 +975,14 @@ class _ResultRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
+    this.subtitleLines = 1,
     this.trailing,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
+  final int subtitleLines;
   final VoidCallback onTap;
   final Widget? trailing;
 
@@ -989,7 +1021,7 @@ class _ResultRow extends StatelessWidget {
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Text(
                         subtitle!,
-                        maxLines: 1,
+                        maxLines: subtitleLines,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12.5,

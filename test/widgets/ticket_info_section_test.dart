@@ -20,7 +20,7 @@ FareLegInfo _fare({String? ticketUrl, String? fareUrl}) => FareLegInfo(
   fareUrl: fareUrl,
 );
 
-Future<void> _pumpExpanded(WidgetTester tester, FareLegInfo fare) async {
+Future<void> _pump(WidgetTester tester, FareLegInfo fare) async {
   tester.view.physicalSize = const Size(900, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -33,13 +33,11 @@ Future<void> _pumpExpanded(WidgetTester tester, FareLegInfo fare) async {
         textDirection: TextDirection.ltr,
         child: MediaQuery(
           data: const MediaQueryData(size: Size(900, 1600)),
-          child: TicketInfoSection(ticketInfo: [fare]),
+          child: TicketFares(ticketInfo: [fare]),
         ),
       ),
     ),
   );
-  await tester.tap(find.text('Ticket information'));
-  await tester.pump();
 }
 
 void main() {
@@ -51,21 +49,21 @@ void main() {
   });
 
   testWidgets('a ticket link says Buy tickets', (tester) async {
-    await _pumpExpanded(tester, _fare(ticketUrl: 'https://t.example/buy'));
+    await _pump(tester, _fare(ticketUrl: 'https://t.example/buy'));
 
     expect(find.text('Buy tickets'), findsOneWidget);
     expect(find.text('More info'), findsNothing);
   });
 
   testWidgets('a fare page says More info', (tester) async {
-    await _pumpExpanded(tester, _fare(fareUrl: 'https://a.example/fares'));
+    await _pump(tester, _fare(fareUrl: 'https://a.example/fares'));
 
     expect(find.text('More info'), findsOneWidget);
     expect(find.text('Buy tickets'), findsNothing);
   });
 
   testWidgets('with both only the ticket link is offered', (tester) async {
-    await _pumpExpanded(
+    await _pump(
       tester,
       _fare(
         ticketUrl: 'https://t.example/buy',
@@ -77,33 +75,12 @@ void main() {
     expect(find.text('More info'), findsNothing);
   });
 
-  testWidgets('with neither the card looks as it always did', (tester) async {
-    await _pumpExpanded(tester, _fare());
+  testWidgets('with neither the fares look as they always did', (tester) async {
+    await _pump(tester, _fare());
 
     expect(find.text('Buy tickets'), findsNothing);
     expect(find.text('More info'), findsNothing);
     expect(find.text('Single ticket'), findsOneWidget);
     expect(find.text('4.40 EUR'), findsOneWidget);
-  });
-
-  testWidgets('the link is not shown until the card is opened', (tester) async {
-    tester.view.physicalSize = const Size(900, 1600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      ChangeNotifierProvider<ThemeProvider>(
-        create: (_) => ThemeProvider(),
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: TicketInfoSection(
-            ticketInfo: [_fare(ticketUrl: 'https://t.example/buy')],
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('Ticket information'), findsOneWidget);
-    expect(find.text('Buy tickets'), findsNothing);
   });
 }
