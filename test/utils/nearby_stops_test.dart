@@ -124,4 +124,16 @@ void main() {
       expect(departureKey(first), DateTime.utc(2026, 8, 8, 9, 38));
     });
   });
+
+  group('lineNames', () {
+    test('names each line once, soonest first', () {
+      final names = lineNames(_departures());
+      expect(names.toSet().length, names.length);
+      expect(names.first, _departures().first.displayName);
+    });
+
+    test('is empty without departures', () {
+      expect(lineNames(const []), isEmpty);
+    });
+  });
 }

@@ -797,11 +797,11 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
     trailing: _heartFor(place),
   );
 
-  /// A stop near the rider: a stop like any other, its next departures under
-  /// its name.
+  /// A stop near the rider: a stop like any other, the lines leaving it next
+  /// under its name.
   Widget _buildNearbyRow(
     MapStop stop,
-    List<String> departures,
+    List<String> lines,
     List<TransitMode> modes,
   ) {
     final place = TransitousLocationSuggestion(
@@ -816,8 +816,7 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
     return _ResultRow(
       icon: placeIcon(place.type, modes: modes),
       title: place.name,
-      subtitle: departures.join('\n'),
-      subtitleLines: departures.length,
+      subtitle: lines.join(', '),
       onTap: () => _pick(place),
       trailing: _heartFor(place),
     );
@@ -981,14 +980,12 @@ class _ResultRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
-    this.subtitleLines = 1,
     this.trailing,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final int subtitleLines;
   final VoidCallback onTap;
   final Widget? trailing;
 
@@ -1027,7 +1024,7 @@ class _ResultRow extends StatelessWidget {
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Text(
                         subtitle!,
-                        maxLines: subtitleLines,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12.5,
