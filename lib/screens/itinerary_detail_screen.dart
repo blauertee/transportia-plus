@@ -6,6 +6,7 @@ import 'package:flutter/cupertino.dart' show CupertinoSliverRefreshControl;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
@@ -32,11 +33,13 @@ import '../utils/time_utils.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/custom_card.dart';
 import '../utils/leg_notices.dart';
+import '../widgets/gtfs_fields_row.dart';
 import '../widgets/journey/leg_notice_stack.dart';
 import '../widgets/journey/spine_node.dart';
 import '../widgets/journey/spine_row.dart';
 import '../widgets/info_chip.dart';
 import '../widgets/last_updated_footer.dart';
+import '../widgets/pressable_highlight.dart';
 import '../widgets/route_badge_pill.dart';
 import '../widgets/save_trip_button.dart';
 import '../widgets/stop_departures_sheet.dart';
@@ -663,8 +666,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     JourneyProgress progress,
   ) {
     return [
-      if (_itinerary.hasTicketInfo)
-        () => TicketInfoCard(ticketInfo: _itinerary.ticketInfo),
       if (displayLegs.isEmpty)
         _buildNoStepsMessage
       else
@@ -840,7 +841,7 @@ class _JourneyNotice extends StatelessWidget {
   }
 }
 
-class JourneyOverviewWidget extends StatelessWidget {
+class JourneyOverviewWidget extends StatefulWidget {
   final Itinerary itinerary;
 
   /// Every change in the journey, already judged.
@@ -870,6 +871,18 @@ class JourneyOverviewWidget extends StatelessWidget {
     return '$first ${rest == 1 ? '1 more change' : '$rest more changes'} '
         'after it will not be made either.';
   }
+
+  @override
+  State<JourneyOverviewWidget> createState() => _JourneyOverviewWidgetState();
+}
+
+class _JourneyOverviewWidgetState extends State<JourneyOverviewWidget> {
+  /// Whether the fares under the price are showing.
+  bool _ticketsOpen = false;
+
+  Itinerary get itinerary => widget.itinerary;
+  List<Changeover> get changeovers => widget.changeovers;
+  VoidCallback? get onFindAlternatives => widget.onFindAlternatives;
 
   @override
   Widget build(BuildContext context) {
@@ -964,7 +977,10 @@ class JourneyOverviewWidget extends StatelessWidget {
                         '${itinerary.calories}',
                         'cal',
                       ),
-                    if (itinerary.fare != null && itinerary.fare!.amount > 0)
+                    if (itinerary.hasTicketInfo)
+                      _buildTicketChip()
+                    else if (itinerary.fare != null &&
+                        itinerary.fare!.amount > 0)
                       _buildStatChip(
                         LucideIcons.banknote,
                         '${itinerary.fare!.amount.toStringAsFixed(2)}',
@@ -1004,6 +1020,12 @@ class JourneyOverviewWidget extends StatelessWidget {
               ),
             ],
           ),
+          // Under the price that opens them and boxless like the rest of the
+          // head: the tickets are for the whole journey, not for a leg.
+          if (_ticketsOpen) ...[
+            const SizedBox(height: 12),
+            TicketFares(ticketInfo: itinerary.ticketInfo),
+          ],
           // Above the rule, because it is a fact about this journey rather
           // than a note appended to it: whatever the times below say, they
           // stop being true here.
@@ -1015,7 +1037,7 @@ class JourneyOverviewWidget extends StatelessWidget {
             const SizedBox(height: 14),
             _JourneyNotice(
               icon: LucideIcons.triangleAlert,
-              message: missedChangeMessage(missed),
+              message: JourneyOverviewWidget.missedChangeMessage(missed),
               tint: kMissedChangeColor,
               margin: EdgeInsets.zero,
               // The same words the cancelled-trip notice uses, since it is
@@ -1030,6 +1052,41 @@ class JourneyOverviewWidget extends StatelessWidget {
           Container(height: 1, color: AppColors.black.withValues(alpha: 0.08)),
           const SizedBox(height: 18),
         ],
+      ),
+    );
+  }
+
+  /// The price, in the accent colour because it opens the fares. Says
+  /// "tickets" where the planner gave fares but no total.
+  Widget _buildTicketChip() {
+    final accent = AppColors.accentOf(context);
+    final fare = itinerary.fare;
+    final price = fare != null && fare.amount > 0
+        ? '${fare.amount.toStringAsFixed(2)} ${fare.currency}'
+        : 'Tickets';
+    return Semantics(
+      button: true,
+      expanded: _ticketsOpen,
+      label: 'Ticket information, $price',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _ticketsOpen = !_ticketsOpen),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.banknote, size: 16, color: accent),
+            const SizedBox(width: 4),
+            Text(
+              price,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: accent,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1052,60 +1109,23 @@ class JourneyOverviewWidget extends StatelessWidget {
   }
 }
 
-class TicketInfoCard extends StatefulWidget {
+/// The fares the planner gave for a journey, each with what it is valid
+/// for and where to buy it.
+class TicketFares extends StatefulWidget {
   final List<FareLegInfo> ticketInfo;
 
-  const TicketInfoCard({super.key, required this.ticketInfo});
+  const TicketFares({super.key, required this.ticketInfo});
 
   @override
-  State<TicketInfoCard> createState() => _TicketInfoCardState();
+  State<TicketFares> createState() => _TicketFaresState();
 }
 
-class _TicketInfoCardState extends State<TicketInfoCard> {
-  bool _isExpanded = false;
-
+class _TicketFaresState extends State<TicketFares> {
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => _isExpanded = !_isExpanded),
-      child: CustomCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  LucideIcons.ticket,
-                  size: 18,
-                  color: AppColors.accentOf(context),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('Ticket information', style: AppText.bodyStrong),
-                ),
-                Icon(
-                  _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 16,
-                  color: AppColors.accentOf(context),
-                ),
-              ],
-            ),
-            if (_isExpanded) ...[
-              const SizedBox(height: 12),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                child: SizedBox(
-                  height: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(color: Color(0x33000000)),
-                  ),
-                ),
-              ),
-              ...widget.ticketInfo.map(_buildFareLegOptions),
-            ],
-          ],
-        ),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widget.ticketInfo.map(_buildFareLegOptions).toList(),
     );
   }
 
@@ -1136,9 +1156,49 @@ class _TicketInfoCardState extends State<TicketInfoCard> {
               ),
             ),
           ...legInfo.options.map(_buildFareOption),
+          if (legInfo.ticketUrl != null || legInfo.fareUrl != null)
+            _buildFareLink(legInfo),
         ],
       ),
     );
+  }
+
+  /// A direct ticket-purchase link where the agency gives one, and its
+  /// general fare page otherwise; never both.
+  Widget _buildFareLink(FareLegInfo legInfo) {
+    final isTicketLink = legInfo.ticketUrl != null;
+    final url = legInfo.ticketUrl ?? legInfo.fareUrl!;
+    final accent = AppColors.accentOf(context);
+    // Under the prices it buys, on their right edge. The highlight pads its
+    // text by 10, so the row is nudged out by that much for the text itself
+    // to line up.
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Transform.translate(
+        offset: const Offset(10, 0),
+        child: PressableHighlight(
+          onPressed: () => unawaited(_openFareUrl(url)),
+          borderRadius: BorderRadius.circular(8),
+          enableHaptics: false,
+          child: Text(
+            isTicketLink ? 'Buy tickets' : 'More info',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: accent,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFareUrl(String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // A link that will not open has nothing to fall back to.
+    }
   }
 
   Widget _buildRouteBadge(RouteBadge badge) {
@@ -1578,6 +1638,7 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
               ),
             ),
           ],
+          GtfsFieldsRow(fields: {'stop': stop.stopId}),
         ],
       ),
     );
@@ -1623,9 +1684,23 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
       metadata.add(const InfoChip(icon: LucideIcons.link, label: 'Interlined'));
     }
 
-    if (metadata.isEmpty) return const SizedBox.shrink();
+    final gtfsFields = GtfsFieldsRow(
+      fields: {
+        'trip': widget.leg.tripId,
+        'from stop': widget.leg.fromStopId,
+        'to stop': widget.leg.toStopId,
+      },
+    );
 
-    return Wrap(spacing: 8, runSpacing: 8, children: metadata);
+    if (metadata.isEmpty) return gtfsFields;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(spacing: 8, runSpacing: 8, children: metadata),
+        gtfsFields,
+      ],
+    );
   }
 
   Widget _buildTitleWidget() {

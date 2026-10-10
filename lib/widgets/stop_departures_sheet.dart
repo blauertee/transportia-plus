@@ -12,6 +12,7 @@ import '../utils/leg_helper.dart';
 import '../utils/reported_time.dart';
 import 'bottom_overlay_card.dart';
 import 'delayed_time.dart';
+import 'gtfs_fields_row.dart';
 import 'pressable_highlight.dart';
 import 'route_badge_pill.dart';
 import 'skeletons/skeleton_shimmer.dart';
@@ -278,11 +279,20 @@ class _DepartureTile extends StatelessWidget {
               const SizedBox(width: 10),
             ],
             Expanded(
-              child: Text(
-                stopTime.headsign,
-                style: AppText.bodyStrong,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    stopTime.headsign,
+                    style: AppText.bodyStrong,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  GtfsFieldsRow(
+                    fields: {'trip': stopTime.tripId, 'stop': place.stopId},
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

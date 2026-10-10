@@ -23,6 +23,8 @@ import '../utils/stop_time_utils.dart';
 import '../widgets/buttons/pill_button.dart';
 import '../widgets/delayed_time.dart';
 import '../widgets/error_notice.dart';
+import '../widgets/gtfs_fields_row.dart';
+import '../widgets/nearby_departures_section.dart';
 import '../widgets/route_badge_pill.dart';
 import '../widgets/buttons/primary_button.dart';
 import '../widgets/skeletons/skeleton_list.dart';
@@ -32,13 +34,36 @@ import '../widgets/validation_toast.dart';
 import '../theme/app_text.dart';
 
 class TimetablesScreen extends StatefulWidget {
-  const TimetablesScreen({super.key, this.initialStop});
+  const TimetablesScreen({
+    super.key,
+    this.initialStop,
+    this.isOpen = true,
+    this.buildNearby = _buildNearby,
+  });
+
+  /// Whether this tab is the one showing. The tabs are all kept built, so
+  /// without it the Near you list would ask where the rider is at launch
+  /// rather than when they open Timetables.
+  final bool isOpen;
 
   final TransitousLocationSuggestion? initialStop;
+
+  /// Builds the Near you list around a position; swapped in drafts and
+  /// tests, which have no position and no network.
+  final NearbyBuilder buildNearby;
+
+  static NearbySectionBuilder _buildNearby(LatLng? center) =>
+      (buildRow, buildMessage) => NearbyDeparturesSection(
+        center: center,
+        buildRow: buildRow,
+        buildMessage: buildMessage,
+      );
 
   @override
   State<TimetablesScreen> createState() => _TimetablesScreenState();
 }
+
+typedef NearbyBuilder = NearbySectionBuilder Function(LatLng? center);
 
 class _TimetablesScreenState extends State<TimetablesScreen> {
   final TextEditingController _searchController = TextEditingController();
@@ -100,6 +125,10 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
     if (widget.initialStop?.id != oldWidget.initialStop?.id) {
       _applyInitialStop(widget.initialStop);
     }
+    // Where the rider is now, for the list that is about to be built again.
+    if (widget.isOpen && !oldWidget.isOpen && _nearbyDeparturesAllowed) {
+      unawaited(_checkLocationPermission());
+    }
   }
 
   @override
@@ -131,12 +160,25 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
   /// The picker's own body is rendered here rather than pushed, and the
   /// keyboard stays down, because the favourites and recents are what you
   /// came for.
+  /// The rider's choice, once it is known: until the settings have loaded,
+  /// a stored "off" would read as the default "on".
+  bool get _nearbyDeparturesAllowed {
+    final theme = context.read<ThemeProvider>();
+    return theme.isInitialized && theme.showNearbyDepartures;
+  }
+
   Widget _buildStopSearch() {
     return LocationSearchBody(
       bucket: SavedPlacesBucket.timetable,
       type: 'STOP',
       autofocus: false,
       onPicked: _onSuggestionSelected,
+      // Off, or with another tab showing, the section is not there at all and
+      // nothing near the rider is asked for. Built anew on each opening, so
+      // it loads once each time Timetables comes up.
+      nearby: widget.isOpen && _nearbyDeparturesAllowed
+          ? widget.buildNearby(_lastUserLatLng)
+          : null,
     );
   }
 
@@ -815,6 +857,12 @@ class _StopTimeCard extends StatelessWidget {
                     style: AppText.listTitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                  ),
+                  GtfsFieldsRow(
+                    fields: {
+                      'trip': stopTime.tripId,
+                      'stop': stopTime.place.stopId,
+                    },
                   ),
                 ],
               ),

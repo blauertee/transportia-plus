@@ -8,9 +8,11 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../models/my_location.dart';
 import '../models/saved_place.dart';
+import '../models/transitous/enums.dart';
 import '../services/favorites_service.dart';
 import '../services/saved_places_service.dart';
 import '../services/transitous_geocode_service.dart';
+import '../services/transitous_map_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/favorite_icons.dart';
@@ -20,6 +22,7 @@ import '../utils/place_icons.dart';
 import '../widgets/app_page_scaffold.dart';
 import '../widgets/buttons/heart_button.dart';
 import '../widgets/edit_favorite_overlay.dart';
+import '../widgets/nearby_departures_section.dart';
 import 'map_place_picker/map_place_picker_screen.dart';
 import '../theme/app_text.dart';
 
@@ -102,6 +105,7 @@ class LocationSearchBody extends StatefulWidget {
     this.showMyLocation = false,
     this.mapPickerTitle = 'Select a place',
     this.mapPickerConfirmLabel = 'Select',
+    this.nearby,
   });
 
   /// Heading and button of the map picker the field's map icon opens.
@@ -111,6 +115,12 @@ class LocationSearchBody extends StatefulWidget {
   /// What to do with the place that was chosen. The pushed screen pops it;
   /// the timetable tab opens its departures.
   final ValueChanged<TransitousLocationSuggestion> onPicked;
+
+  /// The stops around the rider, listed under the favourites and above the
+  /// recents in the same rows. Only the timetable search has them: a
+  /// departure is an answer there, and anywhere else it is not what was
+  /// asked. Null leaves the section out, heading and all.
+  final NearbySectionBuilder? nearby;
 
   /// The pushed screen opens for the sake of typing, so it takes the keyboard.
   /// A tab that merely happens to start here should not.
@@ -675,6 +685,11 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
             SliverList.list(
               children: [
                 if (widget.showFavourites) const SizedBox(height: 20),
+                if (widget.nearby case final nearby?) ...[
+                  _sectionHeading('Near you'),
+                  nearby(_buildNearbyRow, _note),
+                  const SizedBox(height: 12),
+                ],
                 if (recents.isNotEmpty) ...[
                   _sectionHeading('Recent'),
                   for (final place in recents.take(8))
@@ -780,6 +795,37 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
     subtitle: subtitle,
     onTap: () => _pick(place),
     trailing: _heartFor(place),
+  );
+
+  /// A stop near the rider: a stop like any other, the lines leaving it next
+  /// under its name.
+  Widget _buildNearbyRow(
+    MapStop stop,
+    List<String> lines,
+    List<TransitMode> modes,
+  ) {
+    final place = TransitousLocationSuggestion(
+      id: 'nearby:${stop.id}',
+      name: stop.name,
+      lat: stop.lat,
+      lon: stop.lon,
+      type: 'STOP',
+      stopId: stop.stopId,
+      modes: modes,
+    );
+    return _ResultRow(
+      icon: placeIcon(place.type, modes: modes),
+      title: place.name,
+      subtitle: lines.join(', '),
+      onTap: () => _pick(place),
+      trailing: _heartFor(place),
+    );
+  }
+
+  /// A section with nothing in it, said in one line rather than a block.
+  Widget _note(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Text(text, style: AppText.caption),
   );
 
   Widget _sectionHeading(String text) => Padding(

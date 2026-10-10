@@ -33,7 +33,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _handleTimetableRequested(TransitousLocationSuggestion stop) {
     setState(() {
       _pendingTimetableStop = stop;
-      _currentIndex = 1;
+      _currentIndex = _kTimetablesTabIndex;
     });
   }
 
@@ -53,6 +53,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   /// Index of the map tab, the only one whose sheet can push the nav bar away.
   static const int _kMapTabIndex = 0;
+  static const int _kTimetablesTabIndex = 1;
 
   /// How far the map sheet has to be collapsed before the nav bar starts to
   /// fade, and where it has finished fading. Between the two the bar is on its
@@ -126,7 +127,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 onTabChangeRequested: _onNavIndexChanged,
                 onTimetableRequested: _handleTimetableRequested,
               ),
-              TimetablesScreen(initialStop: _pendingTimetableStop),
+              TimetablesScreen(
+                initialStop: _pendingTimetableStop,
+                isOpen: _currentIndex == _kTimetablesTabIndex,
+              ),
               const SavedTripsScreen(),
               const SettingsScreen(),
             ],
