@@ -3,7 +3,7 @@ import '../models/itinerary.dart';
 import '../models/routing_options.dart';
 import '../models/transitous/itinerary_id.dart';
 import 'rental_providers_service.dart';
-import 'trip_details_service.dart';
+import 'server_capabilities_service.dart';
 
 /// How much the app actually knows about an itinerary's current state after
 /// trying to refresh it.
@@ -44,7 +44,7 @@ class ItineraryRefreshResult {
       freshness == ItineraryFreshness.changed;
 }
 
-/// Signature of [TripDetailsService.fetchTripDetails], so tests can supply
+/// Signature of the per-trip lookup, so tests can supply
 /// their own trip data without going over the network.
 typedef TripDetailsFetcher =
     Future<Itinerary> Function({required String tripId});
@@ -77,7 +77,7 @@ class ItineraryRefreshService {
     ItineraryFetcher? fetchItinerary,
     RoutingOptions? options,
   }) async {
-    if (!_hasTransitLegs(itinerary)) {
+    if (!itinerary.hasTransit) {
       return ItineraryRefreshResult(
         itinerary: itinerary,
         freshness: ItineraryFreshness.notRefreshable,
@@ -97,14 +97,13 @@ class ItineraryRefreshService {
       if (refreshed != null) return refreshed;
     }
 
-    return _refreshPerTrip(
-      itinerary,
-      fetchTripDetails ?? TripDetailsService.fetchTripDetails,
-    );
+    return _refreshPerTrip(itinerary, fetchTripDetails ?? _fetchTripTimes);
   }
 
-  static bool _hasTransitLegs(Itinerary itinerary) =>
-      itinerary.legs.any((leg) => leg.tripId != null && leg.tripId!.isNotEmpty);
+  /// `/trip` without the line's shape: the merge keeps the shape the leg
+  /// already has, so downloading it again would only be thrown away.
+  static Future<Itinerary> _fetchTripTimes({required String tripId}) =>
+      TripEndpoint.trip(tripId: tripId, detailedLegs: false);
 
   /// Refreshes the itinerary in one request, or returns null so the caller
   /// falls back to the per-trip path.
@@ -126,7 +125,7 @@ class ItineraryRefreshService {
       return null;
     }
 
-    final merged = itinerary.withLegs(_merge(itinerary.legs, fresh.legs));
+    final merged = itinerary.withLegs(_merge(itinerary, fresh));
 
     return ItineraryRefreshResult(
       itinerary: merged,
@@ -141,37 +140,93 @@ class ItineraryRefreshService {
   ///
   /// Leg count alone is not enough: walk legs carry no `tripId` for the
   /// server to pin them by, so they are exactly the ones it is free to
-  /// re-plan into something else.
+  /// re-plan into something else. So the rides and the changes between them
+  /// must line up one for one. The first and last mile are found again from
+  /// scratch and may come back in another shape — a shared vehicle is a
+  /// walk, a ride and a walk, or one placeholder when none is in reach — so
+  /// they only have to be there on both sides or on neither.
   static bool _isSameJourney(Itinerary before, Itinerary after) {
-    if (before.legs.length != after.legs.length) return false;
-    for (var i = 0; i < before.legs.length; i++) {
-      if (before.legs[i].mode != after.legs[i].mode) return false;
-      final beforeTrip = before.legs[i].tripId;
-      final afterTrip = after.legs[i].tripId;
-      if ((beforeTrip ?? '') != (afterTrip ?? '')) return false;
+    if (before.firstMileLegs.isEmpty != after.firstMileLegs.isEmpty) {
+      return false;
+    }
+    if (before.lastMileLegs.isEmpty != after.lastMileLegs.isEmpty) {
+      return false;
+    }
+    final planned = before.rideLegs;
+    final refreshed = after.rideLegs;
+    if (planned.length != refreshed.length) return false;
+    for (var i = 0; i < planned.length; i++) {
+      if (!_isSameLeg(planned[i], refreshed[i])) return false;
     }
     return true;
   }
 
+  /// The same ride, or the same change. A ride the server could not find
+  /// again comes back as a cancelled placeholder without its trip id, which
+  /// is news about this ride rather than a different one.
+  static bool _isSameLeg(Leg planned, Leg refreshed) {
+    if (planned.mode != refreshed.mode) return false;
+    final plannedTrip = planned.tripId ?? '';
+    final refreshedTrip = refreshed.tripId ?? '';
+    if (plannedTrip == refreshedTrip) return true;
+    return refreshed.cancelled && refreshedTrip.isEmpty;
+  }
+
   /// Takes the refreshed times onto the planned journey, rather than the
   /// planned times onto a refreshed one.
-  ///
+  static List<Leg> _merge(Itinerary before, Itinerary after) => [
+    ..._mergeStreetStretch(before.firstMileLegs, after.firstMileLegs),
+    for (final (i, leg) in before.rideLegs.indexed)
+      _mergeLeg(leg, after.rideLegs[i]),
+    ..._mergeStreetStretch(before.lastMileLegs, after.lastMileLegs),
+  ];
+
   /// `withRealTimeFrom` is the same merge the per-trip path uses, and it
   /// keeps what belongs to the itinerary rather than to the timetable —
   /// fare indices, turn-by-turn steps, and the leg's geometry. That last one
-  /// is why this matters: a refresh can answer without geometry, and a street
+  /// is why this matters: a refresh answers without geometry, and a street
   /// leg with none is drawn as a straight line from origin to station, which
   /// is not where anybody walks.
   ///
   /// A stored leg that never had geometry has nothing to lend, so the fresh
-  /// one is taken whole in case it brought some.
-  static List<Leg> _merge(List<Leg> before, List<Leg> after) => [
-    for (var i = 0; i < after.length; i++)
-      if (before[i].legGeometry?.points.isNotEmpty ?? false)
-        before[i].withRealTimeFrom(after[i])
-      else
-        after[i],
-  ];
+  /// one is taken whole in case it brought some — unless it is the stand-in
+  /// for a ride the server could not find again, which carries no trip id
+  /// and nothing else of the ride's.
+  static Leg _mergeLeg(Leg planned, Leg refreshed) {
+    final hasShape = planned.legGeometry?.points.isNotEmpty ?? false;
+    final isStandIn = refreshed.cancelled && !refreshed.isRide;
+    return hasShape || isStandIn
+        ? planned.withRealTimeFrom(refreshed)
+        : refreshed;
+  }
+
+  /// The way to the first station, or from the last, after the server has
+  /// looked for it again.
+  ///
+  /// A shared vehicle is taken as the server now finds it: the planned one
+  /// may be gone, and the one in its place stands somewhere else, reached
+  /// another way, which is why the refresh fetched its shape. When none is in
+  /// reach that is news — the rider cannot leave the way the itinerary says —
+  /// so the planned stretch stays, with its vehicle marked cancelled. The
+  /// server's stand-in would say the same with no names and no path.
+  ///
+  /// The rider's own feet, bike or car do not go anywhere. A placeholder for
+  /// one only means the server could not find the stretch again within the
+  /// limit it was given, so the planned stretch stays as it was. Found again,
+  /// it takes the new times — the server moves it with a delayed ride — and
+  /// keeps its shape.
+  static List<Leg> _mergeStreetStretch(List<Leg> planned, List<Leg> fresh) {
+    final notFoundAgain = fresh.any((leg) => leg.cancelled);
+    if (planned.any((leg) => leg.rental != null)) {
+      if (!notFoundAgain) return fresh;
+      return [
+        for (final leg in planned)
+          leg.rental != null ? leg.withCancelled() : leg,
+      ];
+    }
+    if (notFoundAgain || fresh.length != planned.length) return planned;
+    return [for (final (i, leg) in planned.indexed) _mergeLeg(leg, fresh[i])];
+  }
 
   static Future<Itinerary> _refreshViaApi(
     Itinerary itinerary,
@@ -179,6 +234,9 @@ class ItineraryRefreshService {
   ) async {
     final id = itinerary.id;
     final params = options.toRefreshParams(
+      itinerary: itinerary,
+      serverLimit:
+          ServerCapabilitiesService.capabilities.value.maxPrePostTransitTime,
       rentalProviderGroups: await RentalProvidersService.activeGroupIds(),
     );
     // A saved trip parsed from a snapshot taken before the app read `id`

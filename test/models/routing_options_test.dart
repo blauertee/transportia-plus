@@ -392,7 +392,10 @@ void main() {
         firstMileRentalFormFactors: const [RentalFormFactor.bicycle],
       );
       final sent = options
-          .toRefreshParams(rentalProviderGroups: const ['VOI'])
+          .toRefreshParams(
+            serverLimit: const Duration(hours: 2),
+            rentalProviderGroups: const ['VOI'],
+          )
           .toQuery();
 
       expect(sent['preTransitRentalFormFactors'], 'BICYCLE');
@@ -424,7 +427,9 @@ void main() {
     });
 
     test('so does a refresh', () {
-      final sent = linked.toRefreshParams().toQuery();
+      final sent = linked
+          .toRefreshParams(serverLimit: const Duration(hours: 2))
+          .toQuery();
       expect(sent['postTransitModes'], sent['preTransitModes']);
       expect(sent['maxPostTransitTime'], sent['maxPreTransitTime']);
     });
