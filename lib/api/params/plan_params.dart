@@ -330,7 +330,8 @@ class PlanParams {
   /// Include ticket prices. The app's fare display depends on this.
   final bool? withFares;
 
-  /// Number of alternative departures to attach to each leg.
+  /// How many stand-in connections to attach to each ride; see
+  /// `Leg.alternatives`.
   final int? numLegAlternatives;
 
   /// Include stops the vehicle skips, rather than omitting them.

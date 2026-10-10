@@ -16,6 +16,18 @@ export 'transitous/place.dart' show TransitPlace;
 export 'transitous/rental.dart' show Rental, RentalVehicleType;
 export 'transitous/step_instruction.dart' show StepInstruction;
 
+/// Modes the traveller covers under their own power or in their own vehicle,
+/// as opposed to riding a service.
+const Set<String> kStreetModes = {
+  'WALK',
+  'BIKE',
+  'CAR',
+  'CAR_PARKING',
+  'CAR_DROPOFF',
+  'RENTAL',
+  'ODM',
+};
+
 /// A stop a leg passes through without the rider boarding or alighting.
 ///
 /// MOTIS returns the same `Place` object here as for leg endpoints, so this is
@@ -184,12 +196,44 @@ class Itinerary {
 
   bool get hasTicketInfo => ticketInfo.isNotEmpty;
 
+  /// Whether any leg is a ride on a scheduled service. Walking, cycling and
+  /// shared vehicles carry no trip id.
+  bool get hasTransit => legs.any((leg) => leg.isRide);
+
+  /// The street legs before the first ride: the way to the first station, on
+  /// foot, by bike or on a shared vehicle (a walk to it, the ride, a walk on).
+  ///
+  /// This is the stretch the planner calls the pre-transit offset, and which a
+  /// refresh has to find again. Empty when the journey starts on a ride or has
+  /// none at all.
+  ///
+  /// Told apart by mode rather than trip id: a ride a refresh could not find
+  /// again comes back without its trip id, and is still a ride.
+  List<Leg> get firstMileLegs {
+    final firstRide = legs.indexWhere((leg) => !leg.isStreet);
+    return firstRide <= 0 ? const [] : legs.sublist(0, firstRide);
+  }
+
+  /// The street legs after the last ride, as [firstMileLegs] at the other end.
+  List<Leg> get lastMileLegs {
+    final lastRide = legs.lastIndexWhere((leg) => !leg.isStreet);
+    if (lastRide < 0 || lastRide == legs.length - 1) return const [];
+    return legs.sublist(lastRide + 1);
+  }
+
+  /// Everything from the first ride to the last: the rides and the changes
+  /// between them.
+  List<Leg> get rideLegs =>
+      legs.sublist(firstMileLegs.length, legs.length - lastMileLegs.length);
+
   /// Returns a copy of this itinerary with [newLegs] substituted in,
   /// recomputing the fields derived from the leg list (e.g. after a
   /// real-time refresh updates individual legs).
   Itinerary withLegs(List<Leg> newLegs) {
     if (newLegs.isEmpty) return this;
-    final transitLegCount = newLegs.where((l) => l.mode != 'WALK').length;
+    // Rides, not everything that is not a walk: a bike or a shared scooter
+    // to the station is no change of vehicle.
+    final transitLegCount = newLegs.where((l) => !l.isStreet).length;
     return Itinerary(
       duration: newLegs.last.endTime
           .difference(newLegs.first.startTime)
@@ -427,9 +471,15 @@ class Leg {
   /// Vehicle-sharing details, set on `RENTAL` legs.
   final Rental? rental;
 
-  /// Other departures serving the same connection, when leg alternatives are
-  /// requested.
-  final List<Leg> alternatives;
+  /// Connections that could stand in for this ride, when leg alternatives
+  /// are requested: each one leaves after the ride before it arrives and
+  /// arrives before the ride after it leaves.
+  ///
+  /// Each is a short journey of its own — normally a footpath, a ride and a
+  /// footpath — because the replacement may leave from another platform or
+  /// stop. Empty on street legs, and on every leg of an interlined chain but
+  /// the first.
+  final List<List<Leg>> alternatives;
 
   final bool interlineWithPreviousLeg;
   final int? fareTransferIndex;
@@ -500,6 +550,13 @@ class Leg {
   /// not know.
   TransitMode? get transitMode => TransitMode.fromWire(mode);
 
+  /// A ride on a scheduled service, which is what carries a trip id. Street
+  /// legs and shared vehicles have none.
+  bool get isRide => tripId?.isNotEmpty ?? false;
+
+  /// Covered on foot, by bike, by car or on a shared vehicle.
+  bool get isStreet => kStreetModes.contains(mode);
+
   String get fromName => from.name;
   String get toName => to.name;
   double get fromLat => from.lat;
@@ -513,11 +570,14 @@ class Leg {
   String? get fromScheduledTrack => from.scheduledTrack;
   String? get toScheduledTrack => to.scheduledTrack;
 
+  /// This leg as planned, but no longer possible.
+  Leg withCancelled() => withRealTimeFrom(this, cancelled: true);
+
   /// Returns a copy of this leg with the real-time fields (times, delay,
   /// cancellation, track, intermediate stops, alerts) refreshed from
   /// [fresh], while keeping itinerary-specific context (fare indices,
-  /// geometry) from this leg.
-  Leg withRealTimeFrom(Leg fresh) {
+  /// geometry) from this leg. [cancelled] overrides the fresh leg's own.
+  Leg withRealTimeFrom(Leg fresh, {bool? cancelled}) {
     return Leg(
       mode: mode,
       from: from.mergeRealTime(fresh.from),
@@ -550,11 +610,15 @@ class Leg {
       tripTo: fresh.tripTo ?? tripTo,
       category: category,
       source: source,
-      cancelled: fresh.cancelled,
+      cancelled: cancelled ?? fresh.cancelled,
       intermediateStops: fresh.intermediateStops.isNotEmpty
           ? fresh.intermediateStops
           : intermediateStops,
-      alerts: fresh.alerts.isNotEmpty ? fresh.alerts : alerts,
+      // A ride a refresh could not find again comes back as a stand-in
+      // without its trip id, whose only alert is the server's error text.
+      alerts: fresh.alerts.isNotEmpty && (fresh.isRide || !fresh.cancelled)
+          ? fresh.alerts
+          : alerts,
       legGeometry: legGeometry,
       steps: steps,
       rental: rental,
@@ -676,6 +740,15 @@ class Leg {
     return a.name.isNotEmpty && a.name == b.name;
   }
 
+  /// `alternatives` is a list of leg lists, one per stand-in connection.
+  static List<List<Leg>> _alternativesFromJson(Object? value) {
+    if (value is! List) return const [];
+    return List.unmodifiable([
+      for (final alternative in value)
+        if (alternative is List) asList(alternative, Leg.fromJson),
+    ]);
+  }
+
   factory Leg.fromJson(Map<String, dynamic> json) {
     try {
       final legGeometry = asMap(json['legGeometry']);
@@ -728,7 +801,7 @@ class Leg {
             : EncodedPolyline.fromJson(legGeometry),
         steps: asList(json['steps'], StepInstruction.fromJson),
         rental: rental == null ? null : Rental.fromJson(rental),
-        alternatives: asList(json['alternatives'], Leg.fromJson),
+        alternatives: _alternativesFromJson(json['alternatives']),
         interlineWithPreviousLeg:
             asBool(json['interlineWithPreviousLeg']) ?? false,
         fareTransferIndex: asInt(json['fareTransferIndex']),

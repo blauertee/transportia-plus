@@ -21,6 +21,7 @@ import '../services/routing_options_service.dart';
 import '../services/routing_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/custom_app_bar.dart';
+import '../utils/departure_label.dart';
 import '../utils/leg_notices.dart';
 import '../utils/color_utils.dart';
 import '../utils/duration_formatter.dart';
@@ -398,8 +399,7 @@ class _ItineraryCardState extends State<ItineraryCard>
       (theme) => theme.showCalories,
     );
     final delaySummary = _delaySummaryLabel();
-    final hasDeparted = _hasDeparted();
-    final departureText = _departureText();
+    final departure = departureLabel(itinerary, now: DateTime.now());
     final firstNonWalkingLeg = itinerary.legs
         .where((leg) => leg.mode != 'WALK')
         .firstOrNull;
@@ -425,16 +425,17 @@ class _ItineraryCardState extends State<ItineraryCard>
                         color: AppColors.black,
                       ),
                     ),
-                    Text(
-                      departureText,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: hasDeparted
-                            ? AppColors.disrupted
-                            : AppColors.black.withValues(alpha: 0.7),
+                    if (departure != null)
+                      Text(
+                        departure.text,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: departure.hasDeparted
+                              ? AppColors.disrupted
+                              : AppColors.black.withValues(alpha: 0.7),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -621,19 +622,6 @@ class _ItineraryCardState extends State<ItineraryCard>
 
     if (affected == 0) return null;
     return '$affected';
-  }
-
-  int _secondsUntilDeparture() {
-    return widget.itinerary.startTime.difference(DateTime.now()).inSeconds;
-  }
-
-  bool _hasDeparted() => _secondsUntilDeparture() <= 0;
-
-  String _departureText() {
-    final secondsUntil = _secondsUntilDeparture();
-    if (secondsUntil <= 0) return 'Departed';
-    if (secondsUntil < 60) return 'Depart now';
-    return 'Depart in ${formatDuration(secondsUntil)}';
   }
 }
 

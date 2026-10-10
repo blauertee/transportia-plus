@@ -84,6 +84,26 @@ void main() {
       expect(step.polyline, isNotNull);
     });
 
+    test('reads leg alternatives as journeys of their own', () {
+      // Captured with numLegAlternatives=2: each ride carries up to two
+      // stand-ins, each a footpath, a ride and a footpath. The ride may be
+      // another line or mode altogether — an S-Bahn's stand-in can be a
+      // U-Bahn.
+      final rides = (plan['itineraries'] as List)
+          .expand((i) => Itinerary.fromJson(i as Map<String, dynamic>).legs)
+          .where((l) => l.alternatives.isNotEmpty)
+          .toList();
+
+      expect(rides, hasLength(4));
+      for (final ride in rides) {
+        expect(ride.alternatives, hasLength(2));
+        for (final alternative in ride.alternatives) {
+          expect(alternative.map((l) => l.isStreet), [true, false, true]);
+          expect(alternative[1].tripId, isNotEmpty);
+        }
+      }
+    });
+
     test('keeps the raw payload so an itinerary stays saveable', () {
       final itinerary = Itinerary.fromJson(
         (plan['itineraries'] as List).first as Map<String, dynamic>,

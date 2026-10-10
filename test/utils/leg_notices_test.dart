@@ -76,6 +76,45 @@ void main() {
     expect(notices.single.severity, NoticeSeverity.problem);
   });
 
+  group('a cancelled street leg', () {
+    // What a refresh sends for a stretch it could not route again: the
+    // planned mode, cancelled, its only alert the server's error.
+    Leg placeholder(String mode) => _leg(
+      mode: mode,
+      cancelled: true,
+      alerts: [_alert('no offset found')],
+      from: _place('', cancelled: true),
+      to: _place('', cancelled: true),
+    );
+
+    test('on a shared vehicle means none is left within reach', () {
+      final notices = legNotices(placeholder('RENTAL'));
+      expect(_titles(notices), ['No shared vehicle is within reach any more.']);
+      expect(notices.single.severity, NoticeSeverity.problem);
+    });
+
+    test('on foot means the way is gone, not a service', () {
+      expect(_titles(legNotices(placeholder('WALK'))), [
+        'There is no way through here any more.',
+      ]);
+    });
+
+    test('keeps the stops\' own alerts', () {
+      final notices = legNotices(
+        _leg(
+          mode: 'WALK',
+          cancelled: true,
+          alerts: [_alert('no offset found')],
+          from: _place('Ostkreuz', alerts: [_alert('Lift out of order')]),
+        ),
+      );
+      expect(_titles(notices), [
+        'There is no way through here any more.',
+        'Lift out of order',
+      ]);
+    });
+  });
+
   test('losing the stop you board or leave at is a problem', () {
     final notices = legNotices(
       _leg(
