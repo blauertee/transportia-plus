@@ -43,8 +43,8 @@ which: check the indices in `store_draft_test.dart` and the `maps` list in
 
 Every image says "Powered by Transitous and OpenStreetMap": the trips come
 from Transitous and the maps and places from OpenStreetMap.
-`transitous_logo.png` is https://transitous.org/images/logo.svg rasterised
-to 128 px with Chromium.
+`transitous_logo.png` is https://transitous.org/images/logo-text.svg
+rasterised to 482×100 px with Chromium.
 
 ## Things that are faked
 

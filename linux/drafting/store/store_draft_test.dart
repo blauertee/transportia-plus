@@ -37,7 +37,7 @@ const double _kPhoneTop = 250;
 const Color _kBackground = Color(0xFF007185);
 const double _kCreditHeight = 46;
 
-/// Rasterised from https://transitous.org/images/logo.svg; see README.md.
+/// Rasterised from https://transitous.org/images/logo-text.svg; see README.md.
 const String _kLogo = 'linux/drafting/store/transitous_logo.png';
 
 // Itineraries of data/plan.json, and the legs the map images focus on. The
@@ -82,7 +82,7 @@ class StoreFrame extends StatelessWidget {
   final String heading;
   final Widget phone;
 
-  /// Transitous's, for the credit along the bottom.
+  /// Transitous's logo with its name, for the credit along the bottom.
   final ui.Image logo;
 
   @override
@@ -191,22 +191,17 @@ class _Credit extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text('Powered by ', style: style),
-        Container(
-          width: 22,
-          height: 22,
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFFFF),
-            borderRadius: BorderRadius.circular(6),
-          ),
+        // The logo carries the name; its lettering is white, for dark grounds.
+        SizedBox(
+          height: 24,
+          width: 24 * logo.width / logo.height,
           child: RawImage(image: logo, fit: BoxFit.contain),
         ),
         const Text.rich(
           TextSpan(
             style: style,
             children: [
-              TextSpan(text: ' Transitous', style: strong),
-              TextSpan(text: ' and '),
+              TextSpan(text: '  and '),
               TextSpan(text: 'OpenStreetMap', style: strong),
             ],
           ),
