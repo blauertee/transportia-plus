@@ -30,6 +30,8 @@ sees it.
 - `render.sh` — runs draft files and says where the PNGs went.
 - `examples/example_draft_test.dart` — one plain screen, one seeded with
   stored data, one sheet over the map. Copy it.
+- `store/` — the fastlane store screenshots, with the captured data they
+  are rendered from; see its README.
 
 ## Getting Flutter
 

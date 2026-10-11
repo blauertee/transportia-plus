@@ -50,3 +50,4 @@ app.*.map.json
 !/linux/drafting/draft_kit.dart
 !/linux/drafting/render.sh
 !/linux/drafting/examples/
+!/linux/drafting/store/
