@@ -39,6 +39,13 @@ their own requests and parsing. Re-capturing changes which itinerary is
 which: check the indices in `store_draft_test.dart` and the `maps` list in
 `render_store.sh` afterwards.
 
+## The credit
+
+Every image says "Powered by Transitous and OpenStreetMap": the trips come
+from Transitous and the maps and places from OpenStreetMap.
+`transitous_logo.png` is https://transitous.org/images/logo.svg rasterised
+to 128 px with Chromium.
+
 ## Things that are faked
 
 - **The clock.** Widgets read `DateTime.now()`. `render_store.sh` moves every

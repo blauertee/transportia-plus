@@ -35,6 +35,10 @@ const Size _kPhone = Size(400, 860);
 const double _kPhoneScale = 0.96;
 const double _kPhoneTop = 250;
 const Color _kBackground = Color(0xFF007185);
+const double _kCreditHeight = 46;
+
+/// Rasterised from https://transitous.org/images/logo.svg; see README.md.
+const String _kLogo = 'linux/drafting/store/transitous_logo.png';
 
 // Itineraries of data/plan.json, and the legs the map images focus on. The
 // map entries in render_store.sh name the same ones.
@@ -68,10 +72,18 @@ void _mockTransitous() {
 /// The store image: [heading] on the brand colour, the phone below it,
 /// running off the bottom edge.
 class StoreFrame extends StatelessWidget {
-  const StoreFrame({super.key, required this.heading, required this.phone});
+  const StoreFrame({
+    super.key,
+    required this.heading,
+    required this.phone,
+    required this.logo,
+  });
 
   final String heading;
   final Widget phone;
+
+  /// Transitous's, for the credit along the bottom.
+  final ui.Image logo;
 
   @override
   Widget build(BuildContext context) {
@@ -144,19 +156,76 @@ class StoreFrame extends StatelessWidget {
               ),
             ),
           ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _kCreditHeight,
+            child: ColoredBox(
+              color: _kBackground,
+              child: _Credit(logo: logo),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-Future<ui.Image> _map(WidgetTester tester, String name) async =>
+/// "Powered by Transitous and OpenStreetMap", with Transitous's logo: the
+/// data in every picture is theirs.
+class _Credit extends StatelessWidget {
+  const _Credit({required this.logo});
+
+  final ui.Image logo;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      fontFamily: 'Roboto',
+      fontSize: 13,
+      color: Color(0xE6FFFFFF),
+    );
+    const strong = TextStyle(fontWeight: FontWeight.w700);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text('Powered by ', style: style),
+        Container(
+          width: 22,
+          height: 22,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: RawImage(image: logo, fit: BoxFit.contain),
+        ),
+        const Text.rich(
+          TextSpan(
+            style: style,
+            children: [
+              TextSpan(text: ' Transitous', style: strong),
+              TextSpan(text: ' and '),
+              TextSpan(text: 'OpenStreetMap', style: strong),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<ui.Image> _image(WidgetTester tester, String path) async =>
     (await tester.runAsync(() async {
       final codec = await ui.instantiateImageCodec(
-        File('$_maps/$name').readAsBytesSync(),
+        File(path).readAsBytesSync(),
       );
       return (await codec.getNextFrame()).image;
     }))!;
+
+Future<ui.Image> _map(WidgetTester tester, String name) =>
+    _image(tester, '$_maps/$name');
 
 /// Where the journey map starts below its app bar, measured on the screen.
 final ValueNotifier<double> _mapTop = ValueNotifier(0);
@@ -247,7 +316,11 @@ Future<void> _shoot(
 }) async {
   await pumpDraft(
     tester,
-    StoreFrame(heading: heading, phone: phone),
+    StoreFrame(
+      heading: heading,
+      phone: phone,
+      logo: await _image(tester, _kLogo),
+    ),
     size: _kCanvas,
   );
   await tester.pump(const Duration(seconds: 1));
