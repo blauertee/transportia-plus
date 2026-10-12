@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>html, body, #m { margin: 0; width: 100%; height: 100%; }</style>
+</head>
+<body>
+<div id="m"></div>
+<script>
+// Called by shoot.mjs. Lines and stop circles match ItineraryMapScreen's
+// widths, colours and opacity; its stop icons are approximated by rings.
+window.render = async (style, spec, padding, maxZoom) => {
+  const map = new maplibregl.Map({
+    container: 'm', style, attributionControl: false, fadeDuration: 0,
+    bounds: spec.bounds, fitBoundsOptions: { padding, maxZoom },
+  });
+  await new Promise((r) => map.on('load', r));
+  map.addSource('legs', { type: 'geojson', data: { type: 'FeatureCollection',
+    features: spec.legs.map((l) => ({ type: 'Feature',
+      properties: { c: l.color, w: l.width },
+      geometry: { type: 'LineString', coordinates: l.coords } })) } });
+  map.addLayer({ id: 'legs', type: 'line', source: 'legs',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': ['get', 'c'], 'line-width': ['get', 'w'], 'line-opacity': 0.8 } });
+  map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection',
+    features: spec.stops.map((s) => ({ type: 'Feature', properties: { c: s.color },
+      geometry: { type: 'Point', coordinates: [s.lon, s.lat] } })) } });
+  map.addLayer({ id: 'stops', type: 'circle', source: 'stops',
+    paint: { 'circle-radius': 6, 'circle-color': '#ffffff',
+      'circle-stroke-color': ['get', 'c'], 'circle-stroke-width': 3 } });
+  await new Promise((r) => map.once('idle', r));
+  await new Promise((r) => setTimeout(r, 500));
+};
+</script>
+</body>
+</html>
