@@ -21,7 +21,7 @@
   itinerary, with tappable stops and pull-to-refresh.
 - **Side-by-side install** — its own app ID, so it runs next to the original.
 
-## Screenshots
+## Preview 
 
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" width="45%" alt="Search with the bike to the station" />
