@@ -88,8 +88,9 @@ class TransitSection extends StatelessWidget {
     ),
     // Always offered, and already on when the same vehicle is at both ends —
     // that is when it is travelling with you rather than being left at the
-    // station. The derivation is a starting point, not a gate: turning it
-    // off there, or on elsewhere, is a real request.
+    // station — unless the rider turned that off for bikes. The derivation is
+    // a starting point, not a gate: turning it off there, or on elsewhere, is
+    // a real request.
     LegOption.toggle(
       mark: const Icon(LucideIcons.bike),
       title: 'Bike on board',

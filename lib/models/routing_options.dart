@@ -98,10 +98,11 @@ class RoutingOptions {
 
   /// Whether to demand a service that carries bicycles.
   ///
-  /// Null means "follow [bikeAtBothEnds]" while [autoBikeCarriage] holds — picking a bike at both ends says
-  /// the bike is travelling with you, so carriage follows without being asked
-  /// for. Non-null means the rider decided, and their choice holds until the
-  /// mile modes stop implying anything.
+  /// Null means "follow [bikeAtBothEnds]" while [autoBikeCarriage] holds —
+  /// picking a bike at both ends says the bike is travelling with you, so
+  /// carriage follows without being asked for. Non-null means the rider
+  /// decided, and their choice holds until the mile modes stop implying
+  /// anything.
   ///
   /// Turning it off with a bike at both ends is a real request: the bike is
   /// coming, but you would rather walk it onto a service that does not
@@ -124,8 +125,9 @@ class RoutingOptions {
   /// The value actually sent.
   ///
   /// The derivation is the default, not a gate: a bike at both ends turns
-  /// carriage on without being asked, and the rider can still turn it off, or
-  /// on for a journey where the derivation does not apply.
+  /// carriage on without being asked, unless [autoBikeCarriage] is off, and
+  /// the rider can still turn it off, or on for a journey where the
+  /// derivation does not apply.
   bool get requireBikeTransport =>
       bikeCarriageOverride ?? (autoBikeCarriage && bikeAtBothEnds);
 

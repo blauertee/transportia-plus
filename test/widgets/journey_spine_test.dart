@@ -571,7 +571,10 @@ void main() {
       expect(tester.widget<IconPick>(_pick('Bike on board')).selected, true);
       expect(host.options.requireBikeTransport, isTrue);
       expect(host.options.bikeCarriageIsManual, isFalse);
-      expect(find.text('Bike on board turned on automatically'), findsOneWidget);
+      expect(
+        find.textContaining('Bike on board turned on automatically'),
+        findsOneWidget,
+      );
       await _quiet(tester);
     });
 
@@ -1009,6 +1012,26 @@ void main() {
               w is SpineNode && w.appIcon == const GlyphIcon(LucideIcons.bike),
         ),
         findsNWidgets(2),
+      );
+      await _quiet(tester);
+    });
+
+    testWidgets('linking says when it takes the bike on board', (
+      tester,
+    ) async {
+      final host = await _pumpSpine(
+        tester,
+        initial: _separate.copyWith(firstMileModes: const [TransitMode.bike]),
+      );
+      await tapLink(tester);
+
+      expect(host.options.requireBikeTransport, isTrue);
+      expect(
+        find.text(
+          'From the station: same as to the station. '
+          'Bike on board turned on automatically',
+        ),
+        findsOne,
       );
       await _quiet(tester);
     });
