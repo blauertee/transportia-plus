@@ -77,9 +77,13 @@ class _HostState extends State<_Host> {
   }
 }
 
+/// The app starts with the last mile linked; most of these tests are about a
+/// stage of its own, so they start with it set apart.
+final _separate = RoutingOptions.defaults.copyWith(lastMileSameAsFirst: false);
+
 Future<_HostState> _pumpSpine(
   WidgetTester tester, {
-  RoutingOptions initial = RoutingOptions.defaults,
+  RoutingOptions initial = _separate,
   List<String> providerNames = const [],
   SearchOptionsOpening opening = SearchOptionsOpening.closed,
   QuickAccessLayout? layout,
@@ -143,7 +147,7 @@ void main() {
   testWidgets('the summary names the sections that are on', (tester) async {
     await _pumpSpine(
       tester,
-      initial: RoutingOptions.defaults.copyWith(
+      initial: _separate.copyWith(
         firstMileModes: const [TransitMode.walk, TransitMode.rental],
         firstMileRentalFormFactors: const [RentalFormFactor.scooterStanding],
         maxFirstMileTime: const Duration(minutes: 90),
@@ -218,7 +222,7 @@ void main() {
     testWidgets('a partly-on section is drawn as partly on', (tester) async {
       await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(
+        initial: _separate.copyWith(
           firstMileModes: const [TransitMode.walk, TransitMode.rental],
           firstMileRentalFormFactors: const [RentalFormFactor.bicycle],
         ),
@@ -321,7 +325,7 @@ void main() {
     testWidgets('the stage icon follows the last section on', (tester) async {
       await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(
+        initial: _separate.copyWith(
           firstMileModes: const [TransitMode.walk, TransitMode.bike],
         ),
       );
@@ -585,7 +589,7 @@ void main() {
     testWidgets('stays the rider\'s to turn off', (tester) async {
       final host = await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(
+        initial: _separate.copyWith(
           firstMileModes: const [TransitMode.bike],
           lastMileModes: const [TransitMode.bike],
         ),
@@ -820,7 +824,7 @@ void main() {
   });
 
   group('only my sharing providers', () {
-    final renting = RoutingOptions.defaults.copyWith(
+    final renting = _separate.copyWith(
       firstMileModes: const [TransitMode.walk, TransitMode.rental],
       firstMileRentalFormFactors: const [RentalFormFactor.bicycle],
     );
@@ -944,6 +948,12 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('a fresh install starts linked', (tester) async {
+      await _pumpSpine(tester, initial: RoutingOptions.defaults);
+      expect(visible('Same as to the station'), findsOneWidget);
+      await _quiet(tester);
+    });
+
     testWidgets('only the way from the station offers it', (tester) async {
       await _pumpSpine(tester);
       expect(link(), findsOneWidget);
@@ -999,7 +1009,7 @@ void main() {
     ) async {
       final host = await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(
+        initial: _separate.copyWith(
           firstMileModes: const [TransitMode.walk, TransitMode.bike],
           lastMileSameAsFirst: true,
         ),
@@ -1017,7 +1027,7 @@ void main() {
     testWidgets('stays closed when the card opens everything', (tester) async {
       await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(lastMileSameAsFirst: true),
+        initial: _separate.copyWith(lastMileSameAsFirst: true),
         opening: SearchOptionsOpening.stagesOpen,
       );
       await tester.pumpAndSettle();
@@ -1038,7 +1048,7 @@ void main() {
     ) async {
       await _pumpSpine(
         tester,
-        initial: RoutingOptions.defaults.copyWith(
+        initial: _separate.copyWith(
           lastMileModes: const [
             TransitMode.walk,
             TransitMode.bike,

@@ -23,6 +23,7 @@ void main() {
       const options = RoutingOptions(
         firstMileModes: [TransitMode.walk, TransitMode.hgv],
         lastMileModes: [TransitMode.walk],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -146,6 +147,7 @@ void main() {
           RentalFormFactor.moped,
         ],
         lastMileRentalFormFactors: [RentalFormFactor.bicycle],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -161,6 +163,7 @@ void main() {
         firstMileModes: [TransitMode.rental],
         lastMileModes: [TransitMode.walk],
         firstMileRentalFormFactors: [RentalFormFactor.cargoBicycle],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -276,7 +279,10 @@ void main() {
     });
 
     test('follows the way there, not the way back', () {
-      const options = RoutingOptions(lastMileModes: [TransitMode.bike]);
+      const options = RoutingOptions(
+        lastMileModes: [TransitMode.bike],
+        lastMileSameAsFirst: false,
+      );
 
       expect(options.directModes, [TransitMode.walk]);
     });
@@ -311,6 +317,7 @@ void main() {
       const options = RoutingOptions(
         maxFirstMileTime: Duration(minutes: 20),
         maxLastMileTime: Duration(minutes: 10),
+        lastMileSameAsFirst: false,
       );
 
       expect(options.maxDirectTime, const Duration(minutes: 30));
@@ -414,9 +421,9 @@ void main() {
       lastMileSameAsFirst: true,
     );
 
-    test('off unless asked for', () {
-      expect(RoutingOptions.defaults.lastMileSameAsFirst, isFalse);
-      expect(RoutingOptions.fromJson(const {}).lastMileSameAsFirst, isFalse);
+    test('on unless set apart', () {
+      expect(RoutingOptions.defaults.lastMileSameAsFirst, isTrue);
+      expect(RoutingOptions.fromJson(const {}).lastMileSameAsFirst, isTrue);
     });
 
     test('a search sends the first mile as the last mile too', () {

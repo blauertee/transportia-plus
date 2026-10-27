@@ -67,7 +67,7 @@ class RoutingOptions {
     this.maxLastMileTime = const Duration(minutes: 15),
     this.firstMileRentalFormFactors = const [],
     this.lastMileRentalFormFactors = const [],
-    this.lastMileSameAsFirst = false,
+    this.lastMileSameAsFirst = true,
     this.walkingSpeedKmh = _defaultWalkingSpeedKmh,
     this.cyclingSpeedKmh = _defaultCyclingSpeedKmh,
     this.elevationCosts = ElevationCosts.none,
