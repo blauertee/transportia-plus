@@ -15,6 +15,7 @@ import '../../utils/time_utils.dart';
 const double _kAxisWidth = 44;
 
 const double _kBarWidth = 30;
+const double _kBarRadius = 6;
 
 /// Station names are cut to this many characters, so the widest label is
 /// known before laying out the columns.
@@ -356,14 +357,28 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       ? _Lock.implicit
       : null;
 
-  /// A tab off the right side of the bar, at its top: a bar has little
-  /// height to spare but room to either side.
+  /// A tab off the right side of the bar, where its straight edge starts
+  /// below the rounded corner: a bar has little height to spare but room
+  /// to either side. Centred instead on a bar too short for that.
   Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
+    final top = g.y(ride.leg.startTime);
+    final height = g.y(ride.leg.endTime) - top;
+    final inset = math.min(
+      _kBarRadius,
+      math.max(0.0, (height - _LockBadge.height) / 2),
+    );
     return Positioned(
       left: g.x(ride.slot) + _kBarWidth / 2,
-      top: g.y(ride.leg.startTime) + 1,
+      top: top + inset,
       child: IgnorePointer(
-        child: _LockBadge(color: accent, implicit: lock == _Lock.implicit),
+        child: _LockBadge(
+          color: legSpineColor(
+            leg: ride.leg,
+            background: AppColors.white,
+            accent: accent,
+          ),
+          implicit: lock == _Lock.implicit,
+        ),
       ),
     );
   }
@@ -508,7 +523,7 @@ class _RideBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(_kBarRadius),
       ),
       padding: const EdgeInsets.only(top: 3),
       alignment: Alignment.topCenter,
@@ -638,31 +653,30 @@ enum _Lock { explicit, implicit }
 /// How much a lock that follows from another fades.
 const double _kImplicitLockOpacity = 0.4;
 
-/// A small tab joined to the right side of a locked bar: square where it
-/// meets the bar, rounded at its free end. A lock that follows from a later
-/// one is the same tab, fainter.
+/// A small tab joined to the right side of a locked bar: outlined in the
+/// bar's colour, open where it meets the bar, rounded at its free end. A
+/// lock that follows from a later one is the same tab, fainter.
 class _LockBadge extends StatelessWidget {
   const _LockBadge({required this.color, this.implicit = false});
 
+  /// The colour of the bar it hangs off.
   final Color color;
   final bool implicit;
 
+  static const double height = 20;
+
   @override
   Widget build(BuildContext context) {
+    final edge = BorderSide(color: color, width: 1.5);
     final tab = Container(
-      width: 17,
-      height: 16,
-      padding: const EdgeInsets.only(right: 1),
+      height: height,
+      padding: const EdgeInsets.fromLTRB(4, 0, 5, 0),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+        border: Border(top: edge, right: edge, bottom: edge),
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
       ),
       alignment: Alignment.center,
-      child: const Icon(
-        LucideIcons.lock,
-        size: 10,
-        color: AppColors.solidWhite,
-      ),
+      child: Icon(LucideIcons.lock, size: 11, color: color),
     );
     return implicit ? Opacity(opacity: _kImplicitLockOpacity, child: tab) : tab;
   }
