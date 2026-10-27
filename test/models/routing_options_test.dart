@@ -23,6 +23,7 @@ void main() {
       const options = RoutingOptions(
         firstMileModes: [TransitMode.walk, TransitMode.hgv],
         lastMileModes: [TransitMode.walk],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -42,10 +43,39 @@ void main() {
 
   group('carriage starts from the modes but stays the rider\'s', () {
     test('a bike only to the station leaves it there', () {
-      const options = RoutingOptions(firstMileModes: [TransitMode.bike]);
+      const options = RoutingOptions(
+        firstMileModes: [TransitMode.bike],
+        lastMileSameAsFirst: false,
+      );
       expect(options.bikeAtBothEnds, isFalse);
       expect(options.requireBikeTransport, isFalse);
       expect(_query(options).containsKey('requireBikeTransport'), isFalse);
+    });
+
+    test('automatic carriage off, a bike at both ends asks for nothing', () {
+      final manual = _bikeBothEnds.copyWith(autoBikeCarriage: false);
+      expect(manual.bikeAtBothEnds, isTrue);
+      expect(manual.requireBikeTransport, isFalse);
+      expect(_query(manual).containsKey('requireBikeTransport'), isFalse);
+    });
+
+    test('the rider can still ask for carriage with automatic off', () {
+      final asked = _bikeBothEnds.copyWith(
+        autoBikeCarriage: false,
+        bikeCarriageOverride: true,
+      );
+      expect(asked.requireBikeTransport, isTrue);
+    });
+
+    test('automatic carriage is on unless turned off, and is stored', () {
+      expect(RoutingOptions.defaults.autoBikeCarriage, isTrue);
+      expect(RoutingOptions.fromJson(const {}).autoBikeCarriage, isTrue);
+      final off = RoutingOptions.defaults.copyWith(autoBikeCarriage: false);
+      expect(RoutingOptions.fromJson(off.toJson()).autoBikeCarriage, isFalse);
+      expect(
+        RoutingOptions.defaults.withSettingsFrom(off).autoBikeCarriage,
+        isFalse,
+      );
     });
 
     test('a bike at both ends carries it aboard without being asked', () {
@@ -109,21 +139,20 @@ void main() {
     });
   });
 
-  group('car carriage works the same way', () {
-    test('a car at both ends means motorail', () {
-      const motorail = RoutingOptions(
-        firstMileModes: [TransitMode.car],
-        lastMileModes: [TransitMode.car],
-      );
-      expect(_query(motorail)['requireCarTransport'], 'true');
+  group('car carriage is only ever asked for', () {
+    const carBothEnds = RoutingOptions(
+      firstMileModes: [TransitMode.car],
+      lastMileModes: [TransitMode.car],
+    );
+
+    test('a car at both ends does not mean motorail', () {
+      expect(carBothEnds.requireCarTransport, isFalse);
+      expect(_query(carBothEnds).containsKey('requireCarTransport'), isFalse);
     });
 
-    test('park and ride is not motorail', () {
-      const parkAndRide = RoutingOptions(
-        firstMileModes: [TransitMode.carParking],
-        lastMileModes: [TransitMode.carParking],
-      );
-      expect(parkAndRide.requireCarTransport, isFalse);
+    test('turning it on is honoured', () {
+      final motorail = carBothEnds.copyWith(carCarriageOverride: true);
+      expect(_query(motorail)['requireCarTransport'], 'true');
     });
   });
 
@@ -146,6 +175,7 @@ void main() {
           RentalFormFactor.moped,
         ],
         lastMileRentalFormFactors: [RentalFormFactor.bicycle],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -161,6 +191,7 @@ void main() {
         firstMileModes: [TransitMode.rental],
         lastMileModes: [TransitMode.walk],
         firstMileRentalFormFactors: [RentalFormFactor.cargoBicycle],
+        lastMileSameAsFirst: false,
       );
       final query = _query(options);
 
@@ -276,7 +307,10 @@ void main() {
     });
 
     test('follows the way there, not the way back', () {
-      const options = RoutingOptions(lastMileModes: [TransitMode.bike]);
+      const options = RoutingOptions(
+        lastMileModes: [TransitMode.bike],
+        lastMileSameAsFirst: false,
+      );
 
       expect(options.directModes, [TransitMode.walk]);
     });
@@ -311,6 +345,7 @@ void main() {
       const options = RoutingOptions(
         maxFirstMileTime: Duration(minutes: 20),
         maxLastMileTime: Duration(minutes: 10),
+        lastMileSameAsFirst: false,
       );
 
       expect(options.maxDirectTime, const Duration(minutes: 30));
@@ -390,6 +425,7 @@ void main() {
       final options = RoutingOptions.defaults.copyWith(
         firstMileModes: const [TransitMode.rental],
         firstMileRentalFormFactors: const [RentalFormFactor.bicycle],
+        lastMileSameAsFirst: false,
       );
       final sent = options
           .toRefreshParams(
@@ -414,9 +450,24 @@ void main() {
       lastMileSameAsFirst: true,
     );
 
-    test('off unless asked for', () {
-      expect(RoutingOptions.defaults.lastMileSameAsFirst, isFalse);
-      expect(RoutingOptions.fromJson(const {}).lastMileSameAsFirst, isFalse);
+    test('a fresh install starts linked', () {
+      expect(RoutingOptions.defaults.lastMileSameAsFirst, isTrue);
+      expect(
+        RoutingOptions.fromJson(
+          RoutingOptions.defaults.toJson(),
+        ).lastMileSameAsFirst,
+        isTrue,
+      );
+    });
+
+    test('options stored before the link existed stay set apart', () {
+      final stored = RoutingOptions.defaults
+          .copyWith(lastMileModes: const [TransitMode.bike])
+          .toJson()
+        ..remove('lastMileSameAsFirst');
+      final restored = RoutingOptions.fromJson(stored);
+      expect(restored.lastMileSameAsFirst, isFalse);
+      expect(restored.lastMileModesInUse, [TransitMode.bike]);
     });
 
     test('a search sends the first mile as the last mile too', () {
@@ -443,7 +494,7 @@ void main() {
       // Carriage follows the modes searched with, not the ones set aside.
       expect(linked.bikeAtBothEnds, isTrue);
       expect(linked.requireBikeTransport, isTrue);
-      expect(linked.carAtBothEnds, isFalse);
+      expect(linked.requireCarTransport, isFalse);
     });
 
     test('a journey without transit gets both budgets as searched', () {

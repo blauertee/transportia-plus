@@ -35,7 +35,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultSearchMapEnabled = true;
   static const SearchOptionsOpening defaultSearchOptionsOpening =
       SearchOptionsOpening.closed;
-  static const bool defaultShowCalories = true;
+  static const bool defaultShowCalories = false;
   static const bool defaultShowGtfsFields = false;
   static const bool defaultShowNearbyDepartures = true;
 

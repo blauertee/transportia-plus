@@ -145,6 +145,7 @@ void main() {
           maxFirstMileTime: Duration(minutes: 20),
           lastMileModes: [TransitMode.bike],
           maxLastMileTime: Duration(minutes: 10),
+          lastMileSameAsFirst: false,
           walkingSpeedKmh: 5.4,
           cyclingSpeedKmh: 18.0,
           elevationCosts: ElevationCosts.high,

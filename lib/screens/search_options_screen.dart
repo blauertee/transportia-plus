@@ -149,6 +149,7 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
         capabilities: _capabilities,
         onChanged: _update,
       ),
+      SearchOptionsBikeGroup(options: _options, onChanged: _update),
       if (_capabilities.hasElevation)
         SearchOptionsInclineGroup(options: _options, onChanged: _update),
       OptionsGroup(

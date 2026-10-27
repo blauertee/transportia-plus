@@ -55,6 +55,7 @@ class RoutingOptions {
     this.transitModes = const [],
     this.useRoutedTransfers = true,
     this.wheelchairAccessibleOnly = false,
+    this.autoBikeCarriage = true,
     this.bikeCarriageOverride,
     this.carCarriageOverride,
     this.noCompulsoryReservation = false,
@@ -67,7 +68,7 @@ class RoutingOptions {
     this.maxLastMileTime = const Duration(minutes: 15),
     this.firstMileRentalFormFactors = const [],
     this.lastMileRentalFormFactors = const [],
-    this.lastMileSameAsFirst = false,
+    this.lastMileSameAsFirst = true,
     this.walkingSpeedKmh = _defaultWalkingSpeedKmh,
     this.cyclingSpeedKmh = _defaultCyclingSpeedKmh,
     this.elevationCosts = ElevationCosts.none,
@@ -91,19 +92,27 @@ class RoutingOptions {
   /// Restrict street legs to step-free paths.
   final bool wheelchairAccessibleOnly;
 
+  /// Whether a bike at both ends switches bike carriage on by itself. Off,
+  /// carriage is only ever what the rider asked for.
+  final bool autoBikeCarriage;
+
   /// Whether to demand a service that carries bicycles.
   ///
-  /// Null means "follow [bikeAtBothEnds]" — picking a bike at both ends says
-  /// the bike is travelling with you, so carriage follows without being asked
-  /// for. Non-null means the rider decided, and their choice holds until the
-  /// mile modes stop implying anything.
+  /// Null means "follow [bikeAtBothEnds]" while [autoBikeCarriage] holds —
+  /// picking a bike at both ends says the bike is travelling with you, so
+  /// carriage follows without being asked for. Non-null means the rider
+  /// decided, and their choice holds until the mile modes stop implying
+  /// anything.
   ///
   /// Turning it off with a bike at both ends is a real request: the bike is
   /// coming, but you would rather walk it onto a service that does not
   /// advertise carriage.
   final bool? bikeCarriageOverride;
 
-  /// Same rule for taking a car aboard, where carriage means motorail.
+  /// Whether to demand a service that takes cars aboard (motorail). Unlike
+  /// bikes, it never follows the mile modes: driving to and from stations is
+  /// far more often park and ride than motorail, so it is on only when the
+  /// rider asks.
   final bool? carCarriageOverride;
 
   /// A bike is among the modes at both ends, so it travels with the rider
@@ -112,18 +121,16 @@ class RoutingOptions {
       firstMileModes.contains(TransitMode.bike) &&
       lastMileModesInUse.contains(TransitMode.bike);
 
-  bool get carAtBothEnds =>
-      firstMileModes.contains(TransitMode.car) &&
-      lastMileModesInUse.contains(TransitMode.car);
-
   /// The value actually sent.
   ///
   /// The derivation is the default, not a gate: a bike at both ends turns
-  /// carriage on without being asked, and the rider can still turn it off, or
-  /// on for a journey where the derivation does not apply.
-  bool get requireBikeTransport => bikeCarriageOverride ?? bikeAtBothEnds;
+  /// carriage on without being asked, unless [autoBikeCarriage] is off, and
+  /// the rider can still turn it off, or on for a journey where the
+  /// derivation does not apply.
+  bool get requireBikeTransport =>
+      bikeCarriageOverride ?? (autoBikeCarriage && bikeAtBothEnds);
 
-  bool get requireCarTransport => carCarriageOverride ?? carAtBothEnds;
+  bool get requireCarTransport => carCarriageOverride ?? false;
 
   /// True when the rider set carriage by hand rather than inheriting it.
   bool get bikeCarriageIsManual => bikeCarriageOverride != null;
@@ -290,12 +297,14 @@ class RoutingOptions {
     useRoutedTransfers: stored.useRoutedTransfers,
     additionalTransferTime: stored.additionalTransferTime,
     elevationCosts: stored.elevationCosts,
+    autoBikeCarriage: stored.autoBikeCarriage,
   );
 
   RoutingOptions copyWith({
     List<TransitMode>? transitModes,
     bool? useRoutedTransfers,
     bool? wheelchairAccessibleOnly,
+    bool? autoBikeCarriage,
     bool? bikeCarriageOverride,
     bool? carCarriageOverride,
     bool clearCarriageOverrides = false,
@@ -325,6 +334,7 @@ class RoutingOptions {
       useRoutedTransfers: useRoutedTransfers ?? this.useRoutedTransfers,
       wheelchairAccessibleOnly:
           wheelchairAccessibleOnly ?? this.wheelchairAccessibleOnly,
+      autoBikeCarriage: autoBikeCarriage ?? this.autoBikeCarriage,
       bikeCarriageOverride: clearCarriageOverrides
           ? null
           : (bikeCarriageOverride ?? this.bikeCarriageOverride),
@@ -563,6 +573,7 @@ class RoutingOptions {
     'transitModes': [for (final mode in transitModes) mode.wireName],
     'useRoutedTransfers': useRoutedTransfers,
     'wheelchairAccessibleOnly': wheelchairAccessibleOnly,
+    'autoBikeCarriage': autoBikeCarriage,
     'bikeCarriageOverride': bikeCarriageOverride,
     'carCarriageOverride': carCarriageOverride,
     'noCompulsoryReservation': noCompulsoryReservation,
@@ -596,6 +607,8 @@ class RoutingOptions {
       wheelchairAccessibleOnly:
           json['wheelchairAccessibleOnly'] as bool? ??
           fallback.wheelchairAccessibleOnly,
+      autoBikeCarriage:
+          json['autoBikeCarriage'] as bool? ?? fallback.autoBikeCarriage,
       bikeCarriageOverride: json['bikeCarriageOverride'] as bool?,
       carCarriageOverride: json['carCarriageOverride'] as bool?,
       noCompulsoryReservation:
@@ -635,8 +648,10 @@ class RoutingOptions {
       lastMileRentalFormFactors: _formFactors(
         json['lastMileRentalFormFactors'],
       ),
-      lastMileSameAsFirst:
-          json['lastMileSameAsFirst'] as bool? ?? fallback.lastMileSameAsFirst,
+      // Options stored before the link existed always set the last mile
+      // apart; linking them now would quietly drop what the rider set there.
+      // Only a fresh install starts linked.
+      lastMileSameAsFirst: json['lastMileSameAsFirst'] as bool? ?? false,
     );
   }
 

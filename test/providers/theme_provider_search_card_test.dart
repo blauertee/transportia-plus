@@ -65,27 +65,27 @@ void main() {
   });
 
   group('calories', () {
-    test('shown unless turned off', () async {
-      final provider = await _loaded();
-      expect(provider.showCalories, isTrue);
-    });
-
-    test('a stored "off" is honoured', () async {
-      SharedPreferencesAsyncPlatform.instance =
-          InMemorySharedPreferencesAsync.withData({_showCalories: false});
+    test('hidden unless turned on', () async {
       final provider = await _loaded();
       expect(provider.showCalories, isFalse);
     });
 
-    test('turning them off is stored and announced', () async {
+    test('a stored "on" is honoured', () async {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.withData({_showCalories: true});
+      final provider = await _loaded();
+      expect(provider.showCalories, isTrue);
+    });
+
+    test('turning them on is stored and announced', () async {
       final provider = await _loaded();
       var notified = 0;
       provider.addListener(() => notified++);
 
-      await provider.setShowCalories(false);
+      await provider.setShowCalories(true);
 
       expect(notified, 1);
-      expect(await SharedPreferencesAsync().getBool(_showCalories), isFalse);
+      expect(await SharedPreferencesAsync().getBool(_showCalories), isTrue);
     });
   });
 }

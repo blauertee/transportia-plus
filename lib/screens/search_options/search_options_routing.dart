@@ -122,3 +122,39 @@ class SearchOptionsInclineGroup extends StatelessWidget {
     );
   }
 }
+
+/// Whether riding a bike to and from the station also puts it on the train.
+class SearchOptionsBikeGroup extends StatelessWidget {
+  const SearchOptionsBikeGroup({
+    super.key,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final RoutingOptions options;
+  final ValueChanged<RoutingOptions> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return OptionsGroup(
+      title: 'Bike',
+      children: [
+        OptionsRow(
+          icon: LucideIcons.bike,
+          label: 'Take the bike on board automatically',
+          description:
+              'With a bike at both ends of the journey, only offer services '
+              'that carry bicycles. Off, you decide per search.',
+          onTap: () => onChanged(
+            options.copyWith(autoBikeCarriage: !options.autoBikeCarriage),
+          ),
+          trailing: AppToggleSwitch(
+            value: options.autoBikeCarriage,
+            onChanged: (value) =>
+                onChanged(options.copyWith(autoBikeCarriage: value)),
+          ),
+        ),
+      ],
+    );
+  }
+}
