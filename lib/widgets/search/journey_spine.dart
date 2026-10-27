@@ -254,11 +254,14 @@ class _JourneySpineState extends State<JourneySpine> {
         _open.add(_Stage.fromStation);
       }
     });
-    widget.onChanged(options.withLastMileSameAsFirst(linking));
+    final next = options.withLastMileSameAsFirst(linking);
+    widget.onChanged(next);
+    final change = linking
+        ? 'From the station: same as to the station'
+        : 'From the station: set separately';
+    final carriage = _autoCarriageNote(options, next);
     _announce(
-      linking
-          ? 'From the station: same as to the station'
-          : 'From the station: set separately',
+      carriage == null ? change : '$change. $carriage',
       icon: LucideIcons.link2,
     );
   }
@@ -384,8 +387,14 @@ class _JourneySpineState extends State<JourneySpine> {
         view: _viewOf(stage),
         onViewChanged: (view) => _setView(stage, view),
         onChanged: (next) {
-          _apply(onChanged(next));
-          _announceStreetChange(choice, next, where);
+          final after = onChanged(next);
+          _apply(after);
+          _announceStreetChange(
+            choice,
+            next,
+            where,
+            carriage: _autoCarriageNote(widget.options, after),
+          );
         },
         onBudgetChanged: (next) => _apply(onBudgetChanged(next)),
         limitToMyProviders: widget.limitToMyProviders,
@@ -395,20 +404,35 @@ class _JourneySpineState extends State<JourneySpine> {
     );
   }
 
+  /// What a change to the street legs did to bike carriage on its own, for
+  /// the rider never asked for that by hand. Null when it did nothing.
+  String? _autoCarriageNote(RoutingOptions before, RoutingOptions after) {
+    if (after.bikeCarriageIsManual) return null;
+    if (after.requireBikeTransport == before.requireBikeTransport) return null;
+    return after.requireBikeTransport
+        ? 'Bike on board turned on automatically'
+        : 'Bike on board turned off automatically';
+  }
+
   /// Names the section that was just switched on or off, since its icon
   /// alone cannot say which of the two happened.
+  ///
+  /// A [carriage] note rides along, since the same tap switched it; alone,
+  /// it is announced even when no whole section changed.
   void _announceStreetChange(
     StreetLegChoice before,
     StreetLegChoice after,
-    String where,
-  ) {
+    String where, {
+    String? carriage,
+  }) {
     for (final section in _layout.streetSections) {
       final wasOn = before.stateOf(section.items) != GroupState.none;
       if (wasOn == (after.stateOf(section.items) != GroupState.none)) continue;
+      final change = wasOn
+          ? 'No ${section.title.toLowerCase()} $where'
+          : '${section.title} $where';
       _announce(
-        wasOn
-            ? 'No ${section.title.toLowerCase()} $where'
-            : '${section.title} $where',
+        carriage == null ? change : '$change. $carriage',
         // An announcement has room for one glyph; a composed icon gives its
         // main one.
         icon: switch (section.icon) {
@@ -418,6 +442,7 @@ class _JourneySpineState extends State<JourneySpine> {
       );
       return;
     }
+    if (carriage != null) _announce(carriage, icon: LucideIcons.bike);
   }
 
   /// Names whichever transport-section control changed, so an icon-only tap
