@@ -422,6 +422,46 @@ void main() {
       );
       expect(find.textContaining('0.26 km walk'), findsOneWidget);
     });
+
+    testWidgets('its routing icon asks for other ways on, not the map', (
+      tester,
+    ) async {
+      var onward = 0;
+      var map = 0;
+      await _pump(
+        tester,
+        TransferLegCard(
+          leg: _change(),
+          openStopSheet: _noop,
+          onShowOnMap: () => map++,
+          onFindOnward: () => onward++,
+        ),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Other ways on from this change'));
+      expect(onward, 1);
+      expect(map, 0);
+      expect(
+        find.bySemanticsLabel('Show this change on the map'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('without a way on it shows only the map', (tester) async {
+      await _pump(
+        tester,
+        TransferLegCard(
+          leg: _change(),
+          openStopSheet: _noop,
+          onShowOnMap: () {},
+        ),
+      );
+
+      expect(
+        find.bySemanticsLabel('Other ways on from this change'),
+        findsNothing,
+      );
+    });
   });
 
   group('the line shows how far you have got', () {

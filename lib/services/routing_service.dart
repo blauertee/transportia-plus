@@ -33,6 +33,10 @@ class RoutingService {
   /// [options] are the ones configured for this search. Falling back to the
   /// stored defaults is for journeys nobody configured — a deep link, or a
   /// second opinion on an itinerary opened from history.
+  ///
+  /// [fromStopId] starts the search at that stop rather than at the
+  /// coordinates, for going on from a station partway through a journey:
+  /// the results then board there instead of walking in from its centre.
   static Future<ItineraryResponse> findRoutesPaginated({
     required double fromLat,
     required double fromLon,
@@ -41,12 +45,13 @@ class RoutingService {
     TimeSelection? timeSelection,
     String? pageCursor,
     RoutingOptions? options,
+    String? fromStopId,
   }) async {
     final resolved = options ?? await RoutingOptionsService.load();
     final providerGroups = await RentalProvidersService.activeGroupIds();
 
     final params = resolved.toPlanParams(
-      fromPlace: Q.latLonComma(fromLat, fromLon),
+      fromPlace: fromStopId ?? Q.latLonComma(fromLat, fromLon),
       toPlace: Q.latLonComma(toLat, toLon),
       pageCursor: pageCursor,
       rentalProviderGroups: providerGroups,

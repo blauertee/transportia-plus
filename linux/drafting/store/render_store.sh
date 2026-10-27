@@ -39,19 +39,26 @@ done
 # after the render starts ("Depart in 20m"), and pick a time zone whose wall
 # clock shows the times London riders would have seen. Widgets read
 # DateTime.now(), so this is the only way to pin what they print.
-tz="$(python3 -I - "$here/data/plan.json" "$work/data/plan.json" <<'PY'
+#
+# The search on from London Kings Cross was captured a week later, after the
+# clocks went back: it moves back a week and an hour first, to the same wall
+# clock times on the day of the main capture.
+tz="$(python3 -I - "$here/data" "$work/data" <<'PY'
 import datetime as dt, json, re, sys
 src, dst = sys.argv[1:3]
-raw = open(src).read()
+raw = open(f'{src}/plan.json').read()
 first = json.loads(raw)['itineraries'][0]['startTime']
 first = dt.datetime.fromisoformat(first.replace('Z', '+00:00'))
 now = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
 delta = now + dt.timedelta(minutes=22) - first
-def shift(m):
-    t = dt.datetime.fromisoformat(m.group(0).replace('Z', '+00:00')) + delta
-    return t.strftime('%Y-%m-%dT%H:%M:%SZ')
-open(dst, 'w').write(
-    re.sub(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z', shift, raw))
+for name, back in [('plan.json', dt.timedelta()),
+                   ('plan_onward.json', dt.timedelta(days=7, hours=1))]:
+    def shift(m):
+        t = dt.datetime.fromisoformat(m.group(0).replace('Z', '+00:00'))
+        return (t - back + delta).strftime('%Y-%m-%dT%H:%M:%SZ')
+    text = open(f'{src}/{name}').read()
+    open(f'{dst}/{name}', 'w').write(
+        re.sub(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z', shift, text))
 london = dt.timedelta(hours=1)  # BST, when the capture was taken
 minutes = round((london - delta).total_seconds() / 60) % 1440
 # POSIX TZ counts west as positive.
@@ -67,6 +74,6 @@ STORE_DATA="$work/data" STORE_MAPS="$work/maps" TZ="$tz" \
 
 if $install; then
   dest="$repo/fastlane/metadata/android/en-US/images/phoneScreenshots"
-  for i in 1 2 3 4 5 6; do cp "$out/store_$i.png" "$dest/$i.png"; done
+  for i in 1 2 3 4 5 6 7; do cp "$out/store_$i.png" "$dest/$i.png"; done
   echo "Installed into $dest"
 fi
