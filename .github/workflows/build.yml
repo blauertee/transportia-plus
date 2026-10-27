@@ -2,16 +2,33 @@ name: "Build"
 
 # Signed release build. Uses the keystore secrets, which GitHub does not pass
 # to PRs from forks, so this fails there.
+# Dart-only changes are covered by checks.yml, so this only runs when files
+# that affect the Android build or store metadata change. Don't make "Build"
+# a required check: when it is skipped, the PR would wait for it forever.
 on:
   pull_request:
     branches:
       - master
       - main
       - dev
+    paths:
+      - 'android/**'
+      - 'assets/**'
+      - 'fastlane/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build.yml'
   push:
     branches:
       - main
       - dev
+    paths:
+      - 'android/**'
+      - 'assets/**'
+      - 'fastlane/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build.yml'
 
 permissions:
   contents: read
