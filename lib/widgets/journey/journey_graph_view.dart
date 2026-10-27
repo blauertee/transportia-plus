@@ -654,7 +654,7 @@ enum _Lock { explicit, implicit }
 const double _kImplicitLockOpacity = 0.4;
 
 /// A small tab joined to the right side of a locked bar: outlined in the
-/// bar's colour, open where it meets the bar, rounded at its free end. A
+/// bar's colour, open where it meets the bar, round at its free end. A
 /// lock that follows from a later one is the same tab, fainter.
 class _LockBadge extends StatelessWidget {
   const _LockBadge({required this.color, this.implicit = false});
@@ -663,7 +663,7 @@ class _LockBadge extends StatelessWidget {
   final Color color;
   final bool implicit;
 
-  static const double height = 20;
+  static const double height = 24;
 
   /// The border, and the lock drawn in it with the same line.
   static const double _stroke = 1.5;
@@ -673,10 +673,12 @@ class _LockBadge extends StatelessWidget {
     final edge = BorderSide(color: color, width: _stroke);
     final tab = Container(
       height: height,
-      padding: const EdgeInsets.fromLTRB(4, 0, 5, 0),
+      padding: const EdgeInsets.fromLTRB(6, 0, 9, 0),
       decoration: BoxDecoration(
         border: Border(top: edge, right: edge, bottom: edge),
-        borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
+        borderRadius: const BorderRadius.horizontal(
+          right: Radius.circular(height / 2),
+        ),
       ),
       alignment: Alignment.center,
       child: CustomPaint(
