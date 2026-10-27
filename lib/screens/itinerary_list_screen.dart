@@ -13,9 +13,11 @@ import '../widgets/empty_state.dart';
 import '../models/itinerary.dart';
 import '../models/my_location.dart';
 import '../models/routing_options.dart';
+import '../providers/journey_locks_controller.dart';
 import '../providers/theme_provider.dart';
 import '../services/location_service.dart';
 import '../services/plan_request.dart';
+import '../services/journey_graph_service.dart';
 import '../services/recent_trips_service.dart';
 import '../services/routing_options_service.dart';
 import '../services/routing_service.dart';
@@ -25,9 +27,11 @@ import '../utils/departure_label.dart';
 import '../utils/leg_notices.dart';
 import '../utils/color_utils.dart';
 import '../utils/duration_formatter.dart';
+import '../utils/journey_graph.dart';
 import '../utils/time_utils.dart';
 import 'itinerary_detail_screen.dart';
 import '../widgets/bidirectional_paged_list.dart';
+import '../widgets/journey/journey_graph_panel.dart';
 import '../widgets/route_badge_pill.dart';
 import '../widgets/save_trip_button.dart';
 import '../widgets/skeletons/skeleton_list.dart';
@@ -36,6 +40,9 @@ import '../theme/app_text.dart';
 /// How often each result's "departs in" countdown is redrawn. A minute is
 /// the resolution the countdown itself is printed at.
 const Duration _kDepartsInTick = Duration(minutes: 1);
+
+/// The two ways the results can be shown.
+enum ResultsView { list, graph }
 
 class ItineraryListScreen extends StatefulWidget {
   final FutureOr<double> fromLat;
@@ -54,6 +61,12 @@ class ItineraryListScreen extends StatefulWidget {
   /// defaults cannot make the next page a different search from the first.
   final RoutingOptions? options;
 
+  final ResultsView initialView;
+
+  /// A journey fixed up to a ride, for the graph to search on from: set
+  /// when a change on an itinerary is to be replaced.
+  final RideLock? lockedUpTo;
+
   const ItineraryListScreen({
     super.key,
     required this.fromLat,
@@ -64,6 +77,8 @@ class ItineraryListScreen extends StatefulWidget {
     this.options,
     this.fromSelection,
     this.toSelection,
+    this.initialView = ResultsView.list,
+    this.lockedUpTo,
   });
 
   /// Shows results for a journey the routing screen did not search for, with
@@ -134,6 +149,13 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
   RoutingOptions? _options;
   late final ScrollController _scrollController;
   bool _appliedInitialPreviousOffset = false;
+  late ResultsView _view = widget.initialView;
+
+  /// What is locked, shared by the list and the graph.
+  late final JourneyLocksController _locks = JourneyLocksController(
+    query: _query,
+    initialLock: widget.lockedUpTo,
+  )..addListener(_locksChanged);
   static const Key _centerKey = ValueKey('itineraries-center');
 
   /// Breathing room under the last result.
@@ -149,7 +171,25 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _locks.dispose();
     super.dispose();
+  }
+
+  void _locksChanged() => setState(() {});
+
+  /// This search, for the locks to search again: from where it starts once
+  /// that is known, and until then from where a journey fixed in advance
+  /// starts.
+  JourneyQuery _query() {
+    final origin = widget.lockedUpTo?.itinerary.legs.first.from;
+    return JourneyQuery(
+      fromLat: _fromLat ?? origin!.lat,
+      fromLon: _fromLon ?? origin!.lon,
+      toLat: widget.toLat,
+      toLon: widget.toLon,
+      time: widget.timeSelection,
+      options: _options ?? widget.options,
+    );
   }
 
   Future<void> _loadInitial() async {
@@ -274,20 +314,24 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
                   Navigator.of(context).pop();
                 },
               ),
+              ResultsViewTabs(
+                selected: _view,
+                onSelect: (view) => setState(() => _view = view),
+              ),
+              if (_view == ResultsView.list && _locks.isLocked)
+                _LockedJourneyHint(
+                  controller: _locks,
+                  originName: widget.fromSelection?.name,
+                ),
               Expanded(
-                child: _isLoading
+                child: _view == ResultsView.graph
+                    ? _buildGraph()
+                    : _locks.results != null
+                    ? _buildLockedList(_locks.results!)
+                    : _isLoading
                     ? _buildLoadingSkeleton()
                     : _itineraries.isEmpty
-                    ? Center(
-                        child: EmptyState(
-                          title: 'No routes found.',
-                          titleStyle: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.black.withValues(alpha: 0.5),
-                          ),
-                        ),
-                      )
+                    ? _buildEmpty()
                     : BidirectionalPagedList<Itinerary>(
                         controller: _scrollController,
                         centerKey: _centerKey,
@@ -310,28 +354,73 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
     );
   }
 
+  void _openItinerary(Itinerary itinerary) {
+    // Named as the save button names it, so the recent entry and a saved
+    // copy of the same connection share an id.
+    unawaited(
+      RecentTripsService.record(
+        itinerary,
+        fromName: widget.fromSelection?.name,
+        toName: widget.toSelection?.name,
+      ),
+    );
+    Navigator.of(context).push(
+      CustomPageRoute(
+        child: ItineraryDetailScreen(
+          itinerary: itinerary,
+          fromName: widget.fromSelection?.name,
+          toName: widget.toSelection?.name,
+        ),
+      ),
+    );
+  }
+
+  /// The graph waits for the first page, unless it opens on a journey that
+  /// is already fixed: that one it can show, and search on from, at once.
+  Widget _buildGraph() {
+    if (_locks.results == null) {
+      if (_isLoading) return _buildLoadingSkeleton();
+      if (_itineraries.isEmpty) return _buildEmpty();
+    }
+    return JourneyGraphPanel(
+      controller: _locks,
+      results: _itineraries,
+      onOpen: _openItinerary,
+    );
+  }
+
+  /// What the locks found: one search's results, with no pages around them.
+  Widget _buildLockedList(List<Itinerary> locked) {
+    return BidirectionalPagedList<Itinerary>(
+      controller: _scrollController,
+      centerKey: _centerKey,
+      items: locked,
+      centerIndex: 0,
+      itemBuilder: _buildItineraryTile,
+      hasPrevious: false,
+      hasNext: false,
+      isLoadingPrevious: false,
+      isLoadingNext: false,
+      onLoadPrevious: () async {},
+      onLoadNext: () async {},
+      trailingExtent: _kListBottomSpacing,
+    );
+  }
+
+  Widget _buildEmpty() => Center(
+    child: EmptyState(
+      title: 'No routes found.',
+      titleStyle: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: AppColors.black.withValues(alpha: 0.5),
+      ),
+    ),
+  );
+
   Widget _buildItineraryTile(Itinerary itinerary) {
     return GestureDetector(
-      onTap: () {
-        // Named as the save button names it, so the recent entry and a
-        // saved copy of the same connection share an id.
-        unawaited(
-          RecentTripsService.record(
-            itinerary,
-            fromName: widget.fromSelection?.name,
-            toName: widget.toSelection?.name,
-          ),
-        );
-        Navigator.of(context).push(
-          CustomPageRoute(
-            child: ItineraryDetailScreen(
-              itinerary: itinerary,
-              fromName: widget.fromSelection?.name,
-              toName: widget.toSelection?.name,
-            ),
-          ),
-        );
-      },
+      onTap: () => _openItinerary(itinerary),
       child: ItineraryCard(
         itinerary: itinerary,
         fromName: widget.fromSelection?.name,
@@ -670,6 +759,171 @@ class LegWidget extends StatelessWidget {
             fontSize: 14,
           ),
       ],
+    );
+  }
+}
+
+/// Above the list while something is locked: what is, and the way back to
+/// searching the whole journey again.
+class _LockedJourneyHint extends StatelessWidget {
+  const _LockedJourneyHint({required this.controller, this.originName});
+
+  final JourneyLocksController controller;
+
+  /// Where the search started, when it was a named place rather than the
+  /// rider's position.
+  final String? originName;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.accentOf(context);
+    final parts = [
+      if (controller.lock case final lock?) 'fixed up to ${lock.upTo.to.name}',
+      for (final station in controller.stations) 'via ${station.name}',
+    ];
+    final status = controller.searching ? 'Searching…' : controller.problem;
+    return CustomCard.filled(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      padding: const EdgeInsets.all(12),
+      backgroundColor: AppColors.accentWash(accent),
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(LucideIcons.lock, size: 16, color: accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Only journeys ${parts.join(', ')}.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.black.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (status != null) ...[
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(
+                status,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: controller.searching
+                      ? AppColors.black.withValues(alpha: 0.6)
+                      : AppColors.disrupted,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: controller.clear,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.rotateCcw, size: 14, color: accent),
+                  const SizedBox(width: 6),
+                  Text(
+                    originName == null
+                        ? 'Search from the start'
+                        : 'Search from $originName',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// List and Graph as tabs across the screen, the selected one underlined in
+/// the accent.
+class ResultsViewTabs extends StatelessWidget {
+  const ResultsViewTabs({
+    super.key,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final ResultsView selected;
+  final ValueChanged<ResultsView> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.hairline)),
+      ),
+      child: Row(
+        children: [
+          _tab(context, ResultsView.list, 'List', LucideIcons.list),
+          _tab(context, ResultsView.graph, 'Graph', LucideIcons.route),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(
+    BuildContext context,
+    ResultsView view,
+    String label,
+    IconData icon,
+  ) {
+    final accent = AppColors.accentOf(context);
+    final isSelected = view == selected;
+    final ink = isSelected ? accent : AppColors.black.withValues(alpha: 0.5);
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSelect(view),
+        child: Semantics(
+          button: true,
+          selected: isSelected,
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isSelected ? accent : const Color(0x00000000),
+                  width: 2.5,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 16, color: ink),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: ink,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

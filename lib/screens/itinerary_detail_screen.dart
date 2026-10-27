@@ -25,6 +25,7 @@ import '../utils/color_utils.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/duration_formatter.dart';
 import '../utils/itinerary_leg_utils.dart';
+import '../utils/journey_graph.dart';
 import '../utils/journey_colors.dart';
 import '../utils/journey_progress.dart';
 import '../utils/leg_helper.dart';
@@ -524,6 +525,58 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     );
   }
 
+  /// Opens the journey graph with this journey fixed up to [ride], searching
+  /// on from where it gets off: how to replace a change that will not work,
+  /// or see what else there is from there.
+  void _openGraphUpTo(Leg ride) {
+    Haptics.lightTick();
+    final legs = _itinerary.legs;
+    final origin = legs.first.from;
+    final destination = legs.last.to;
+    // The names searched for where there were any: the planner calls plain
+    // coordinates "START" and "END".
+    final from = _suggestionFor(
+      origin,
+      'graph-from',
+      name: widget.fromName ?? widget.savedTrip?.fromName,
+    );
+    final to = _suggestionFor(
+      destination,
+      'graph-to',
+      name: widget.toName ?? widget.savedTrip?.toName,
+    );
+    Navigator.of(context).push(
+      CustomPageRoute(
+        child: ItineraryListScreen(
+          fromLat: origin.lat,
+          fromLon: origin.lon,
+          toLat: destination.lat,
+          toLon: destination.lon,
+          timeSelection: TimeSelection(
+            dateTime: _itinerary.startTime,
+            isArriveBy: false,
+          ),
+          fromSelection: from,
+          toSelection: to,
+          initialView: ResultsView.graph,
+          lockedUpTo: RideLock(_itinerary, ride),
+        ),
+      ),
+    );
+  }
+
+  /// The graph, fixed up to the ride that reaches the first change that
+  /// will not be made: that ride is still being taken, and what to do from
+  /// where it gets off is the question. The routing screen when no ride
+  /// reaches it.
+  void _findAlternativesFor(List<Changeover> changeovers) {
+    final missed = changeovers.where((c) => c.isMissed).firstOrNull;
+    if (missed?.arriving case final ride? when ride.isRide) {
+      return _openGraphUpTo(ride);
+    }
+    _replanFromHere();
+  }
+
   /// Hands the routing screen a journey that still works, and stops there.
   ///
   /// Deliberately not a search. A rider whose connection has just broken is
@@ -549,14 +602,17 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   ///
   /// The stop's own id where it has one, so the field reads as a station
   /// rather than a pair of coordinates.
-  TransitousLocationSuggestion _suggestionFor(TransitPlace place, String tag) =>
-      TransitousLocationSuggestion(
-        id: place.stopId ?? '$tag-${place.lat},${place.lon}',
-        name: place.name,
-        lat: place.lat,
-        lon: place.lon,
-        type: place.isStop ? 'STOP' : 'PLACE',
-      );
+  TransitousLocationSuggestion _suggestionFor(
+    TransitPlace place,
+    String tag, {
+    String? name,
+  }) => TransitousLocationSuggestion(
+    id: place.stopId ?? '$tag-${place.lat},${place.lon}',
+    name: name ?? place.name,
+    lat: place.lat,
+    lon: place.lon,
+    type: place.isStop ? 'STOP' : 'PLACE',
+  );
 
   /// The next time today or tomorrow that this trip's departure comes
   /// round, for repeating a journey already taken.
@@ -643,7 +699,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
             JourneyOverviewWidget(
               itinerary: _itinerary,
               changeovers: changeovers,
-              onFindAlternatives: _replanFromHere,
+              onFindAlternatives: () => _findAlternativesFor(changeovers),
             ),
             if (savedTripNotice != null) savedTripNotice,
             Expanded(
@@ -739,6 +795,9 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       return TransferLegCard(
         leg: entry.leg,
         previousLeg: previous,
+        onFindOnward: previous != null && previous.isRide
+            ? () => _openGraphUpTo(previous)
+            : null,
         changeover: changeovers
             .where((c) => identical(c.transfer, entry.leg))
             .firstOrNull,
@@ -1762,6 +1821,10 @@ class TransferLegCard extends StatelessWidget {
   /// A change is a walk between platforms; where it goes is the question.
   final VoidCallback? onShowOnMap;
 
+  /// Opens the journey graph fixed up to the ride arriving here, for the
+  /// other ways on from this change.
+  final VoidCallback? onFindOnward;
+
   /// The leg that arrives at this change. See [LegDetailsWidget.previousLeg].
   final Leg? previousLeg;
 
@@ -1777,6 +1840,7 @@ class TransferLegCard extends StatelessWidget {
     required this.leg,
     required this.openStopSheet,
     this.onShowOnMap,
+    this.onFindOnward,
     this.previousLeg,
     this.changeover,
     this.progress = JourneyProgress.never,
@@ -1836,17 +1900,7 @@ class TransferLegCard extends StatelessWidget {
       railAboveDashed: previousLeg != null && isStreetLeg(previousLeg!.mode),
       firstLineHeight: kSpineNameLineHeight,
       time: SpineTimes(point: point),
-      meta: onShowOnMap == null
-          ? null
-          : Semantics(
-              button: true,
-              label: 'Show this change on the map',
-              child: Icon(
-                LucideIcons.map,
-                size: 16,
-                color: AppColors.accentOf(context),
-              ),
-            ),
+      meta: _actions(context),
       onTap: onShowOnMap,
       footer: Padding(
         padding: const EdgeInsets.only(bottom: 14),
@@ -1892,6 +1946,40 @@ class TransferLegCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  /// Other ways on from here, then the map. The map icon keeps the right
+  /// edge every leg's has; the row's own tap is the map as well.
+  Widget? _actions(BuildContext context) {
+    final accent = AppColors.accentOf(context);
+    final onFindOnward = this.onFindOnward;
+    final map = onShowOnMap == null
+        ? null
+        : Semantics(
+            button: true,
+            label: 'Show this change on the map',
+            child: Icon(LucideIcons.map, size: 16, color: accent),
+          );
+    if (onFindOnward == null) return map;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onFindOnward,
+          child: Semantics(
+            button: true,
+            label: 'Other ways on from this change',
+            child: Padding(
+              // A wider target than the icon, without moving it.
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Icon(LucideIcons.route, size: 16, color: accent),
+            ),
+          ),
+        ),
+        if (map != null) ...[const SizedBox(width: 8), map],
+      ],
     );
   }
 

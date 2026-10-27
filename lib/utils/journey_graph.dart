@@ -250,8 +250,13 @@ class GraphScale {
     };
     // Each constraint: from one event to a later one, at least so much room.
     final needs = <int, List<(int, double)>>{};
-    void need(DateTime from, DateTime to, double room) =>
-        needs.putIfAbsent(index[to]!, () => []).add((index[from]!, room));
+    void need(DateTime from, DateTime to, double room) {
+      // A change that cannot be made boards before the ride into it gets
+      // in; there is no gap to make room in.
+      if (index[from]! >= index[to]!) return;
+      needs.putIfAbsent(index[to]!, () => []).add((index[from]!, room));
+    }
+
     for (final ride in graph.rides) {
       need(
         ride.leg.startTime,
@@ -357,60 +362,121 @@ class GraphScale {
 /// two). A locked ride fixes the journey up to where it gets off: the next
 /// search starts from there, at its arrival, and its results are joined to
 /// the fixed part. The planner cannot pin a ride in the middle of a search,
-/// which is why a lock reaches back to the start. Until either search is
-/// wired up, locks only filter what already came back.
+/// which is why a lock reaches back to the start, and why only one ride is
+/// locked at a time; see [RideLock].
 class JourneyLocks {
   const JourneyLocks({this.stationKeys = const {}, this.rideKeys = const {}});
 
   /// [GraphStation.key]s.
   final Set<String> stationKeys;
+
+  /// [GraphRide.key]s.
   final Set<String> rideKeys;
 
   bool get isEmpty => stationKeys.isEmpty && rideKeys.isEmpty;
 
-  JourneyLocks toggleStation(String key) =>
-      JourneyLocks(stationKeys: _toggle(stationKeys, key), rideKeys: rideKeys);
+  JourneyLocks toggleStation(String key) => JourneyLocks(
+    stationKeys: stationKeys.contains(key)
+        ? ({...stationKeys}..remove(key))
+        : {...stationKeys, key},
+    rideKeys: rideKeys,
+  );
+}
 
-  JourneyLocks toggleRide(String key) =>
-      JourneyLocks(stationKeys: stationKeys, rideKeys: _toggle(rideKeys, key));
+/// A journey fixed up to and including the ride [upTo] on [itinerary]:
+/// what the graph searches onward from.
+class RideLock {
+  const RideLock(this.itinerary, this.upTo);
 
-  /// Whether [itinerary] passes every locked station and takes every locked
-  /// ride.
-  bool admits(Itinerary itinerary) {
-    final rides = itinerary.legs.where((leg) => leg.isRide).toList();
-    final stations = {
-      for (final leg in rides) ...[
-        GraphStation.of(leg, arriving: false).key,
-        GraphStation.of(leg, arriving: true).key,
-      ],
-    };
-    final keys = {for (final leg in rides) GraphRide.keyOf(leg)};
-    return stationKeys.every(stations.contains) &&
-        rideKeys.every(keys.contains);
+  final Itinerary itinerary;
+  final Leg upTo;
+
+  String get key => GraphRide.keyOf(upTo);
+
+  /// Every ride up to and including [upTo].
+  List<Leg> get rides {
+    final end = _endOf(itinerary, upTo);
+    if (end < 0) return const [];
+    return [
+      for (final leg in itinerary.legs.sublist(0, end + 1))
+        if (leg.isRide) leg,
+    ];
   }
 
-  static Set<String> _toggle(Set<String> set, String value) =>
-      set.contains(value) ? ({...set}..remove(value)) : {...set, value};
+  /// Whether the fixed part passes [stationKey], so a via stop there is
+  /// already met and must not be sent onward.
+  bool passes(String stationKey) => rides.any(
+    (leg) =>
+        GraphStation.of(leg, arriving: false).key == stationKey ||
+        GraphStation.of(leg, arriving: true).key == stationKey,
+  );
+}
+
+int _endOf(Itinerary itinerary, Leg upTo) {
+  final key = GraphRide.keyOf(upTo);
+  return itinerary.legs.indexWhere(
+    (leg) => leg.isRide && GraphRide.keyOf(leg) == key,
+  );
 }
 
 /// [locked] up to and including [upTo], followed by each of [continuations]:
 /// the results of a search from where [upTo] gets off, at its arrival.
 ///
 /// The joined itineraries were never planned as a whole, so they carry no
-/// server id that could be refreshed or shared; wiring this up has to clear
-/// it.
+/// server id to refresh them by and no fare, which covered only one of the
+/// halves. Their snapshot is the two halves' legs joined, so a joined
+/// journey can still be saved.
 List<Itinerary> continueAfter(
   Itinerary locked,
-  GraphRide upTo,
+  Leg upTo,
   List<Itinerary> continuations,
 ) {
-  final end = locked.legs.indexWhere(
-    (leg) => leg.isRide && GraphRide.keyOf(leg) == upTo.key,
-  );
+  final end = _endOf(locked, upTo);
   if (end < 0) return const [];
-  final prefix = locked.legs.sublist(0, end + 1);
   return [
-    for (final continuation in continuations)
-      locked.withLegs([...prefix, ...continuation.legs]),
+    for (final continuation in continuations) _join(locked, end, continuation),
   ];
+}
+
+Itinerary _join(Itinerary locked, int end, Itinerary continuation) {
+  final legs = [...locked.legs.sublist(0, end + 1), ...continuation.legs];
+  final rides = legs.where((leg) => !leg.isStreet).length;
+  final transfers = rides > 0 ? rides - 1 : 0;
+  final duration = legs.last.endTime.difference(legs.first.startTime);
+  return Itinerary(
+    duration: duration.inSeconds,
+    startTime: legs.first.startTime,
+    endTime: legs.last.endTime,
+    transfers: transfers,
+    legs: legs,
+    sourceJson: _joinedSnapshot(locked, end, continuation, transfers),
+  );
+}
+
+/// The planner's own JSON for the joined legs, or null when either half
+/// has none to give.
+Map<String, dynamic>? _joinedSnapshot(
+  Itinerary locked,
+  int end,
+  Itinerary continuation,
+  int transfers,
+) {
+  final head = locked.sourceJson?['legs'];
+  final tail = continuation.sourceJson?['legs'];
+  if (head is! List || tail is! List || tail.isEmpty) return null;
+  // Legs and snapshot have to line up for the cut to land in the same
+  // place in both.
+  if (head.length != locked.legs.length) return null;
+  final legs = [...head.sublist(0, end + 1), ...tail];
+  final start = (legs.first as Map)['startTime'] as String;
+  final finish = (legs.last as Map)['endTime'] as String;
+  return {
+    'duration': DateTime.parse(
+      finish,
+    ).difference(DateTime.parse(start)).inSeconds,
+    'startTime': start,
+    'endTime': finish,
+    'transfers': transfers,
+    'legs': legs,
+  };
 }
