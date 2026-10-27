@@ -83,7 +83,7 @@ final _separate = RoutingOptions.defaults.copyWith(lastMileSameAsFirst: false);
 
 Future<_HostState> _pumpSpine(
   WidgetTester tester, {
-  RoutingOptions initial = _separate,
+  RoutingOptions? initial,
   List<String> providerNames = const [],
   SearchOptionsOpening opening = SearchOptionsOpening.closed,
   QuickAccessLayout? layout,
@@ -97,7 +97,7 @@ Future<_HostState> _pumpSpine(
 
   await tester.pumpWidget(
     _Host(
-      initial: initial,
+      initial: initial ?? _separate,
       providerNames: providerNames,
       opening: opening,
       layout: layout,
