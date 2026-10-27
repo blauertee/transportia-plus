@@ -1,18 +1,46 @@
 name: "Build"
 
+# Signed release build. Uses the keystore secrets, which GitHub does not pass
+# to PRs from forks, so this fails there.
+# Dart-only changes are covered by checks.yml, so this only runs when files
+# that affect the Android build or store metadata change. Don't make "Build"
+# a required check: when it is skipped, the PR would wait for it forever.
 on:
   pull_request:
     branches:
+      - master
       - main
       - dev
+    paths:
+      - 'android/**'
+      - 'assets/**'
+      - 'fastlane/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build.yml'
   push:
     branches:
       - main
       - dev
-jobs:  
-  build:      
-    name: Build 
-    runs-on: ubuntu-latest 
+    paths:
+      - 'android/**'
+      - 'assets/**'
+      - 'fastlane/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
@@ -36,14 +64,14 @@ jobs:
       - name: Decode Keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
-          
+
       - name: Create key.properties
         run: |
           echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
           echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
           echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
           echo "storeFile=keystore.jks" >> android/key.properties
-        
+
       - name: Build APK arm
         run: flutter build apk --release --split-per-abi --target-platform android-arm --split-debug-info=build/symbols --dart-define=CONTACT_EMAIL="$CONTACT_EMAIL"
         env:
