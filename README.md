@@ -35,6 +35,9 @@
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.png" width="45%" alt="Bike leg on the map" />
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="45%" alt="Place search for nearby shops" />
 </p>
+<p align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/7.png" width="45%" alt="Graph of the ways on after missing a change" />
+</p>
 
 ## Install
 A release on GooglePlay is not planned.

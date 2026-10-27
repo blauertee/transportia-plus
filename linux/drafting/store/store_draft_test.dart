@@ -23,6 +23,7 @@ import 'package:transportia/screens/itinerary_map_screen.dart';
 import 'package:transportia/screens/location_search_screen.dart';
 import 'package:transportia/services/favorites_service.dart';
 import 'package:transportia/services/saved_places_service.dart';
+import 'package:transportia/utils/journey_graph.dart';
 import 'package:transportia/widgets/route_bottom_card.dart';
 
 import '../draft_kit.dart';
@@ -46,6 +47,11 @@ const int _kTrainOnly = 0;
 const int _kViaParis = 4;
 const int _kBercyWalk = 12;
 
+/// The Great Northern into London Kings Cross on [_kTrainOnly], late enough
+/// to miss the Eurostar.
+const int _kIntoKingsCross = 5;
+const Duration _kLate = Duration(minutes: 30);
+
 Map<String, dynamic> _json(String name) =>
     jsonDecode(File('$_data/$name').readAsStringSync()) as Map<String, dynamic>;
 
@@ -53,11 +59,34 @@ Itinerary _itinerary(int index) => Itinerary.fromJson(
   (_json('plan.json')['itineraries'] as List)[index] as Map<String, dynamic>,
 );
 
+/// [_kTrainOnly] with the train into Kings Cross [_kLate].
+Itinerary _lateIntoKingsCross() {
+  final json =
+      jsonDecode(
+            jsonEncode(
+              (_json('plan.json')['itineraries'] as List)[_kTrainOnly],
+            ),
+          )
+          as Map<String, dynamic>;
+  String later(String at) =>
+      DateTime.parse(at).add(_kLate).toUtc().toIso8601String();
+  final leg = (json['legs'] as List)[_kIntoKingsCross] as Map;
+  leg['realTime'] = true;
+  leg['endTime'] = later(leg['endTime'] as String);
+  final to = leg['to'] as Map;
+  if (to['arrival'] case final String at) to['arrival'] = later(at);
+  return Itinerary.fromJson(json);
+}
+
 void _mockTransitous() {
   final client = MockClient((request) async {
     final path = request.url.path;
     String? file;
-    if (path.endsWith('/plan')) file = 'plan.json';
+    if (path.endsWith('/plan')) {
+      // From a stop rather than coordinates: the search on from a change.
+      final from = request.url.queryParameters['fromPlace'] ?? '';
+      file = from.contains(',') ? 'plan.json' : 'plan_onward.json';
+    }
     if (path.endsWith('/geocode')) file = 'geocode_decathlon.json';
     if (file == null) return http.Response('{}', 404);
     return http.Response.bytes(
@@ -407,6 +436,46 @@ void main() {
         ),
       ),
       before: () => _clearMapBackground(tester),
+    );
+  });
+
+  testWidgets('7 missed change', (tester) async {
+    final late = _lateIntoKingsCross();
+    await _shoot(
+      tester,
+      '7',
+      'What if I miss that change?',
+      ItineraryListScreen(
+        fromLat: 52.87,
+        fromLon: 0.918,
+        toLat: 50.0833,
+        toLon: 14.4231,
+        timeSelection: TimeSelection(
+          dateTime: late.startTime,
+          isArriveBy: false,
+        ),
+        options: RoutingOptions.defaults.copyWith(
+          firstMileModes: const [TransitMode.bike],
+        ),
+        initialView: ResultsView.graph,
+        lockedUpTo: RideLock(late, late.legs[_kIntoKingsCross]),
+      ),
+      before: () async {
+        // Opened, it fits the whole night to Prague; pinch in on Kings Cross
+        // and the evening's ways across the Channel.
+        await tester.pump(const Duration(seconds: 1));
+        final at = tester.getCenter(find.text('London King…'));
+        final a = await tester.startGesture(at - const Offset(0, 30));
+        final b = await tester.startGesture(at + const Offset(0, 30));
+        for (var i = 1; i <= 12; i++) {
+          await a.moveTo(at - Offset(0, 30 + 5.0 * i));
+          await b.moveTo(at + Offset(0, 30 + 5.0 * i));
+          await tester.pump();
+        }
+        await a.up();
+        await b.up();
+        await tester.pump();
+      },
     );
   });
 

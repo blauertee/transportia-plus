@@ -778,7 +778,7 @@ class _LockedJourneyHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = AppColors.accentOf(context);
     final parts = [
-      if (controller.lock case final lock?) 'fixed up to ${lock.upTo.to.name}',
+      if (controller.lock case final lock?) 'until ${lock.upTo.to.name}',
       for (final station in controller.stations) 'via ${station.name}',
     ];
     final status = controller.searching ? 'Searching…' : controller.problem;
@@ -788,37 +788,26 @@ class _LockedJourneyHint extends StatelessWidget {
       backgroundColor: AppColors.accentWash(accent),
       borderRadius: BorderRadius.circular(12),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(LucideIcons.lock, size: 16, color: accent),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Only journeys ${parts.join(', ')}.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.black.withValues(alpha: 0.8),
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Locked ${parts.join(', ')}.',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.black.withValues(alpha: 0.8),
+            ),
           ),
           if (status != null) ...[
             const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.only(left: 26),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: controller.searching
-                      ? AppColors.black.withValues(alpha: 0.6)
-                      : AppColors.disrupted,
-                ),
+            Text(
+              status,
+              style: TextStyle(
+                fontSize: 12,
+                color: controller.searching
+                    ? AppColors.black.withValues(alpha: 0.6)
+                    : AppColors.disrupted,
               ),
             ),
           ],
@@ -827,7 +816,7 @@ class _LockedJourneyHint extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: controller.clear,
             child: Padding(
-              padding: const EdgeInsets.only(left: 26),
+              padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [

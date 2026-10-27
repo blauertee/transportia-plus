@@ -41,6 +41,24 @@ void main() {
 
       expect(starts, [...starts]..sort());
     });
+
+    test(
+      'puts results leaving together next to those they share rides with',
+      () {
+        // EST 9036 first; then two on EST 9040, one of which takes the same
+        // TGV on as the first. That one goes next to it.
+        final graph = JourneyGraph.build(_load('plan_same_departure'));
+        final tgv = graph.rides.singleWhere(
+          (ride) => ride.leg.displayName == 'TGV INOUI 2465',
+        );
+        final est9040 = graph.rides.singleWhere(
+          (ride) => ride.leg.displayName == 'EST 9040',
+        );
+
+        expect(tgv.itineraries, [0, 1]);
+        expect(est9040.itineraries, [1, 2]);
+      },
+    );
   });
 
   group('continueAfter', () {

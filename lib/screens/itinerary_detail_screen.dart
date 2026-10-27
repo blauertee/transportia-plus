@@ -1974,7 +1974,11 @@ class TransferLegCard extends StatelessWidget {
             child: Padding(
               // A wider target than the icon, without moving it.
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              child: Icon(LucideIcons.split, size: 16, color: accent),
+              // Turned over, so the paths fork on from the change below.
+              child: RotatedBox(
+                quarterTurns: 2,
+                child: Icon(LucideIcons.split, size: 16, color: accent),
+              ),
             ),
           ),
         ),

@@ -27,7 +27,7 @@ const int _kMaxStationChars = 12;
 const double _kSideMargin = 8;
 
 /// Room kept between two durations in the header.
-const double _kHeaderGap = 10;
+const double _kHeaderGap = 14;
 
 /// Room right of the last column.
 const double _kRightPad = 8;
@@ -249,6 +249,8 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
             children: [
               for (var i = 0; i < graph.columnCount; i++)
                 _durationLabel(geometry, i),
+              for (var i = 1; i < graph.columnCount; i++)
+                _headerDivider(geometry, i),
             ],
           ),
         );
@@ -495,6 +497,18 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
           ),
         ),
       ),
+    );
+  }
+
+  /// A hairline between [column]'s duration and the one before it.
+  Widget _headerDivider(_Geometry g, int column) {
+    final xs = g.columns;
+    return Positioned(
+      left: (xs[column - 1] + xs[column]) / 2,
+      top: 5,
+      bottom: 5,
+      width: 1,
+      child: ColoredBox(color: AppColors.hairline),
     );
   }
 

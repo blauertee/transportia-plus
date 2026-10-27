@@ -136,8 +136,9 @@ class JourneyGraph {
       .reduce((a, b) => a.isBefore(b) ? a : b);
 
   factory JourneyGraph.build(List<Itinerary> results) {
-    final itineraries = results.where((it) => it.hasTransit).toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final itineraries = _byDeparture(
+      results.where((it) => it.hasTransit).toList(),
+    );
 
     final byKey = <String, GraphRide>{};
     final changes = <String, GraphChange>{};
@@ -188,6 +189,34 @@ class JourneyGraph {
       arrivals.values.toList(),
       events,
     );
+  }
+
+  /// [results] ordered by departure. Results leaving at the same time go
+  /// next to the ones they share rides with: a shared ride is drawn across
+  /// the columns that take it, and a column between them that does not
+  /// would have its own rides drawn through it.
+  static List<Itinerary> _byDeparture(List<Itinerary> results) {
+    Set<String> rides(Itinerary it) => {
+      for (final leg in it.legs)
+        if (leg.isRide) GraphRide.keyOf(leg),
+    };
+    final left = [...results]
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final ordered = <Itinerary>[];
+    while (left.isNotEmpty) {
+      final start = left.first.startTime;
+      final tied = left.takeWhile((it) => it.startTime == start).toList();
+      final next = ordered.isEmpty
+          ? tied.first
+          : tied.reduce((best, it) {
+              final previous = rides(ordered.last);
+              int shared(Itinerary x) => rides(x).intersection(previous).length;
+              return shared(it) > shared(best) ? it : best;
+            });
+      ordered.add(next);
+      left.remove(next);
+    }
+    return ordered;
   }
 
   /// The zoom at which [until] lands [height] below the first departure.

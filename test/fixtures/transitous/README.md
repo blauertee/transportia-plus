@@ -34,15 +34,16 @@ than against hand-written JSON that agrees with our assumptions.
 | `refresh_itinerary_rental_none.json` | the same with the filters and `maxPre/PostTransitTime=60`: a single cancelled `RENTAL` placeholder for the first mile, and the last walk as a placeholder too |
 | `plan_journey_graph.json` | `/api/v5/plan` Wildau → Lindau Insel, 27 Oct 2026 10:40, the first three of eight itineraries: two that share ICE 1507, one over ICE 1009 to Ingolstadt (2026-10-27) |
 | `plan_journey_graph_onward.json` | `/api/v5/plan` from Ingolstadt Hbf by stop id at 15:58 the same day, to Lindau Insel: the search on from ICE 1009, first two itineraries |
+| `plan_same_departure.json` | `/api/v6/plan` from London Kings Cross by stop id, 28 Oct 2026 15:05, to central Prague, the first three of five itineraries: two leave together on EST 9040, and the one over Paris Est shares its TGV onward with the earlier EST 9036 (2026-10-27) |
 
 ## Trimming
 
-Six files were shortened after capture, because the endpoints return far
+Seven files were shortened after capture, because the endpoints return far
 more than a parser test needs: `map_routes.json` keeps 1 route, 3 polylines
 and 5 stops; `one_to_all.json` keeps 30 reachable places; `map_stops.json`
 keeps 20 stops; `debug_transfers.json` keeps 5 equivalences and 15
-transfers; the two `plan_journey_graph` files keep the itineraries named
-above. Nothing else was edited, and no field was removed — array
+transfers; the two `plan_journey_graph` files and
+`plan_same_departure.json` keep the itineraries named above. Nothing else was edited, and no field was removed — array
 lengths are the only thing that differs from the wire.
 
 Because of that, do not assert cross-references in `map_routes.json`: its

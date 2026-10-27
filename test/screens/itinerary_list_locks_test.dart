@@ -111,7 +111,7 @@ void main() {
   ) async {
     await pumpLocked(tester);
 
-    expect(find.text('Only journeys fixed up to Ingolstadt Hbf.'), findsOne);
+    expect(find.text('Locked until Ingolstadt Hbf.'), findsOne);
     expect(find.text('Search from Wildau'), findsOne);
     expect(from.where((place) => !place.contains(',')), isNotEmpty);
     // Every result listed starts with the fixed part.
@@ -125,7 +125,7 @@ void main() {
     await tester.tap(find.text('Search from Wildau'));
     await answer(tester);
 
-    expect(find.textContaining('Only journeys'), findsNothing);
+    expect(find.textContaining('Locked until'), findsNothing);
     expect(find.text('ICE 1507'), findsWidgets);
   });
 
@@ -136,6 +136,6 @@ void main() {
     await answer(tester);
 
     expect(find.text('up to Ingolstadt Hbf'), findsOne);
-    expect(find.textContaining('Only journeys'), findsNothing);
+    expect(find.textContaining('Locked until'), findsNothing);
   });
 }
