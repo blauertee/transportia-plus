@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -21,11 +22,25 @@ const double _kBarRadius = 6;
 /// known before laying out the columns.
 const int _kMaxStationChars = 12;
 
-/// Room kept between a station label and the bar in the next column.
-const double _kLabelClearance = 8;
+/// Room kept between anything in one column and anything beside it at the
+/// same time in the next: bars, station names, badges and arrivals.
+const double _kSideMargin = 8;
 
-/// The narrowest column, for results that only pass short station names.
-const double _kMinColumn = 48;
+/// Room kept between two durations in the header.
+const double _kHeaderGap = 10;
+
+/// Room right of the last column.
+const double _kRightPad = 8;
+
+/// The time hung under each result's last ride.
+const double _kArrivalWidth = 40;
+const double _kArrivalHeight = 32;
+
+TextStyle get _durationStyle => TextStyle(
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+  color: AppColors.black,
+);
 
 /// The row of journey durations above the columns.
 const double _kHeaderHeight = 24;
@@ -105,7 +120,17 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
 
   /// Null until fitted to the height available.
   double? _pxPerMinute;
+
+  /// The zoom it was fitted at, which the columns are spaced for.
+  double? _fittedPxPerMinute;
   late GraphScale _scale;
+
+  /// Text widths, measured once per graph.
+  final Map<String, double> _textWidths = {};
+
+  /// The last spacing worked out, and what it was worked out for.
+  (double, RideBadges, String)? _spacedFor;
+  ({List<double> xs, double width}) _columns = (xs: const [], width: 0);
 
   final Map<int, Offset> _pointers = {};
   double? _pinchStartSpan;
@@ -126,6 +151,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     if (old.graph == widget.graph) return;
     // New results: fit them afresh, from the top.
     _pxPerMinute = null;
+    _spacedFor = null;
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
@@ -200,20 +226,19 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     final accent = AppColors.accentOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final column = math.max(
-          (constraints.maxWidth - _kAxisWidth - 8) / graph.columnCount,
-          _columnFor(context),
-        );
         final implicit = _implicitlyLocked;
         final badges = _badges;
-        final zoom = _pxPerMinute ??= graph.fitPxPerMinute(
+        final zoom = _pxPerMinute ??= _fittedPxPerMinute = graph.fitPxPerMinute(
           graph.firstArrival,
           constraints.maxHeight - _kHeaderHeight - _kTopPad - _kBottomPad,
           badges: badges,
         );
         _scale = GraphScale(graph, zoom, badges: badges);
-        final geometry = _Geometry(graph, column, _scale);
-        final width = _kAxisWidth + column * graph.columnCount + 8;
+        final columns = _spaceColumns(context, badges);
+        final geometry = _Geometry(graph, columns.xs, _scale);
+        // Never narrower than the screen: the graph keeps to the left, and
+        // the grid runs on to the edge.
+        final width = math.max(columns.width, constraints.maxWidth);
         final header = Container(
           width: width,
           height: _kHeaderHeight,
@@ -287,24 +312,140 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
   }
 
-  /// Wide enough that the longest station label, centred on its column,
-  /// stops short of the bar in the next one.
-  double _columnFor(BuildContext context) {
-    final style = DefaultTextStyle.of(
-      context,
-    ).style.merge(_StationMarker.textStyle(AppColors.black));
-    var widest = 0.0;
-    for (final ride in graph.rides) {
-      for (final station in [ride.boarding, ride.alighting]) {
-        final label = TextPainter(
-          text: TextSpan(text: stationLabel(station.name), style: style),
+  double _textWidth(BuildContext context, String text, TextStyle style) =>
+      _textWidths.putIfAbsent(
+        '${style.fontSize}|$text',
+        () => (TextPainter(
+          text: TextSpan(
+            text: text,
+            style: DefaultTextStyle.of(context).style.merge(style),
+          ),
           textDirection: TextDirection.ltr,
-        )..layout();
-        widest = math.max(widest, label.width);
+        )..layout()).width,
+      );
+
+  double _stationWidth(BuildContext context, GraphStation station) =>
+      _textWidth(
+        context,
+        stationLabel(station.name),
+        _StationMarker.textStyle(AppColors.black),
+      ) +
+      _StationMarker.chrome(locked: locks.stationKeys.contains(station.key));
+
+  /// Column centres, from the axis: each column only as far from the last
+  /// as what sits beside it at the same time needs.
+  ///
+  /// Worked out at the zoom the graph opened at, and kept while zooming in,
+  /// where things only move further apart; zooming out past it, where they
+  /// can come side by side, spaces them again.
+  ({List<double> xs, double width}) _spaceColumns(
+    BuildContext context,
+    RideBadges badges,
+  ) {
+    final zoom = math.min(_pxPerMinute!, _fittedPxPerMinute ?? _pxPerMinute!);
+    // Locked stations, whose names grow a lock.
+    final key = (zoom, badges, (locks.stationKeys.toList()..sort()).join('|'));
+    if (_spacedFor == key) return _columns;
+    final scale = zoom == _pxPerMinute
+        ? _scale
+        : GraphScale(graph, zoom, badges: badges);
+    double y(DateTime time) => scale.yOf(time);
+
+    final boxes = <GraphBox>[];
+    for (final ride in graph.rides) {
+      final top = y(ride.leg.startTime), bottom = y(ride.leg.endTime);
+      boxes.add(
+        GraphBox(
+          ride,
+          left: _kBarWidth / 2,
+          right: _kBarWidth / 2,
+          top: top,
+          bottom: bottom,
+        ),
+      );
+      if (badges.keys.contains(ride.key)) {
+        const inside = _LockBadge.size - _LockBadge.overhang;
+        boxes.add(
+          GraphBox(
+            ride,
+            left: inside - _kBarWidth / 2,
+            right: _kBarWidth / 2 + _LockBadge.overhang,
+            top: bottom - inside,
+            bottom: bottom + _LockBadge.overhang,
+          ),
+        );
       }
     }
-    final label = widest + _StationMarker.chrome;
-    return math.max(_kMinColumn, label / 2 + _kBarWidth / 2 + _kLabelClearance);
+    void label(GraphStation station, GraphRide ride, {required bool above}) {
+      final half = _stationWidth(context, station) / 2;
+      final at = above
+          ? y(ride.leg.startTime) - _StationMarker.labelHeight - 1
+          : y(ride.leg.endTime) +
+                1 +
+                (badges.keys.contains(ride.key) ? _LockBadge.overhang : 0);
+      boxes.add(
+        GraphBox(
+          ride,
+          left: half,
+          right: half,
+          top: at,
+          bottom: at + _StationMarker.labelHeight,
+        ),
+      );
+    }
+
+    for (final change in graph.changes) {
+      label(change.from.alighting, change.from, above: false);
+      if (change.changesStation) {
+        label(change.to.boarding, change.to, above: true);
+      }
+    }
+    for (final arrival in graph.arrivals) {
+      final at = y(arrival.ride.leg.endTime) + 2;
+      boxes.add(
+        GraphBox(
+          arrival.ride,
+          left: _kArrivalWidth / 2,
+          right: _kArrivalWidth / 2,
+          top: at,
+          bottom: at + _kArrivalHeight,
+        ),
+      );
+    }
+
+    final durations = [
+      for (final itinerary in graph.itineraries)
+        _textWidth(context, formatDuration(itinerary.duration), _durationStyle),
+    ];
+    final xs = packColumns(
+      graph.columnCount,
+      boxes,
+      minGaps: [
+        0,
+        for (var i = 1; i < graph.columnCount; i++)
+          (durations[i - 1] + durations[i]) / 2 + _kHeaderGap,
+      ],
+      margin: _kSideMargin,
+    );
+
+    // Shifted so whatever reaches furthest left clears the axis.
+    double centreOf(GraphRide ride) =>
+        (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
+    var leftmost = 0.0, rightmost = 0.0;
+    for (var i = 0; i < xs.length; i++) {
+      leftmost = math.min(leftmost, xs[i] - durations[i] / 2);
+      rightmost = math.max(rightmost, xs[i] + durations[i] / 2);
+    }
+    for (final box in boxes) {
+      leftmost = math.min(leftmost, centreOf(box.ride) - box.left);
+      rightmost = math.max(rightmost, centreOf(box.ride) + box.right);
+    }
+    final shift = _kAxisWidth + 4 - leftmost;
+    _spacedFor = key;
+    return _columns = (
+      xs: [for (final x in xs) x + shift],
+      width: rightmost + shift + _kRightPad,
+    );
   }
 
   /// Rides fixed because a later ride on the same results is locked: the
@@ -328,10 +469,17 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   }
 
   Widget _durationLabel(_Geometry g, int column) {
+    // As wide as the room either side, for something to tap.
+    final xs = g.columns;
+    final room = [
+      if (column > 0) xs[column] - xs[column - 1],
+      if (column < xs.length - 1) xs[column + 1] - xs[column],
+    ].fold(double.infinity, math.min);
+    final width = room.isFinite ? room : 80.0;
     return Positioned(
-      left: g.x(column.toDouble()) - g.column / 2,
+      left: xs[column] - width / 2,
       top: 4,
-      width: g.column,
+      width: width,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onSelect(column),
@@ -341,11 +489,9 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
             formatDuration(graph.itineraries[column].duration),
             textAlign: TextAlign.center,
             maxLines: 1,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.black,
-            ),
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            style: _durationStyle,
           ),
         ),
       ),
@@ -373,7 +519,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
     const inside = _LockBadge.size - _LockBadge.overhang;
     return Positioned(
-      left: g.x(ride.slot) + _kBarWidth / 2 - inside,
+      left: g.x(ride) + _kBarWidth / 2 - inside,
       top: g.y(ride.leg.endTime) - inside,
       child: IgnorePointer(
         child: _LockBadge(
@@ -397,7 +543,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       accent: accent,
     );
     return Positioned(
-      left: g.x(ride.slot) - _kBarWidth / 2,
+      left: g.x(ride) - _kBarWidth / 2,
       top: top,
       width: _kBarWidth,
       height: height,
@@ -433,11 +579,11 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         _StationMarker.positioned(
           station: station,
           center: Offset(
-            g.x(slot),
+            g.x(ride),
             g.y(at) +
                 (!above && badged.contains(ride.key) ? _LockBadge.overhang : 0),
           ),
-          width: g.column * 2,
+          width: _stationWidth(context, station),
           above: above,
           locked: locks.stationKeys.contains(station.key),
           accent: accent,
@@ -471,9 +617,9 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
 
   Widget _arrivalLabel(_Geometry g, GraphArrival arrival) {
     return Positioned(
-      left: g.x(arrival.ride.slot) - 30,
+      left: g.x(arrival.ride) - _kArrivalWidth / 2,
       top: g.y(arrival.ride.leg.endTime) + 2,
-      width: 60,
+      width: _kArrivalWidth,
       child: _fade(
         arrival.itineraries.contains(selected),
         Column(
@@ -496,13 +642,17 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
 
 /// Where things go: columns across, time down at the current zoom.
 class _Geometry {
-  const _Geometry(this.graph, this.column, this.scale);
+  const _Geometry(this.graph, this.columns, this.scale);
 
   final JourneyGraph graph;
-  final double column;
+
+  /// The centre of each result's column.
+  final List<double> columns;
   final GraphScale scale;
 
-  double x(double slot) => _kAxisWidth + (slot + 0.5) * column;
+  /// The centre of [ride]'s bar: across every result that takes it.
+  double x(GraphRide ride) =>
+      (columns[ride.firstColumn] + columns[ride.lastColumn]) / 2;
   double y(DateTime time) => _kTopPad + scale.yOf(time);
 }
 
@@ -589,11 +739,11 @@ class _StationMarker extends StatelessWidget {
   final Color accent;
   final VoidCallback? onTap;
 
-  static const double _labelHeight = 15;
+  static const double labelHeight = 15;
 
   /// Width a label takes beyond its text: padding, and the lock icon a
   /// locked station shows.
-  static const double chrome = 6 + 11;
+  static double chrome({required bool locked}) => 6 + (locked ? 11 : 0);
 
   static TextStyle textStyle(Color color) =>
       TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color);
@@ -612,7 +762,7 @@ class _StationMarker extends StatelessWidget {
   }) {
     return Positioned(
       left: center.dx - width / 2,
-      top: above ? center.dy - _labelHeight - 1 : center.dy + 1,
+      top: above ? center.dy - labelHeight - 1 : center.dy + 1,
       width: width,
       child: _StationMarker(
         station: station,
@@ -628,7 +778,7 @@ class _StationMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = locked ? accent : AppColors.black;
     final label = Container(
-      height: _labelHeight,
+      height: labelHeight,
       padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
         color: AppColors.white.withValues(alpha: 0.92),
@@ -809,8 +959,8 @@ class _GraphPainter extends CustomPainter {
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-      final from = Offset(g.x(change.from.slot), g.y(change.from.leg.endTime));
-      final to = Offset(g.x(change.to.slot), g.y(change.to.leg.startTime));
+      final from = Offset(g.x(change.from), g.y(change.from.leg.endTime));
+      final to = Offset(g.x(change.to), g.y(change.to.leg.startTime));
       final bend = (to.dy - from.dy) / 2;
       final path = Path()
         ..moveTo(from.dx, from.dy)
@@ -911,7 +1061,7 @@ class _GraphPainter extends CustomPainter {
   bool shouldRepaint(_GraphPainter old) =>
       old.g.graph != g.graph ||
       old.g.scale != g.scale ||
-      old.g.column != g.column ||
+      !listEquals(old.g.columns, g.columns) ||
       old.now != now ||
       old.accent != accent ||
       old.selected != selected;

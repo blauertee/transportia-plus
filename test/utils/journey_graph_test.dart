@@ -170,4 +170,82 @@ void main() {
       expect(scale.yOf(graph.firstArrival), greaterThan(590));
     });
   });
+
+  group('packColumns', () {
+    final graph = JourneyGraph.build(results);
+    GraphRide ride(String name, int column) => graph.rides.firstWhere(
+      (ride) =>
+          ride.leg.displayName == name && ride.itineraries.contains(column),
+    );
+    GraphBox box(
+      GraphRide ride,
+      double top,
+      double bottom, {
+      double half = 15,
+    }) => GraphBox(ride, left: half, right: half, top: top, bottom: bottom);
+    const gaps = [0.0, 40.0, 40.0];
+
+    test('puts columns with nothing side by side as close as allowed', () {
+      final xs = packColumns(
+        3,
+        [box(ride('S46', 0), 0, 50), box(ride('S46', 1), 60, 90)],
+        minGaps: gaps,
+        margin: 8,
+      );
+
+      expect(xs, [0, 40, 80]);
+    });
+
+    test('keeps what is side by side at the same time apart', () {
+      final xs = packColumns(
+        3,
+        [
+          box(ride('S46', 0), 0, 50),
+          // A wide name beside it in the next column.
+          box(ride('RE2', 1), 20, 35, half: 40),
+        ],
+        minGaps: gaps,
+        margin: 8,
+      );
+
+      expect(xs[1], 15 + 40 + 8);
+      expect(xs[2], xs[1] + 40);
+    });
+
+    test('moves a shared ride with the last column that takes it', () {
+      final ice1507 = ride('ICE 1507', 0);
+      final xs = packColumns(
+        3,
+        [box(ice1507, 0, 200), box(ride('ICE 1009', 2), 100, 300, half: 50)],
+        minGaps: gaps,
+        margin: 8,
+      );
+
+      final centre = (xs[0] + xs[1]) / 2;
+      expect(xs[2] - centre, 15 + 50 + 8);
+    });
+
+    test('keeps every pair of bars clear in the real results', () {
+      final scale = GraphScale(graph, 1);
+      final bars = [
+        for (final ride in graph.rides)
+          box(ride, scale.yOf(ride.leg.startTime), scale.yOf(ride.leg.endTime)),
+      ];
+      final xs = packColumns(
+        graph.columnCount,
+        bars,
+        minGaps: List.filled(graph.columnCount, 0),
+        margin: 8,
+      );
+
+      double centre(GraphRide ride) =>
+          (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
+      for (final a in bars) {
+        for (final b in bars) {
+          if (a.ride.slot >= b.ride.slot || !a.overlapsInTime(b)) continue;
+          expect(centre(b.ride) - centre(a.ride), greaterThanOrEqualTo(38));
+        }
+      }
+    });
+  });
 }

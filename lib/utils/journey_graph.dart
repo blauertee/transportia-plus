@@ -16,6 +16,10 @@ const double _kNoticeableStretch = 12;
 /// Stretched gaps closer than this many pixels are marked as one span.
 const double _kSpanMergeGap = 40;
 
+/// How far two boxes may reach into each other's height and still count as
+/// one above the other.
+const double _kBoxSlack = 3;
+
 /// Bounds for the fitted zoom, in pixels per minute.
 const double _kMinPxPerMinute = 0.2;
 const double _kMaxPxPerMinute = 12;
@@ -61,6 +65,10 @@ class GraphRide {
   /// Horizontal position in result columns. Fractional when shared: the
   /// ride sits centred under (or over) every result that takes it.
   double slot = 0;
+
+  /// The first and last of [itineraries], the columns it is centred across.
+  int get firstColumn => itineraries.reduce(math.min);
+  int get lastColumn => itineraries.reduce(math.max);
 
   GraphStation get boarding => GraphStation.of(leg, arriving: false);
   GraphStation get alighting => GraphStation.of(leg, arriving: true);
@@ -162,9 +170,7 @@ class JourneyGraph {
     }
 
     for (final ride in byKey.values) {
-      final first = ride.itineraries.reduce(math.min);
-      final last = ride.itineraries.reduce(math.max);
-      ride.slot = (first + last) / 2;
+      ride.slot = (ride.firstColumn + ride.lastColumn) / 2;
     }
 
     final events = <DateTime>{
@@ -204,6 +210,89 @@ class JourneyGraph {
     }
     return low;
   }
+}
+
+/// Something drawn on a ride, for spacing the columns: [left] and [right]
+/// of the ride's centre line, [top] to [bottom] down the graph, in pixels.
+class GraphBox {
+  const GraphBox(
+    this.ride, {
+    required this.left,
+    required this.right,
+    required this.top,
+    required this.bottom,
+  });
+
+  final GraphRide ride;
+  final double left;
+  final double right;
+  final double top;
+  final double bottom;
+
+  /// Whether the two reach the same height, by more than a sliver: the
+  /// rounded ends of bars and the padding round names can touch.
+  bool overlapsInTime(GraphBox other) =>
+      top < other.bottom - _kBoxSlack && other.top < bottom - _kBoxSlack;
+}
+
+/// Where each column's centre goes, from 0 for the first.
+///
+/// Each column sits as close to the one before as [minGaps] allows (an
+/// entry per column, the first unused), and then as far further right as
+/// it takes to keep [margin] between any two [boxes] that sit side by side:
+/// columns are only as wide as what is beside them at the same time, not
+/// as the widest thing anywhere.
+///
+/// One pass, left to right. A ride shared by several results is centred
+/// across them, so it moves with the last of them, and is settled with it.
+List<double> packColumns(
+  int count,
+  List<GraphBox> boxes, {
+  required List<double> minGaps,
+  required double margin,
+}) {
+  if (count == 0) return const [];
+  final byLast = <int, List<GraphBox>>{};
+  for (final box in boxes) {
+    byLast.putIfAbsent(box.ride.lastColumn, () => []).add(box);
+  }
+  final xs = <double>[0];
+  // A box's centre as a * x + c, where x is the column being placed.
+  (double, double) centre(GraphBox box, int column) {
+    final first = box.ride.firstColumn, last = box.ride.lastColumn;
+    if (last < column) return (0, (xs[first] + xs[last]) / 2);
+    if (first == column) return (1, 0);
+    return (0.5, xs[first] / 2);
+  }
+
+  final settled = <GraphBox>[];
+  for (var column = 1; column < count; column++) {
+    var x = xs[column - 1] + minGaps[column];
+    final placing = byLast[column] ?? const <GraphBox>[];
+    settled.addAll(byLast[column - 1] ?? const <GraphBox>[]);
+    for (final box in placing) {
+      for (final other in [...settled, ...placing]) {
+        if (other.ride == box.ride ||
+            other.ride.slot == box.ride.slot ||
+            !box.overlapsInTime(other)) {
+          continue;
+        }
+        final (left, right) = other.ride.slot < box.ride.slot
+            ? (other, box)
+            : (box, other);
+        final (aLeft, cLeft) = centre(left, column);
+        final (aRight, cRight) = centre(right, column);
+        // Moving this column right only helps when it moves the right box
+        // further than the left one; a ride shared across a column it
+        // does not take cannot be helped by it.
+        if (aRight <= aLeft) continue;
+        final room = left.right + right.left + margin;
+        x = math.max(x, (room - (cRight - cLeft)) / (aRight - aLeft));
+      }
+    }
+    xs.add(x);
+  }
+  return xs;
 }
 
 /// Rides with a badge on the bottom corner of their bar, which the scale
