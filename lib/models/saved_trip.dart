@@ -104,9 +104,13 @@ class SavedTrip {
       '$fromName → $toName · ${formatRelativeDay(departureTime)} '
       '${formatTime(departureTime)}';
 
-  /// Identity of a saved connection: the same departure of the same trip
+  /// Identity of a saved connection: the same departure, on the same rides,
   /// between the same two points. Re-saving one replaces it rather than
   /// piling up duplicates.
+  ///
+  /// Every ride counts, not just the first: a journey replanned on from one
+  /// of its rides leaves at the same time on the same first train, and is
+  /// still another journey.
   /// Four decimals is ~10 m: the same street corner counts as the same
   /// endpoint, so re-saving a trip planned from a slightly different tap
   /// replaces it rather than piling up near-identical rows.
@@ -119,15 +123,37 @@ class SavedTrip {
     required double toLat,
     required double toLon,
   }) {
-    final firstTripId = itinerary.legs
-        .map((leg) => leg.tripId)
-        .whereType<String>()
-        .where((tripId) => tripId.isNotEmpty)
-        .firstOrNull;
     final from = coordKey(fromLat, fromLon, decimals: _identityDecimals);
     final to = coordKey(toLat, toLon, decimals: _identityDecimals);
     final departure = itinerary.startTime.toUtc().toIso8601String();
-    return '$from>$to@$departure#${firstTripId ?? 'walk'}';
+    return '$from>$to@$departure#${_rides(itinerary.legs.map((leg) => leg.tripId))}';
+  }
+
+  /// The trips ridden, in order, as the end of an id; "walk" for none.
+  static String _rides(Iterable<String?> tripIds) {
+    final rides = [
+      for (final tripId in tripIds)
+        if (tripId != null && tripId.isNotEmpty) tripId,
+    ];
+    return rides.isEmpty ? 'walk' : rides.join('#');
+  }
+
+  /// [stored] as [buildId] makes it now, from the snapshot's legs.
+  ///
+  /// Ids stored before every ride counted end on the first ride's trip
+  /// alone. Read back unchanged, a saved journey would no longer match
+  /// itself and could be saved twice; with only one ride there is nothing
+  /// to change.
+  static String _currentId(String stored, Map<String, dynamic> itinerary) {
+    final hash = stored.indexOf('#');
+    if (hash < 0) return stored;
+    final legs = itinerary['legs'];
+    if (legs is! List) return stored;
+    final tripIds = [
+      for (final leg in legs)
+        if (leg is Map && leg['tripId'] is String) leg['tripId'] as String,
+    ];
+    return '${stored.substring(0, hash)}#${_rides(tripIds)}';
   }
 
   /// Builds a saved trip from a chosen [itinerary].
@@ -333,7 +359,7 @@ class SavedTrip {
     }
 
     return SavedTrip(
-      id: json['id'] as String,
+      id: _currentId(json['id'] as String, itineraryJson),
       label: json['label'] as String?,
       fromName: fromName,
       fromLat: fromLat,

@@ -19,6 +19,10 @@ class PrefsKeys {
   /// screens. Absent means off.
   static const String showGtfsFields = 'show_gtfs_fields';
 
+  /// Whether the journey graph has a button that copies what it draws.
+  /// Absent means off.
+  static const String showGraphCopyButton = 'show_graph_copy_button';
+
   /// Whether the timetable search lists departures near the rider, which
   /// sends their position. Absent means on.
   static const String showNearbyDepartures = 'show_nearby_departures';

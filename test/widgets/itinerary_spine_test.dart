@@ -422,6 +422,112 @@ void main() {
       );
       expect(find.textContaining('0.26 km walk'), findsOneWidget);
     });
+
+    testWidgets('its routing icon asks for other ways on, not the map', (
+      tester,
+    ) async {
+      var onward = 0;
+      var map = 0;
+      await _pump(
+        tester,
+        TransferLegCard(
+          leg: _change(),
+          openStopSheet: _noop,
+          onShowOnMap: () => map++,
+          onFindOnward: () => onward++,
+        ),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Other ways on from this change'));
+      expect(onward, 1);
+      expect(map, 0);
+      expect(
+        find.bySemanticsLabel('Show this change on the map'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('its way on sits above the map, in one column', (tester) async {
+      await _pump(
+        tester,
+        TransferLegCard(
+          leg: _change(),
+          openStopSheet: _noop,
+          onShowOnMap: () {},
+          onFindOnward: () {},
+        ),
+      );
+
+      final fork = tester.getRect(
+        find.bySemanticsLabel('Other ways on from this change'),
+      );
+      final map = tester.getRect(
+        find.bySemanticsLabel('Show this change on the map'),
+      );
+      expect(fork.bottom, lessThanOrEqualTo(map.top));
+      expect(fork.right, closeTo(map.right, 0.5));
+    });
+
+    testWidgets('without a way on it shows only the map', (tester) async {
+      await _pump(
+        tester,
+        TransferLegCard(
+          leg: _change(),
+          openStopSheet: _noop,
+          onShowOnMap: () {},
+        ),
+      );
+
+      expect(
+        find.bySemanticsLabel('Other ways on from this change'),
+        findsNothing,
+      );
+    });
+  });
+
+  group('a ride left straight for another, with no walk', () {
+    Future<void> pumpRide(WidgetTester tester, VoidCallback? onward) => _pump(
+      tester,
+      LegDetailsWidget(
+        leg: _ride(),
+        openStopSheet: _noop,
+        onShowOnMap: () {},
+        onFindOnward: onward,
+      ),
+    );
+
+    testWidgets('offers the ways on at its foot, on the right', (tester) async {
+      var onward = 0;
+      await pumpRide(tester, () => onward++);
+
+      final fork = find.bySemanticsLabel('Other ways on from this change');
+      expect(fork, findsOneWidget);
+      expect(
+        tester.getCenter(fork).dy,
+        closeTo(tester.getCenter(find.text('Show stops')).dy, 4),
+      );
+      expect(
+        tester.getRect(fork).right,
+        closeTo(tester.getRect(find.text('Track 7')).right, 0.5),
+      );
+
+      await tester.tap(fork);
+      await tester.pumpAndSettle();
+      expect(onward, 1);
+      // The fork is its own button, not the row's: the stops stay folded.
+      expect(find.text('Show stops'), findsOneWidget);
+    });
+
+    testWidgets('a ride with a walk after it leaves that to the change', (
+      tester,
+    ) async {
+      await pumpRide(tester, null);
+
+      expect(
+        find.bySemanticsLabel('Other ways on from this change'),
+        findsNothing,
+      );
+    });
   });
 
   group('the line shows how far you have got', () {

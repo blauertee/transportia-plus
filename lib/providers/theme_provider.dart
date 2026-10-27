@@ -26,6 +26,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _searchOptionsOpeningKey = PrefsKeys.searchOptionsOpening;
   static const String _showCaloriesKey = PrefsKeys.showCalories;
   static const String _showGtfsFieldsKey = PrefsKeys.showGtfsFields;
+  static const String _showGraphCopyButtonKey = PrefsKeys.showGraphCopyButton;
   static const String _showNearbyDeparturesKey = PrefsKeys.showNearbyDepartures;
 
   static const Color defaultAccentColor = Color.fromARGB(255, 0, 113, 133);
@@ -37,6 +38,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
       SearchOptionsOpening.closed;
   static const bool defaultShowCalories = false;
   static const bool defaultShowGtfsFields = false;
+  static const bool defaultShowGraphCopyButton = false;
   static const bool defaultShowNearbyDepartures = true;
 
   static const Color lightBackground = Color(0xFFFFFFFF);
@@ -61,6 +63,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   SearchOptionsOpening _searchOptionsOpening = defaultSearchOptionsOpening;
   bool _showCalories = defaultShowCalories;
   bool _showGtfsFields = defaultShowGtfsFields;
+  bool _showGraphCopyButton = defaultShowGraphCopyButton;
   bool _showNearbyDepartures = defaultShowNearbyDepartures;
   bool _isInitialized = false;
 
@@ -79,6 +82,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   SearchOptionsOpening get searchOptionsOpening => _searchOptionsOpening;
   bool get showCalories => _showCalories;
   bool get showGtfsFields => _showGtfsFields;
+  bool get showGraphCopyButton => _showGraphCopyButton;
   bool get showNearbyDepartures => _showNearbyDepartures;
 
   /// The rider's choice, as the appearance toggle shows it.
@@ -151,6 +155,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _showGtfsFields =
         await prefs.getBool(_showGtfsFieldsKey) ?? defaultShowGtfsFields;
+
+    _showGraphCopyButton =
+        await prefs.getBool(_showGraphCopyButtonKey) ??
+        defaultShowGraphCopyButton;
 
     _showNearbyDepartures =
         await prefs.getBool(_showNearbyDeparturesKey) ??
@@ -249,6 +257,16 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final prefs = SharedPreferencesAsync();
     await prefs.setBool(_showGtfsFieldsKey, show);
+  }
+
+  Future<void> setShowGraphCopyButton(bool show) async {
+    if (_showGraphCopyButton == show) return;
+
+    _showGraphCopyButton = show;
+    notifyListeners();
+
+    final prefs = SharedPreferencesAsync();
+    await prefs.setBool(_showGraphCopyButtonKey, show);
   }
 
   Future<void> setShowNearbyDepartures(bool show) async {
