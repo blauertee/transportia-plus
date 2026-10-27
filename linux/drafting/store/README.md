@@ -22,11 +22,11 @@ first bus. The image to scenario mapping lives in `store_draft_test.dart`:
 |---|---|---|
 | 1 | the search card as a page (map turned off), "To the station" open | bike, 30 min |
 | 2 | search results | `plan.json`: a train-only trip first, a coach from Brussels second |
-| 3 | trip timeline | itinerary 0, the train-only trip |
-| 4 | journey map, transfer | itinerary 4, leg 12: Bercy Métro to the Paris coach stop |
-| 5 | journey map, bike leg | itinerary 0, leg 0 |
-| 6 | place search for "Decathlon" | `geocode_decathlon.json`, biased to central Prague |
-| 7 | search results as a graph, locked up to London Kings Cross | itinerary 0 with its Great Northern 30 min late, so the Eurostar is missed; `plan_onward.json` is the search on from Kings Cross |
+| 3 | search results as a graph, locked up to London Kings Cross | itinerary 0 with its Great Northern 30 min late, so the Eurostar is missed; `plan_onward.json` is the search on from Kings Cross |
+| 4 | trip timeline | itinerary 0, the train-only trip |
+| 5 | journey map, transfer | itinerary 4, leg 12: Bercy Métro to the Paris coach stop |
+| 6 | journey map, bike leg | itinerary 0, leg 0 |
+| 7 | place search for "Decathlon" | `geocode_decathlon.json`, biased to central Prague |
 
 ## Data
 

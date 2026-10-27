@@ -394,56 +394,11 @@ void main() {
     );
   });
 
-  testWidgets('3 timeline', (tester) async {
-    await _shoot(
-      tester,
-      '3',
-      'Where do I change, and how long do I have?',
-      ItineraryDetailScreen(
-        itinerary: _itinerary(_kTrainOnly),
-        fromName: 'Little Snoring',
-        toName: 'Prague',
-      ),
-    );
-  });
-
-  testWidgets('4 transfer', (tester) async {
-    await _shoot(
-      tester,
-      '4',
-      'Métro to the Paris coach: which way?',
-      _overMap(
-        await _map(tester, 'transfer.png'),
-        ItineraryMapScreen(
-          itinerary: _itinerary(_kViaParis),
-          initialLegIndex: _kBercyWalk,
-        ),
-      ),
-      before: () => _clearMapBackground(tester),
-    );
-  });
-
-  testWidgets('5 bike', (tester) async {
-    await _shoot(
-      tester,
-      '5',
-      'Can I cycle to the first bus?',
-      _overMap(
-        await _map(tester, 'bike.png'),
-        ItineraryMapScreen(
-          itinerary: _itinerary(_kTrainOnly),
-          initialLegIndex: 0,
-        ),
-      ),
-      before: () => _clearMapBackground(tester),
-    );
-  });
-
-  testWidgets('7 missed change', (tester) async {
+  testWidgets('3 missed change', (tester) async {
     final late = _lateIntoKingsCross();
     await _shoot(
       tester,
-      '7',
+      '3',
       'What if I miss that change?',
       ItineraryListScreen(
         fromLat: 52.87,
@@ -479,10 +434,55 @@ void main() {
     );
   });
 
-  testWidgets('6 places', (tester) async {
+  testWidgets('4 timeline', (tester) async {
+    await _shoot(
+      tester,
+      '4',
+      'Where do I change, and how long do I have?',
+      ItineraryDetailScreen(
+        itinerary: _itinerary(_kTrainOnly),
+        fromName: 'Little Snoring',
+        toName: 'Prague',
+      ),
+    );
+  });
+
+  testWidgets('5 transfer', (tester) async {
+    await _shoot(
+      tester,
+      '5',
+      'Métro to the Paris coach: which way?',
+      _overMap(
+        await _map(tester, 'transfer.png'),
+        ItineraryMapScreen(
+          itinerary: _itinerary(_kViaParis),
+          initialLegIndex: _kBercyWalk,
+        ),
+      ),
+      before: () => _clearMapBackground(tester),
+    );
+  });
+
+  testWidgets('6 bike', (tester) async {
     await _shoot(
       tester,
       '6',
+      'Can I cycle to the first bus?',
+      _overMap(
+        await _map(tester, 'bike.png'),
+        ItineraryMapScreen(
+          itinerary: _itinerary(_kTrainOnly),
+          initialLegIndex: 0,
+        ),
+      ),
+      before: () => _clearMapBackground(tester),
+    );
+  });
+
+  testWidgets('7 places', (tester) async {
+    await _shoot(
+      tester,
+      '7',
       "Where's the nearest Decathlon in Prague?",
       const LocationSearchScreen(
         title: 'Search',
