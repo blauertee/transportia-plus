@@ -665,9 +665,12 @@ class _LockBadge extends StatelessWidget {
 
   static const double height = 20;
 
+  /// The border, and the lock drawn in it with the same line.
+  static const double _stroke = 1.5;
+
   @override
   Widget build(BuildContext context) {
-    final edge = BorderSide(color: color, width: 1.5);
+    final edge = BorderSide(color: color, width: _stroke);
     final tab = Container(
       height: height,
       padding: const EdgeInsets.fromLTRB(4, 0, 5, 0),
@@ -676,10 +679,51 @@ class _LockBadge extends StatelessWidget {
         borderRadius: const BorderRadius.horizontal(right: Radius.circular(6)),
       ),
       alignment: Alignment.center,
-      child: Icon(LucideIcons.lock, size: 11, color: color),
+      child: CustomPaint(
+        size: const Size.square(12),
+        painter: _LockGlyph(color, _stroke),
+      ),
     );
     return implicit ? Opacity(opacity: _kImplicitLockOpacity, child: tab) : tab;
   }
+}
+
+/// Lucide's lock, drawn rather than set from the icon font, so its line
+/// can match the tab's border at any size.
+class _LockGlyph extends CustomPainter {
+  const _LockGlyph(this.color, this.stroke);
+
+  final Color color;
+  final double stroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Lucide draws on a 24 unit grid with the line inside it.
+    final unit = size.width / 24;
+    canvas.scale(unit);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke / unit
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawRRect(
+      RRect.fromLTRBR(3, 11, 21, 22, const Radius.circular(2)),
+      paint,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(7, 11)
+        ..lineTo(7, 7)
+        ..arcToPoint(const Offset(17, 7), radius: const Radius.circular(5))
+        ..lineTo(17, 11),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LockGlyph old) =>
+      old.color != color || old.stroke != stroke;
 }
 
 /// A station name short enough for one column: "S Südkreuz Bhf (Berlin)"
