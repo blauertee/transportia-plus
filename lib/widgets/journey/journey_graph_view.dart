@@ -18,7 +18,7 @@ import '../../utils/time_utils.dart';
 /// Room left of the first column for the hour labels.
 const double _kAxisWidth = 44;
 
-const double _kBarWidth = 36;
+const double _kBarWidth = 40;
 const double _kBarRadius = 6;
 
 /// Station names are cut to this many characters, so the widest label is
@@ -984,7 +984,7 @@ class _RideBar extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(_kBarRadius),
       ),
-      padding: const EdgeInsets.only(top: _textTop),
+      padding: const EdgeInsets.fromLTRB(_textSide, _textTop, _textSide, 0),
       alignment: Alignment.topCenter,
       clipBehavior: Clip.hardEdge,
       child: Column(
@@ -998,6 +998,10 @@ class _RideBar extends StatelessWidget {
   }
 
   static const double _textTop = 3;
+
+  /// Kept clear either side of the text, so a name cut short does not run
+  /// into the edge.
+  static const double _textSide = 2;
 
   /// The name, the number under it when there is room, and the departure
   /// when there is more.
