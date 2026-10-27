@@ -12,6 +12,7 @@ import '../../models/itinerary.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/duration_formatter.dart';
 import '../../utils/journey_colors.dart';
+import '../../utils/hyphenation.dart';
 import '../../utils/journey_graph.dart';
 import '../../utils/time_utils.dart';
 
@@ -305,6 +306,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _size = constraints.biggest;
+        _nameRides(context);
         final implicit = _implicitlyLocked;
         final badges = _badges;
         final zoom = _pxPerMinute ??= _fittedPxPerMinute = graph.fitPxPerMinute(
@@ -818,7 +820,51 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     keys: {...locks.rideKeys, ..._implicitlyLocked},
     rideHeight: _kLockedRideHeight,
     overhang: _LockBadge.overhang,
+    heights: _nameHeights,
   );
+
+  /// What each ride's bar says, in lines that fit, by [GraphRide.key].
+  final Map<String, _Name> _names = {};
+  JourneyGraph? _namedGraph;
+  Map<String, double> _nameHeights = const {};
+
+  /// Fills [_names] and [_nameHeights] for the graph, once.
+  void _nameRides(BuildContext context) {
+    if (identical(_namedGraph, graph)) return;
+    _namedGraph = graph;
+    _names.clear();
+    final base = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    final room = _kBarWidth - 2 * _RideBar.textSide;
+    bool Function(String) fits(TextStyle style) =>
+        (line) =>
+            (TextPainter(
+              text: TextSpan(text: line, style: base.merge(style)),
+              textDirection: TextDirection.ltr,
+              textScaler: scaler,
+              maxLines: 1,
+            )..layout()).width <=
+            room;
+    final fitsName = fits(_RideBar.nameStyle(AppColors.solidWhite));
+    final fitsNote = fits(_RideBar.noteStyle(AppColors.solidWhite));
+    final fitsTime = fits(_RideBar.timeStyle(AppColors.solidWhite));
+    final heights = <String, double>{};
+    for (final ride in graph.rides) {
+      final (name, note) = _RideBar.fullName(ride.leg);
+      final lines = _names[ride.key] ??= (
+        main: breakLines(name, fitsName),
+        note: note == null ? const <String>[] : breakLines(note, fitsNote),
+        time: breakLines(
+          formatDuration(
+            ride.leg.endTime.difference(ride.leg.startTime).inSeconds,
+          ),
+          fitsTime,
+        ),
+      );
+      heights[ride.key] = _RideBar.heightFor(lines, scaler);
+    }
+    _nameHeights = heights;
+  }
 
   /// A circle on the bar's bottom right corner, mostly over the bar. The
   /// scale leaves room for it: the bar is tall enough to keep it clear of
@@ -861,7 +907,12 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         ),
         child: _fade(
           ride.itineraries.contains(selected),
-          _RideBar(ride: ride, color: color, height: height),
+          _RideBar(
+            ride: ride,
+            name: _names[ride.key]!,
+            color: color,
+            height: height,
+          ),
         ),
       ),
     );
@@ -966,11 +1017,15 @@ class _Geometry {
 class _RideBar extends StatelessWidget {
   const _RideBar({
     required this.ride,
+    required this.name,
     required this.color,
     required this.height,
   });
 
   final GraphRide ride;
+
+  /// Its name, broken into lines that fit.
+  final _Name name;
   final Color color;
   final double height;
 
@@ -979,19 +1034,47 @@ class _RideBar extends StatelessWidget {
     final onColor = color.computeLuminance() > 0.5
         ? AppColors.solidBlack
         : AppColors.solidWhite;
+    final scaler = MediaQuery.textScalerOf(context);
+    final timed =
+        height >=
+        heightFor(name, scaler) + name.time.length * scaler.scale(10) * 1.15;
     return Container(
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(_kBarRadius),
       ),
-      padding: const EdgeInsets.fromLTRB(_textSide, _textTop, _textSide, 0),
+      padding: const EdgeInsets.fromLTRB(textSide, _textTop, textSide, 0),
       alignment: Alignment.topCenter,
       clipBehavior: Clip.hardEdge,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final (text, style) in lines(ride, height, onColor))
-            Text(text, maxLines: 1, style: style),
+          for (final line in name.main)
+            Text(
+              line,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: nameStyle(onColor),
+            ),
+          for (final line in name.note)
+            Text(
+              line,
+              maxLines: 1,
+              softWrap: false,
+              textAlign: TextAlign.center,
+              style: noteStyle(onColor),
+            ),
+          // How long the ride takes, when the bar has room for it.
+          if (timed)
+            for (final line in name.time)
+              Text(
+                line,
+                maxLines: 1,
+                softWrap: false,
+                textAlign: TextAlign.center,
+                style: timeStyle(onColor),
+              ),
         ],
       ),
     );
@@ -999,41 +1082,56 @@ class _RideBar extends StatelessWidget {
 
   static const double _textTop = 3;
 
-  /// Kept clear either side of the text, so a name cut short does not run
-  /// into the edge.
-  static const double _textSide = 2;
+  /// Kept clear either side of the text, so it does not run into the edge.
+  static const double textSide = 2;
 
-  /// The name, the number under it when there is room, and the departure
-  /// when there is more.
-  static List<(String, TextStyle)> lines(
-    GraphRide ride,
-    double height, [
-    Color color = AppColors.solidWhite,
-  ]) {
-    final (line, number) = _splitName(ride.leg);
-    TextStyle style(double size, FontWeight weight) => TextStyle(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: 1.15,
-    );
-    return [
-      (line, style(12, FontWeight.w800)),
-      if (number != null && height > 40) (number, style(10, FontWeight.w500)),
-      if (height > 58)
-        (formatTime(ride.leg.startTime), style(10, FontWeight.w500)),
+  static TextStyle nameStyle(Color color) => TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    color: color,
+    height: 1.15,
+  );
+
+  /// What the name carries in brackets, often the train's number: under
+  /// it, smaller and in a lighter weight.
+  static TextStyle noteStyle(Color color) => TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w400,
+    color: color,
+    height: 1.15,
+  );
+
+  static TextStyle timeStyle(Color color) => TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w500,
+    color: color,
+    height: 1.15,
+  );
+
+  /// How tall a bar has to be to hold [name], not counting its time.
+  static double heightFor(_Name name, TextScaler scaler) =>
+      _textTop +
+      name.main.length * scaler.scale(12) * 1.15 +
+      name.note.length * scaler.scale(10) * 1.15 +
+      _textTop;
+
+  /// The name the rest of the app shows for [leg], whole: what is in
+  /// brackets apart, without them. "RB15 (84284)" → RB15 and 84284.
+  static (String, String?) fullName(Leg leg) {
+    final raw = (leg.displayName ?? leg.routeShortName ?? '').trim();
+    final brackets = RegExp(r'\(([^)]*)\)');
+    final notes = [
+      for (final match in brackets.allMatches(raw))
+        if (match[1]!.trim().isNotEmpty) match[1]!.trim(),
     ];
-  }
-
-  /// "ICE 1507" → ICE over 1507; "RB15 (84284)" → RB15 alone.
-  static (String, String?) _splitName(Leg leg) {
-    final raw = leg.displayName ?? leg.routeShortName ?? '';
-    final name = raw.split(' (').first.trim();
-    final space = name.indexOf(' ');
-    if (space < 0) return (name, null);
-    return (name.substring(0, space), name.substring(space + 1));
+    final name = raw.replaceAll(brackets, ' ').replaceAll(RegExp(r'\s+'), ' ');
+    return (name.trim(), notes.isEmpty ? null : notes.join(' '));
   }
 }
+
+/// What a ride's bar says, each in lines that fit: its name, what the name
+/// had in brackets, and how long the ride takes.
+typedef _Name = ({List<String> main, List<String> note, List<String> time});
 
 class _StationMarker extends StatelessWidget {
   const _StationMarker({

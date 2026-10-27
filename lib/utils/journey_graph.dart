@@ -348,17 +348,23 @@ class RideBadges {
     this.keys = const {},
     this.rideHeight = 0,
     this.overhang = 0,
+    this.heights = const {},
   });
 
   final Set<String> keys;
   final double rideHeight;
   final double overhang;
 
+  /// The least a ride's bar can be to hold its name, by [GraphRide.key],
+  /// for any taller than the shortest bar. A badge adds to it.
+  final Map<String, double> heights;
+
   @override
   bool operator ==(Object other) =>
       other is RideBadges &&
       other.rideHeight == rideHeight &&
       other.overhang == overhang &&
+      identical(other.heights, heights) &&
       other.keys.length == keys.length &&
       other.keys.containsAll(keys);
 
@@ -392,10 +398,13 @@ class GraphScale {
     }
 
     for (final ride in graph.rides) {
+      final name = badges.heights[ride.key] ?? _kMinRideHeight;
       need(
         ride.leg.startTime,
         ride.leg.endTime,
-        badges.keys.contains(ride.key) ? badges.rideHeight : _kMinRideHeight,
+        badges.keys.contains(ride.key)
+            ? name + badges.rideHeight - _kMinRideHeight
+            : name,
       );
     }
     for (final change in graph.changes) {

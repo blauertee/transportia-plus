@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,9 @@ import 'package:transportia/models/itinerary_response.dart';
 import 'package:transportia/models/time_selection.dart';
 import 'package:transportia/providers/journey_locks_controller.dart';
 import 'package:transportia/services/journey_graph_service.dart';
+import 'package:transportia/utils/duration_formatter.dart';
 import 'package:transportia/utils/journey_graph.dart';
+import 'package:transportia/utils/time_utils.dart';
 import 'package:transportia/widgets/journey/journey_graph_panel.dart';
 import 'package:transportia/widgets/journey/journey_graph_view.dart';
 
@@ -53,6 +56,20 @@ void main() {
   }
 
   Itinerary? opened;
+
+  /// The bar of the ride called [name].
+  Finder rideBar(String name) => find.byWidgetPredicate(
+    (widget) =>
+        widget.runtimeType.toString() == '_RideBar' &&
+        ((widget as dynamic).ride as GraphRide).leg.displayName == name,
+  );
+
+  /// The lines of text on [bar], top to bottom.
+  List<Text> linesOn(Finder bar) => [
+    for (final line
+        in find.descendant(of: bar, matching: find.byType(Text)).evaluate())
+      line.widget as Text,
+  ];
 
   /// What the screen shows before anything is locked; set to show a page
   /// more.
@@ -112,7 +129,7 @@ void main() {
     await pumpPanel(tester);
 
     expect(searches, isEmpty);
-    expect(find.text('1507'), findsOneWidget);
+    expect(rideBar('ICE 1507'), findsOneWidget);
     expect(find.textContaining('Open journey'), findsOneWidget);
   });
 
@@ -121,7 +138,7 @@ void main() {
   ) async {
     await pumpPanel(tester);
 
-    await tester.tap(find.text('1507'));
+    await tester.tap(rideBar('ICE 1507'));
     await tester.pumpAndSettle();
 
     expect(searches, hasLength(1));
@@ -134,7 +151,7 @@ void main() {
   ) async {
     await pumpPanel(tester);
 
-    await tester.tap(find.text('1009'));
+    await tester.tap(rideBar('ICE 1009'));
     await tester.pumpAndSettle();
 
     expect(searches, isEmpty);
@@ -165,7 +182,7 @@ void main() {
 
     expect(searches, hasLength(1));
     expect(find.text('Locked until Ingolstadt Hbf'), findsNothing);
-    expect(find.text('1507'), findsOneWidget);
+    expect(rideBar('ICE 1507'), findsOneWidget);
   });
 
   testWidgets('locking a station searches again through it', (tester) async {
@@ -188,11 +205,11 @@ void main() {
       search: (search) => Future.error(const SocketException('offline')),
     );
 
-    await tester.tap(find.text('1507'));
+    await tester.tap(rideBar('ICE 1507'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Could not search again'), findsOneWidget);
-    expect(find.text('1507'), findsOneWidget);
+    expect(rideBar('ICE 1507'), findsOneWidget);
   });
 
   testWidgets('an answer to an older search is dropped', (tester) async {
@@ -210,7 +227,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('1507'));
+    await tester.tap(rideBar('ICE 1507'));
     await tester.pump();
     await tester.tap(find.textContaining('Locked until'));
     await tester.pumpAndSettle();
@@ -220,7 +237,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Locked until'), findsNothing);
-    expect(find.text('1507'), findsOneWidget);
+    expect(rideBar('ICE 1507'), findsOneWidget);
   });
 
   group('pulled past an edge', () {
@@ -254,7 +271,7 @@ void main() {
       tester,
     ) async {
       await pumpPanel(tester, first: results.sublist(1));
-      await tester.tap(find.text('1009'));
+      await tester.tap(rideBar('ICE 1009'));
       await tester.pumpAndSettle();
 
       shown.value = results;
@@ -316,6 +333,85 @@ void main() {
 
       await tester.pump(const Duration(seconds: 2));
       expect(find.text('Copy canvas data'), findsOneWidget);
+    });
+  });
+
+  group('names on rides', () {
+    testWidgets('shows what a name has in brackets on lines of its own', (
+      tester,
+    ) async {
+      await pumpPanel(tester);
+      final lines = linesOn(rideBar('RB15 (84284)').first);
+      String text(Iterable<Text> lines) =>
+          lines.map((line) => line.data).join();
+      final name = lines.where((line) => line.style!.fontSize == 12);
+      final note = lines.where(
+        (line) =>
+            line.style!.fontSize == 10 &&
+            line.style!.fontWeight == FontWeight.w400,
+      );
+
+      expect(text(name).replaceAll('-', ''), 'RB15');
+      expect(text(note), '84284');
+      expect(lines.indexOf(note.first), greaterThan(lines.indexOf(name.last)));
+    });
+
+    testWidgets('cuts nothing short, however narrow the bar', (tester) async {
+      for (final name in ['plan_journey_graph', 'plan_same_departure']) {
+        await pumpPanel(tester, first: _load(name));
+        final bars = find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == '_RideBar',
+        );
+        expect(bars, findsWidgets);
+        for (final bar in bars.evaluate()) {
+          final box = bar.renderObject! as RenderBox;
+          final edges = box.localToGlobal(Offset.zero) & box.size;
+          final lines = find.descendant(
+            of: find.byElementPredicate((element) => element == bar),
+            matching: find.byType(RichText),
+          );
+          for (final line in lines.evaluate()) {
+            final text = line.renderObject! as RenderParagraph;
+            final at = text.localToGlobal(Offset.zero) & text.size;
+            final drawn = (line.widget as RichText).text.toPlainText();
+            expect(
+              text.getMaxIntrinsicWidth(double.infinity),
+              lessThanOrEqualTo(text.size.width + 0.01),
+              reason: '"$drawn" is cut short',
+            );
+            expect(
+              at.left >= edges.left &&
+                  at.top >= edges.top &&
+                  at.right <= edges.right &&
+                  at.bottom <= edges.bottom + 0.01,
+              isTrue,
+              reason: '"$drawn" runs past its bar',
+            );
+          }
+        }
+      }
+    });
+
+    testWidgets('shows how long each ride takes, not when it leaves', (
+      tester,
+    ) async {
+      await pumpPanel(tester);
+      final ice1507 = results
+          .expand((it) => it.legs)
+          .firstWhere((leg) => leg.displayName == 'ICE 1507');
+      final lines = [
+        for (final line in linesOn(rideBar('ICE 1507'))) line.data!,
+      ];
+
+      expect(
+        lines.join(' '),
+        endsWith(
+          formatDuration(
+            ice1507.endTime.difference(ice1507.startTime).inSeconds,
+          ),
+        ),
+      );
+      expect(lines, isNot(contains(formatTime(ice1507.startTime))));
     });
   });
 }

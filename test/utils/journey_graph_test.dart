@@ -200,6 +200,42 @@ void main() {
       expect(height, greaterThanOrEqualTo(28 - 1e-9));
     });
 
+    test('makes a ride as tall as its name needs', () {
+      final ride = graph.rides.firstWhere(
+        (ride) => ride.leg.displayName == 'S46',
+      );
+      final scale = GraphScale(
+        graph,
+        0.3,
+        badges: RideBadges(heights: {ride.key: 48}),
+      );
+      final height =
+          scale.yOf(ride.leg.endTime) - scale.yOf(ride.leg.startTime);
+
+      expect(height, greaterThanOrEqualTo(48 - 1e-9));
+    });
+
+    test('makes room for a badge under a long name', () {
+      final ride = graph.rides.firstWhere(
+        (ride) => ride.leg.displayName == 'S46',
+      );
+      final scale = GraphScale(
+        graph,
+        0.3,
+        badges: RideBadges(
+          keys: {ride.key},
+          rideHeight: 28,
+          overhang: 9,
+          heights: {ride.key: 48},
+        ),
+      );
+      final height =
+          scale.yOf(ride.leg.endTime) - scale.yOf(ride.leg.startTime);
+
+      // The badge needs 8 more than the shortest bar's 20.
+      expect(height, greaterThanOrEqualTo(48 + 8 - 1e-9));
+    });
+
     test('takes a change that cannot be made, boarding before arriving', () {
       // ICE 1009 into Ingolstadt 25 minutes late: the next train leaves
       // before it gets in.

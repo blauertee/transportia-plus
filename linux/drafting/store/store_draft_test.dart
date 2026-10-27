@@ -430,6 +430,12 @@ void main() {
         await a.up();
         await b.up();
         await tester.pump();
+        // Up to the ride before the bus into Kings Lynn, so it is not cut
+        // off at the top.
+        final header = tester.getBottomLeft(find.text('23h 8m').first).dy;
+        final bus = tester.getTopLeft(find.text('49A')).dy;
+        await tester.dragFrom(at, Offset(0, header + 120 - bus));
+        await tester.pumpAndSettle();
       },
     );
   });
