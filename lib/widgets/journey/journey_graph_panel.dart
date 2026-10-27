@@ -134,7 +134,7 @@ class _JourneyGraphPanelState extends State<JourneyGraphPanel> {
             chips: [
               if (controller.lock case final lock?)
                 _LockChip(
-                  label: 'up to ${shortStationName(lock.upTo.to.name)}',
+                  label: 'Locked until ${shortStationName(lock.upTo.to.name)}',
                   onRemove: () {
                     Haptics.lightTick();
                     controller.unlockRide();
@@ -142,7 +142,7 @@ class _JourneyGraphPanelState extends State<JourneyGraphPanel> {
                 ),
               for (final station in controller.stations)
                 _LockChip(
-                  label: 'via ${shortStationName(station.name)}',
+                  label: 'Locked via ${shortStationName(station.name)}',
                   onRemove: () => _tapStation(station),
                 ),
             ],
@@ -236,7 +236,7 @@ class _LockChip extends StatelessWidget {
       onTap: onRemove,
       child: Semantics(
         button: true,
-        label: 'Unlock $label',
+        label: '$label, tap to unlock',
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
@@ -246,8 +246,6 @@ class _LockChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(LucideIcons.lock, size: 12, color: accent),
-              const SizedBox(width: 5),
               Text(label, style: TextStyle(fontSize: 12, color: accent)),
               const SizedBox(width: 6),
               Icon(LucideIcons.x, size: 12, color: accent),

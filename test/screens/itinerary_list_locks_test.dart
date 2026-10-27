@@ -135,7 +135,7 @@ void main() {
     await tester.tap(find.text('Graph'));
     await answer(tester);
 
-    expect(find.text('up to Ingolstadt Hbf'), findsOne);
-    expect(find.textContaining('Locked until'), findsNothing);
+    expect(find.text('Locked until Ingolstadt Hbf'), findsOne);
+    expect(find.text('Locked until Ingolstadt Hbf.'), findsNothing);
   });
 }

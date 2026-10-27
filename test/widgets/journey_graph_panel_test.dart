@@ -95,7 +95,7 @@ void main() {
 
     expect(searches, hasLength(1));
     expect(searches.single.lock?.upTo.displayName, 'ICE 1507');
-    expect(find.textContaining('up to'), findsOneWidget);
+    expect(find.textContaining('Locked until'), findsOneWidget);
   });
 
   testWidgets('tapping a ride off the selected result selects one instead', (
@@ -118,7 +118,7 @@ void main() {
 
     expect(searches, hasLength(1));
     expect(searches.single.lock?.key, GraphRide.keyOf(ice1009));
-    expect(find.text('up to Ingolstadt Hbf'), findsOneWidget);
+    expect(find.text('Locked until Ingolstadt Hbf'), findsOneWidget);
 
     await tester.tap(find.textContaining('Open journey'));
     final legs = opened!.legs;
@@ -129,11 +129,11 @@ void main() {
   testWidgets('removing the lock goes back to the results', (tester) async {
     await pumpPanel(tester, initialLock: RideLock(viaIngolstadt, ice1009));
 
-    await tester.tap(find.text('up to Ingolstadt Hbf'));
+    await tester.tap(find.text('Locked until Ingolstadt Hbf'));
     await tester.pumpAndSettle();
 
     expect(searches, hasLength(1));
-    expect(find.text('up to Ingolstadt Hbf'), findsNothing);
+    expect(find.text('Locked until Ingolstadt Hbf'), findsNothing);
     expect(find.text('1507'), findsOneWidget);
   });
 
@@ -146,7 +146,7 @@ void main() {
     expect(searches, hasLength(1));
     expect(searches.single.lock, isNull);
     expect(searches.single.via.single.name, 'München Hbf');
-    expect(find.text('via München Hbf'), findsOneWidget);
+    expect(find.text('Locked via München Hbf'), findsOneWidget);
   });
 
   testWidgets('a failed search says so and keeps what is shown', (
@@ -179,12 +179,12 @@ void main() {
 
     await tester.tap(find.text('1507'));
     await tester.pump();
-    await tester.tap(find.textContaining('up to'));
+    await tester.tap(find.textContaining('Locked until'));
     await tester.pumpAndSettle();
     slow.complete(continueAfter(viaIngolstadt, ice1009, onward));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('up to'), findsNothing);
+    expect(find.textContaining('Locked until'), findsNothing);
     expect(find.text('1507'), findsOneWidget);
   });
 }
