@@ -2,16 +2,23 @@ import 'dart:math' as math;
 
 import '../models/itinerary.dart';
 
-/// Vertical room every gap between two events gets, however short, so a
-/// two-minute change still has space for a station name.
-const double _kMinGap = 14;
+/// The shortest a ride is drawn, whatever the zoom: room for its line name.
+const double _kMinRideHeight = 18;
 
-/// How fast a gap grows with its length. Mostly with the square root of the
-/// minutes, so a four-hour ride stays on screen and a four-minute hop stays
-/// readable; partly linear, so a long ride still looks long when only a
-/// couple of results are left and few events break it up.
-const double _kGapPerRootMinute = 4.5;
-const double _kGapPerMinute = 0.35;
+/// The least room between getting off and getting on again in one column:
+/// room for the station name hung under the first ride.
+const double _kMinChangeHeight = 16;
+
+/// Stretching under this many pixels goes unmarked on the axis: too little
+/// to mislead anyone about a duration.
+const double _kNoticeableStretch = 12;
+
+/// Stretched gaps closer than this many pixels are marked as one span.
+const double _kSpanMergeGap = 40;
+
+/// Bounds for the fitted zoom, in pixels per minute.
+const double _kMinPxPerMinute = 0.2;
+const double _kMaxPxPerMinute = 12;
 
 /// A station, as a change sees it: platforms of one station are one place.
 class GraphStation {
@@ -99,8 +106,7 @@ class JourneyGraph {
     this.rides,
     this.changes,
     this.arrivals,
-    this._events,
-    this._ys,
+    this.events,
   );
 
   /// Ordered by departure, earliest first: that is the column order.
@@ -108,13 +114,18 @@ class JourneyGraph {
   final List<GraphRide> rides;
   final List<GraphChange> changes;
   final List<GraphArrival> arrivals;
-  final List<DateTime> _events;
-  final List<double> _ys;
+
+  /// Every departure and arrival, in order: where the scale may bend.
+  final List<DateTime> events;
 
   int get columnCount => itineraries.length;
-  double get height => _ys.isEmpty ? 0 : _ys.last;
-  DateTime get start => _events.first;
-  DateTime get end => _events.last;
+  DateTime get start => events.first;
+  DateTime get end => events.last;
+
+  /// When the first result to get there gets there.
+  DateTime get firstArrival => itineraries
+      .map((it) => it.endTime)
+      .reduce((a, b) => a.isBefore(b) ? a : b);
 
   factory JourneyGraph.build(List<Itinerary> results) {
     final itineraries = results.where((it) => it.hasTransit).toList()
@@ -163,20 +174,6 @@ class JourneyGraph {
       ],
       for (final arrival in arrivals.values) arrival.time,
     }.toList()..sort();
-    final ys = <double>[];
-    for (var i = 0; i < events.length; i++) {
-      if (i == 0) {
-        ys.add(0);
-        continue;
-      }
-      final minutes = events[i].difference(events[i - 1]).inSeconds / 60;
-      ys.add(
-        ys.last +
-            _kMinGap +
-            _kGapPerRootMinute * math.sqrt(minutes) +
-            _kGapPerMinute * minutes,
-      );
-    }
 
     return JourneyGraph._(
       itineraries,
@@ -184,23 +181,134 @@ class JourneyGraph {
       changes.values.toList(),
       arrivals.values.toList(),
       events,
-      ys,
     );
   }
 
-  /// Vertical position of [time], from 0 at the first departure.
+  /// The zoom at which [until] lands [height] below the first departure.
   ///
-  /// Linear between two events and compressed across the whole: see
-  /// [_kGapPerRootMinute] and [_kGapPerMinute].
+  /// Found by bisection rather than solved: the stretching [GraphScale]
+  /// adds does not shrink in proportion to the zoom.
+  double fitPxPerMinute(DateTime until, double height) {
+    var low = _kMinPxPerMinute, high = _kMaxPxPerMinute;
+    for (var i = 0; i < 24; i++) {
+      final mid = (low + high) / 2;
+      if (GraphScale(this, mid).yOf(until) > height) {
+        high = mid;
+      } else {
+        low = mid;
+      }
+    }
+    return low;
+  }
+}
+
+/// Time to height at one zoom: linear, except where text would not fit.
+///
+/// At [pxPerMinute] a four-minute hop can be a few pixels tall, too short for
+/// its line name or for the station name under it. Rather than give up on a
+/// linear axis, the scale stretches just those stretches of time, between
+/// two consecutive events, by just enough; the rest stays to scale. A
+/// stretched stretch is flagged so the axis can show it is not to scale.
+class GraphScale {
+  factory GraphScale(JourneyGraph graph, double pxPerMinute) {
+    final index = {
+      for (var i = 0; i < graph.events.length; i++) graph.events[i]: i,
+    };
+    // Each constraint: from one event to a later one, at least so much room.
+    final needs = <int, List<(int, double)>>{};
+    void need(DateTime from, DateTime to, double room) =>
+        needs.putIfAbsent(index[to]!, () => []).add((index[from]!, room));
+    for (final ride in graph.rides) {
+      need(ride.leg.startTime, ride.leg.endTime, _kMinRideHeight);
+    }
+    for (final change in graph.changes) {
+      // Only where the station name would run into the next ride: in the
+      // same column, or close enough to overlap it.
+      if ((change.from.slot - change.to.slot).abs() >= 1) continue;
+      final room = change.changesStation
+          ? 2 * _kMinChangeHeight
+          : _kMinChangeHeight;
+      need(change.from.leg.endTime, change.to.leg.startTime, room);
+    }
+
+    final ys = <double>[];
+    final stretched = <double>[];
+    for (var i = 0; i < graph.events.length; i++) {
+      if (i == 0) {
+        ys.add(0);
+        stretched.add(0);
+        continue;
+      }
+      final minutes =
+          graph.events[i].difference(graph.events[i - 1]).inSeconds / 60;
+      final linear = ys.last + minutes * pxPerMinute;
+      var y = linear;
+      for (final (from, room) in needs[i] ?? const <(int, double)>[]) {
+        y = math.max(y, ys[from] + room);
+      }
+      ys.add(y);
+      stretched.add(y - linear);
+    }
+    return GraphScale._(pxPerMinute, graph.events, ys, stretched);
+  }
+
+  GraphScale._(this.pxPerMinute, this._events, this._ys, this._stretched);
+
+  final double pxPerMinute;
+  final List<DateTime> _events;
+  final List<double> _ys;
+
+  /// How many pixels the gap ending at each event was stretched past linear.
+  final List<double> _stretched;
+
+  double get height => _ys.isEmpty ? 0 : _ys.last;
+
+  /// Vertical position of [time], from 0 at the first departure.
   double yOf(DateTime time) {
     if (_events.isEmpty || !time.isAfter(_events.first)) return 0;
-    if (!time.isBefore(_events.last)) return _ys.last;
-    var hi = _events.indexWhere((event) => !event.isBefore(time));
+    if (!time.isBefore(_events.last)) {
+      return _ys.last +
+          time.difference(_events.last).inSeconds / 60 * pxPerMinute;
+    }
+    final hi = _events.indexWhere((event) => !event.isBefore(time));
     if (_events[hi] == time) return _ys[hi];
     final lo = hi - 1;
     final span = _events[hi].difference(_events[lo]).inSeconds;
     final into = time.difference(_events[lo]).inSeconds;
     return _ys[lo] + (_ys[hi] - _ys[lo]) * into / span;
+  }
+
+  /// The time drawn at [y]: the inverse of [yOf], for keeping the moment
+  /// under the fingers still while zooming.
+  DateTime timeAt(double y) {
+    if (_events.isEmpty || y <= 0) return _events.first;
+    if (y >= _ys.last) {
+      final minutes = (y - _ys.last) / pxPerMinute;
+      return _events.last.add(Duration(seconds: (minutes * 60).round()));
+    }
+    final hi = _ys.indexWhere((at) => at >= y);
+    final lo = hi - 1;
+    final fraction = (y - _ys[lo]) / (_ys[hi] - _ys[lo]);
+    final span = _events[hi].difference(_events[lo]).inSeconds;
+    return _events[lo].add(Duration(seconds: (span * fraction).round()));
+  }
+
+  /// The stretches drawn noticeably taller than their time, as (top,
+  /// bottom) pairs: runs of stretched gaps merged, and runs that gained
+  /// only a few pixels left out, so the axis is not marked all over.
+  Iterable<(double, double)> get stretchedSpans sync* {
+    (double, double)? run;
+    for (var i = 1; i < _ys.length; i++) {
+      if (_stretched[i] < _kNoticeableStretch) continue;
+      final (top, bottom) = (_ys[i - 1], _ys[i]);
+      if (run != null && top - run.$2 < _kSpanMergeGap) {
+        run = (run.$1, bottom);
+        continue;
+      }
+      if (run != null) yield run;
+      run = (top, bottom);
+    }
+    if (run != null) yield run;
   }
 }
 

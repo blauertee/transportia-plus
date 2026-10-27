@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
 import 'package:flutter/widgets.dart';
@@ -28,6 +29,21 @@ const double _kHeaderHeight = 24;
 const double _kTopPad = 14;
 const double _kBottomPad = 44;
 
+/// Zoom bounds, in pixels per minute: from a whole day on one screen to a
+/// few minutes filling it.
+const double _kMinZoom = 0.2;
+const double _kMaxZoom = 12;
+
+/// Below this, two fingers count as side by side, and their vertical
+/// distance says nothing about zoom.
+const double _kMinPinchSpan = 24;
+
+/// The least room between two time labels on the axis.
+const double _kMinLabelGap = 28;
+
+/// The steps the axis may label, finest first.
+const List<int> _kLabelMinutes = [10, 15, 30, 60, 120, 180, 360];
+
 /// How far everything off the selected result fades: still readable, so the
 /// other options stay one tap away, but clearly behind the selected one.
 const double _kUnselectedOpacity = 0.35;
@@ -44,7 +60,12 @@ const Color _kChangeColor = kStreetLegColor;
 /// off the selected result selects a result through it. Tapping a station or
 /// a ride on the selected result locks it; what a lock does is up to the
 /// caller.
-class JourneyGraphView extends StatelessWidget {
+///
+/// Time is linear and zooms vertically with two fingers. It opens at the
+/// zoom where the first result to arrive fits the height it is given; where
+/// a ride or a change is then too short for its text, the scale stretches
+/// that stretch alone and the axis marks it as not to scale.
+class JourneyGraphView extends StatefulWidget {
   const JourneyGraphView({
     super.key,
     required this.graph,
@@ -64,6 +85,95 @@ class JourneyGraphView extends StatelessWidget {
   final ValueChanged<GraphStation>? onStationTap;
   final ValueChanged<GraphRide>? onRideTap;
 
+  @override
+  State<JourneyGraphView> createState() => _JourneyGraphViewState();
+}
+
+class _JourneyGraphViewState extends State<JourneyGraphView> {
+  final ScrollController _scroll = ScrollController();
+
+  /// Null until fitted to the height available.
+  double? _pxPerMinute;
+  late GraphScale _scale;
+
+  final Map<int, Offset> _pointers = {};
+  double? _pinchStartSpan;
+  double _pinchStartZoom = 1;
+  DateTime? _pinchTime;
+  double _pinchFocus = 0;
+
+  JourneyGraph get graph => widget.graph;
+  int get selected => widget.selected;
+  ValueChanged<int> get onSelect => widget.onSelect;
+  JourneyLocks get locks => widget.locks;
+  ValueChanged<GraphStation>? get onStationTap => widget.onStationTap;
+  ValueChanged<GraphRide>? get onRideTap => widget.onRideTap;
+
+  @override
+  void didUpdateWidget(JourneyGraphView old) {
+    super.didUpdateWidget(old);
+    if (old.graph == widget.graph) return;
+    // New results: fit them afresh, from the top.
+    _pxPerMinute = null;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  bool get _pinching => _pinchStartSpan != null;
+
+  void _pointerDown(PointerDownEvent event) {
+    _pointers[event.pointer] = event.localPosition;
+    if (_pointers.length == 2) _startPinch();
+  }
+
+  void _pointerMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.localPosition;
+    if (_pinching) _updatePinch();
+  }
+
+  void _pointerUp(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    if (_pinching && _pointers.length < 2) {
+      setState(() => _pinchStartSpan = null);
+    }
+  }
+
+  void _startPinch() {
+    final [a, b] = _pointers.values.toList();
+    _pinchFocus = (a.dy + b.dy) / 2;
+    setState(() {
+      _pinchStartSpan = math.max((a.dy - b.dy).abs(), _kMinPinchSpan);
+      _pinchStartZoom = _pxPerMinute!;
+      // The moment under the fingers, which has to stay under them.
+      _pinchTime = _scale.timeAt(_scroll.offset + _pinchFocus - _kTopPad);
+    });
+  }
+
+  void _updatePinch() {
+    final [a, b] = _pointers.values.toList();
+    final span = math.max((a.dy - b.dy).abs(), _kMinPinchSpan);
+    final zoom = (_pinchStartZoom * span / _pinchStartSpan!).clamp(
+      _kMinZoom,
+      _kMaxZoom,
+    );
+    final scale = GraphScale(graph, zoom);
+    final offset = _kTopPad + scale.yOf(_pinchTime!) - _pinchFocus;
+    setState(() => _pxPerMinute = zoom);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scroll.hasClients) return;
+      final position = _scroll.position;
+      _scroll.jumpTo(
+        offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
+    });
+  }
+
   /// What a tap on something [through] those results does: [lock] it when
   /// the selected result is among them, else select the first of them.
   VoidCallback _tap(List<int> through, VoidCallback? lock) {
@@ -82,11 +192,29 @@ class JourneyGraphView extends StatelessWidget {
         final column =
             ((constraints.maxWidth - _kAxisWidth - 8) / graph.columnCount)
                 .clamp(_kMinColumn, _kMaxColumn);
-        final geometry = _Geometry(graph, column);
+        final zoom = _pxPerMinute ??= graph.fitPxPerMinute(
+          graph.firstArrival,
+          constraints.maxHeight - _kHeaderHeight - _kTopPad - _kBottomPad,
+        );
+        _scale = GraphScale(graph, zoom);
+        final geometry = _Geometry(graph, column, _scale);
         final width = _kAxisWidth + column * graph.columnCount + 8;
+        final header = Container(
+          width: width,
+          height: _kHeaderHeight,
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.hairline)),
+          ),
+          child: Stack(
+            children: [
+              for (var i = 0; i < graph.columnCount; i++)
+                _durationLabel(geometry, i),
+            ],
+          ),
+        );
         final canvas = SizedBox(
           width: width,
-          height: _kHeaderHeight + _kTopPad + graph.height + _kBottomPad,
+          height: _kTopPad + _scale.height + _kBottomPad,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -101,8 +229,6 @@ class JourneyGraphView extends StatelessWidget {
                   ),
                 ),
               ),
-              for (var i = 0; i < graph.columnCount; i++)
-                _durationLabel(geometry, i),
               for (final ride in graph.rides) _rideBar(geometry, ride, accent),
               ..._stationMarkers(geometry, accent),
               for (final arrival in graph.arrivals)
@@ -110,10 +236,34 @@ class JourneyGraphView extends StatelessWidget {
             ],
           ),
         );
-        if (width <= constraints.maxWidth) return canvas;
+        final body = SizedBox(
+          width: width,
+          height: constraints.maxHeight,
+          child: Column(
+            children: [
+              header,
+              Expanded(
+                child: Listener(
+                  onPointerDown: _pointerDown,
+                  onPointerMove: _pointerMove,
+                  onPointerUp: _pointerUp,
+                  onPointerCancel: _pointerUp,
+                  child: SingleChildScrollView(
+                    controller: _scroll,
+                    physics: _pinching
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
+                    child: canvas,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (width <= constraints.maxWidth) return body;
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: canvas,
+          child: body,
         );
       },
     );
@@ -266,15 +416,16 @@ class JourneyGraphView extends StatelessWidget {
   }
 }
 
-/// Where things go: columns across, the graph's compressed time down.
+/// Where things go: columns across, time down at the current zoom.
 class _Geometry {
-  const _Geometry(this.graph, this.column);
+  const _Geometry(this.graph, this.column, this.scale);
 
   final JourneyGraph graph;
   final double column;
+  final GraphScale scale;
 
   double x(double slot) => _kAxisWidth + (slot + 0.5) * column;
-  double y(DateTime time) => _kHeaderHeight + _kTopPad + graph.yOf(time);
+  double y(DateTime time) => _kTopPad + scale.yOf(time);
 }
 
 class _RideBar extends StatelessWidget {
@@ -546,37 +697,73 @@ class _GraphPainter extends CustomPainter {
     );
   }
 
+  /// Grid lines at the finest step that leaves room for their labels, and
+  /// a break mark wherever the scale was stretched.
   void _paintHours(Canvas canvas, Size size) {
     final line = Paint()
       ..color = AppColors.hairline
       ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(_kAxisWidth, _kHeaderHeight),
-      Offset(size.width, _kHeaderHeight),
-      line,
+    final step = _kLabelMinutes.firstWhere(
+      (minutes) => minutes * g.scale.pxPerMinute >= _kMinLabelGap,
+      orElse: () => _kLabelMinutes.last,
     );
     final start = g.graph.start.toLocal();
-    var hour = DateTime(start.year, start.month, start.day, start.hour + 1);
-    while (hour.isBefore(g.graph.end)) {
-      final y = g.y(hour);
+    final midnight = DateTime(start.year, start.month, start.day);
+    var tick = midnight.add(
+      Duration(
+        minutes: (start.difference(midnight).inMinutes ~/ step + 1) * step,
+      ),
+    );
+    var lastLabel = double.negativeInfinity;
+    while (tick.isBefore(g.graph.end)) {
+      final y = g.y(tick);
       canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(size.width, y), line);
-      final label = TextPainter(
-        text: TextSpan(
-          text: formatTime(hour),
-          style: textStyle.copyWith(
-            fontSize: 10,
-            color: AppColors.black.withValues(alpha: 0.45),
+      // A stretch can push two ticks together; skip a label that would
+      // overlap the one above.
+      if (y - lastLabel >= _kMinLabelGap / 2) {
+        final label = TextPainter(
+          text: TextSpan(
+            text: formatTime(tick),
+            style: textStyle.copyWith(
+              fontSize: 10,
+              color: AppColors.black.withValues(alpha: 0.45),
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
-      hour = hour.add(const Duration(hours: 1));
+          textDirection: TextDirection.ltr,
+        )..layout();
+        label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
+        lastLabel = y;
+      }
+      tick = tick.add(Duration(minutes: step));
     }
+
+    // The axis is solid where time is to scale and dotted where it was
+    // stretched to fit labels.
+    final axis = Paint()
+      ..color = AppColors.black.withValues(alpha: 0.3)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    const x = _kAxisWidth - 2;
+    var y = _kTopPad;
+    final bottom = _kTopPad + g.scale.height;
+    for (final (from, to) in g.scale.stretchedSpans) {
+      canvas.drawLine(Offset(x, y), Offset(x, _kTopPad + from), axis);
+      canvas.drawPath(
+        _dashed(
+          Path()
+            ..moveTo(x, _kTopPad + from)
+            ..lineTo(x, _kTopPad + to),
+          dash: 1.5,
+          gap: 3,
+        ),
+        axis,
+      );
+      y = _kTopPad + to;
+    }
+    canvas.drawLine(Offset(x, y), Offset(x, bottom), axis);
   }
 
-  static Path _dashed(Path source) {
-    const dash = 4.0, gap = 4.0;
+  static Path _dashed(Path source, {double dash = 4, double gap = 4}) {
     final out = Path();
     for (final PathMetric metric in source.computeMetrics()) {
       for (var d = 0.0; d < metric.length; d += dash + gap) {
@@ -589,6 +776,7 @@ class _GraphPainter extends CustomPainter {
   @override
   bool shouldRepaint(_GraphPainter old) =>
       old.g.graph != g.graph ||
+      old.g.scale != g.scale ||
       old.g.column != g.column ||
       old.lockedUpTo != lockedUpTo ||
       old.accent != accent ||
