@@ -806,12 +806,19 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         progress: progress,
       );
     }
+    final next = legIndex + 1 < displayLegs.length
+        ? displayLegs[legIndex + 1].leg
+        : null;
     return LegDetailsWidget(
       leg: entry.leg,
       previousLeg: previous,
       openStopSheet: _openStopSheet,
       onShowOnMap: () => _showLegOnMap(legIndex),
       progress: progress,
+      // Straight onto another ride: a change with no walk to carry it.
+      onFindOnward: entry.leg.isRide && next != null && next.isRide
+          ? () => _openGraphUpTo(entry.leg)
+          : null,
     );
   }
 
@@ -1330,6 +1337,11 @@ class LegDetailsWidget extends StatefulWidget {
   /// this leg's line is drawn as already ridden.
   final JourneyProgress progress;
 
+  /// Other ways on from where this ride is left, when the next is boarded
+  /// straight off it. That is a change too, but with no walk between there
+  /// is no change card to offer it on, so this card does, at its foot.
+  final VoidCallback? onFindOnward;
+
   const LegDetailsWidget({
     super.key,
     required this.leg,
@@ -1337,6 +1349,7 @@ class LegDetailsWidget extends StatefulWidget {
     this.onShowOnMap,
     this.previousLeg,
     this.progress = JourneyProgress.never,
+    this.onFindOnward,
   });
 
   @override
@@ -1535,7 +1548,6 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
         if (!isStreet) ...[
           const SizedBox(height: 6),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 _isExpanded ? 'Hide stops' : 'Show stops',
@@ -1551,6 +1563,10 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
                 size: 14,
                 color: AppColors.accentOf(context),
               ),
+              const Spacer(),
+              // At the right edge, where a change card keeps it.
+              if (widget.onFindOnward case final onFindOnward?)
+                FindOnwardButton(onTap: onFindOnward),
             ],
           ),
         ],
@@ -1962,27 +1978,12 @@ class TransferLegCard extends StatelessWidget {
             child: Icon(LucideIcons.map, size: 16, color: accent),
           );
     if (onFindOnward == null) return map;
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onFindOnward,
-          child: Semantics(
-            button: true,
-            label: 'Other ways on from this change',
-            child: Padding(
-              // A wider target than the icon, without moving it.
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              // Turned over, so the paths fork on from the change below.
-              child: RotatedBox(
-                quarterTurns: 2,
-                child: Icon(LucideIcons.split, size: 16, color: accent),
-              ),
-            ),
-          ),
-        ),
-        if (map != null) ...[const SizedBox(width: 8), map],
+        FindOnwardButton(onTap: onFindOnward),
+        if (map != null) ...[const SizedBox(height: 6), map],
       ],
     );
   }
@@ -1998,6 +1999,39 @@ class TransferLegCard extends StatelessWidget {
     if (hasTo) return 'To Track $to';
     if (hasFrom) return 'From Track $from';
     return null;
+  }
+}
+
+/// Other ways on from a change: a fork, turned over so the paths fork on
+/// from the change below.
+class FindOnwardButton extends StatelessWidget {
+  const FindOnwardButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Semantics(
+        button: true,
+        label: 'Other ways on from this change',
+        child: Padding(
+          // A wider target than the icon, without moving it off the right
+          // edge the map icons keep.
+          padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
+          child: RotatedBox(
+            quarterTurns: 2,
+            child: Icon(
+              LucideIcons.split,
+              size: 16,
+              color: AppColors.accentOf(context),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
