@@ -49,6 +49,32 @@ void main() {
       expect(_query(options).containsKey('requireBikeTransport'), isFalse);
     });
 
+    test('with automatic carriage off, a bike at both ends asks for nothing', () {
+      final manual = _bikeBothEnds.copyWith(autoBikeCarriage: false);
+      expect(manual.bikeAtBothEnds, isTrue);
+      expect(manual.requireBikeTransport, isFalse);
+      expect(_query(manual).containsKey('requireBikeTransport'), isFalse);
+    });
+
+    test('the rider can still ask for carriage with automatic off', () {
+      final asked = _bikeBothEnds.copyWith(
+        autoBikeCarriage: false,
+        bikeCarriageOverride: true,
+      );
+      expect(asked.requireBikeTransport, isTrue);
+    });
+
+    test('automatic carriage is on unless turned off, and is stored', () {
+      expect(RoutingOptions.defaults.autoBikeCarriage, isTrue);
+      expect(RoutingOptions.fromJson(const {}).autoBikeCarriage, isTrue);
+      final off = RoutingOptions.defaults.copyWith(autoBikeCarriage: false);
+      expect(RoutingOptions.fromJson(off.toJson()).autoBikeCarriage, isFalse);
+      expect(
+        RoutingOptions.defaults.withSettingsFrom(off).autoBikeCarriage,
+        isFalse,
+      );
+    });
+
     test('a bike at both ends carries it aboard without being asked', () {
       expect(_bikeBothEnds.bikeAtBothEnds, isTrue);
       expect(_bikeBothEnds.requireBikeTransport, isTrue);

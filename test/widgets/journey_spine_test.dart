@@ -571,6 +571,25 @@ void main() {
       expect(tester.widget<IconPick>(_pick('Bike on board')).selected, true);
       expect(host.options.requireBikeTransport, isTrue);
       expect(host.options.bikeCarriageIsManual, isFalse);
+      expect(find.text('Bike on board turned on automatically'), findsOneWidget);
+      await _quiet(tester);
+    });
+
+    testWidgets('stays off when automatic carriage is off', (tester) async {
+      final host = await _pumpSpine(
+        tester,
+        initial: _separate.copyWith(autoBikeCarriage: false),
+      );
+      await _open(tester, 'TO THE STATION');
+      await tester.tap(_pick('Own bike'));
+      await tester.pumpAndSettle();
+      await _open(tester, 'FROM THE STATION');
+      await tester.tap(_pick('Own bike').last);
+      await tester.pumpAndSettle();
+
+      expect(host.options.bikeAtBothEnds, isTrue);
+      expect(host.options.requireBikeTransport, isFalse);
+      expect(find.textContaining('automatically'), findsNothing);
       await _quiet(tester);
     });
 

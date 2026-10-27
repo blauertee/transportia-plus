@@ -384,8 +384,12 @@ class _JourneySpineState extends State<JourneySpine> {
         view: _viewOf(stage),
         onViewChanged: (view) => _setView(stage, view),
         onChanged: (next) {
-          _apply(onChanged(next));
-          _announceStreetChange(choice, next, where);
+          final before = widget.options;
+          final after = onChanged(next);
+          _apply(after);
+          if (!_announceAutoCarriage(before, after)) {
+            _announceStreetChange(choice, next, where);
+          }
         },
         onBudgetChanged: (next) => _apply(onBudgetChanged(next)),
         limitToMyProviders: widget.limitToMyProviders,
@@ -393,6 +397,20 @@ class _JourneySpineState extends State<JourneySpine> {
         onLimitToMyProvidersPressed: _toggleProviderLimit,
       ),
     );
+  }
+
+  /// Says when picking a bike for the street legs also switched bike carriage,
+  /// which the rider never asked for by hand. True when it spoke.
+  bool _announceAutoCarriage(RoutingOptions before, RoutingOptions after) {
+    if (after.bikeCarriageIsManual) return false;
+    if (after.requireBikeTransport == before.requireBikeTransport) return false;
+    _announce(
+      after.requireBikeTransport
+          ? 'Bike on board turned on automatically'
+          : 'Bike on board turned off automatically',
+      icon: LucideIcons.bike,
+    );
+    return true;
   }
 
   /// Names the section that was just switched on or off, since its icon
