@@ -14,12 +14,17 @@ import '../../utils/time_utils.dart';
 /// Room left of the first column for the hour labels.
 const double _kAxisWidth = 44;
 
-/// Column width bounds: narrower and a two-line ride name stops fitting,
-/// wider and a handful of results spreads into a sparse grid.
-const double _kMinColumn = 40;
-const double _kMaxColumn = 72;
-
 const double _kBarWidth = 30;
+
+/// Station names are cut to this many characters, so the widest label is
+/// known before laying out the columns.
+const int _kMaxStationChars = 12;
+
+/// Room kept between a station label and the bar in the next column.
+const double _kLabelClearance = 8;
+
+/// The narrowest column, for results that only pass short station names.
+const double _kMinColumn = 48;
 
 /// The row of journey durations above the columns.
 const double _kHeaderHeight = 24;
@@ -74,6 +79,7 @@ class JourneyGraphView extends StatefulWidget {
     this.locks = const JourneyLocks(),
     this.onStationTap,
     this.onRideTap,
+    this.now,
   });
 
   final JourneyGraph graph;
@@ -84,6 +90,10 @@ class JourneyGraphView extends StatefulWidget {
   final JourneyLocks locks;
   final ValueChanged<GraphStation>? onStationTap;
   final ValueChanged<GraphRide>? onRideTap;
+
+  /// Where the "now" line goes; the clock when null. Drawn only while the
+  /// results are under way.
+  final DateTime? now;
 
   @override
   State<JourneyGraphView> createState() => _JourneyGraphViewState();
@@ -189,14 +199,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     final accent = AppColors.accentOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final column =
-            ((constraints.maxWidth - _kAxisWidth - 8) / graph.columnCount)
-                .clamp(_kMinColumn, _kMaxColumn);
+        final column = math.max(
+          (constraints.maxWidth - _kAxisWidth - 8) / graph.columnCount,
+          _columnFor(context),
+        );
         final zoom = _pxPerMinute ??= graph.fitPxPerMinute(
           graph.firstArrival,
           constraints.maxHeight - _kHeaderHeight - _kTopPad - _kBottomPad,
         );
         _scale = GraphScale(graph, zoom);
+        final implicit = _implicitlyLocked;
         final geometry = _Geometry(graph, column, _scale);
         final width = _kAxisWidth + column * graph.columnCount + 8;
         final header = Container(
@@ -223,7 +235,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                   painter: _GraphPainter(
                     geometry,
                     DefaultTextStyle.of(context).style,
-                    lockedUpTo: _lockPoint?.leg.endTime,
+                    now: widget.now ?? DateTime.now(),
                     accent: accent,
                     selected: selected,
                   ),
@@ -231,6 +243,9 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               ),
               for (final ride in graph.rides) _rideBar(geometry, ride, accent),
               ..._stationMarkers(geometry, accent),
+              for (final ride in graph.rides)
+                if (_lockOf(ride, implicit) case final lock?)
+                  _lockBadge(geometry, ride, lock, accent),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -269,17 +284,44 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
   }
 
-  /// The latest locked ride: everything up to where it gets off is fixed,
-  /// and the next search starts there.
-  GraphRide? get _lockPoint {
-    GraphRide? latest;
+  /// Wide enough that the longest station label, centred on its column,
+  /// stops short of the bar in the next one.
+  double _columnFor(BuildContext context) {
+    final style = DefaultTextStyle.of(
+      context,
+    ).style.merge(_StationMarker.textStyle(AppColors.black));
+    var widest = 0.0;
     for (final ride in graph.rides) {
-      if (!locks.rideKeys.contains(ride.key)) continue;
-      if (latest == null || ride.leg.endTime.isAfter(latest.leg.endTime)) {
-        latest = ride;
+      for (final station in [ride.boarding, ride.alighting]) {
+        final label = TextPainter(
+          text: TextSpan(text: stationLabel(station.name), style: style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        widest = math.max(widest, label.width);
       }
     }
-    return latest;
+    final label = widest + _StationMarker.chrome;
+    return math.max(_kMinColumn, label / 2 + _kBarWidth / 2 + _kLabelClearance);
+  }
+
+  /// Rides fixed because a later ride on the same results is locked: the
+  /// journey is locked up to that point, so everything before it is too.
+  Set<String> get _implicitlyLocked {
+    final implicit = <String>{};
+    for (final locked in graph.rides) {
+      if (!locks.rideKeys.contains(locked.key)) continue;
+      for (final ride in graph.rides) {
+        if (ride.key == locked.key ||
+            locks.rideKeys.contains(ride.key) ||
+            ride.leg.endTime.isAfter(locked.leg.startTime)) {
+          continue;
+        }
+        if (locked.itineraries.every(ride.itineraries.contains)) {
+          implicit.add(ride.key);
+        }
+      }
+    }
+    return implicit;
   }
 
   Widget _durationLabel(_Geometry g, int column) {
@@ -307,6 +349,25 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
   }
 
+  _Lock? _lockOf(GraphRide ride, Set<String> implicit) =>
+      locks.rideKeys.contains(ride.key)
+      ? _Lock.explicit
+      : implicit.contains(ride.key)
+      ? _Lock.implicit
+      : null;
+
+  /// On the right edge of the bar, just below its top: clear of the
+  /// station label that hangs above it and of the name inside it.
+  Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
+    return Positioned(
+      left: g.x(ride.slot) + _kBarWidth / 2 - 4,
+      top: g.y(ride.leg.startTime) + 3,
+      child: IgnorePointer(
+        child: _LockBadge(color: accent, implicit: lock == _Lock.implicit),
+      ),
+    );
+  }
+
   Widget _rideBar(_Geometry g, GraphRide ride, Color accent) {
     final top = g.y(ride.leg.startTime);
     final height = g.y(ride.leg.endTime) - top;
@@ -315,7 +376,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       background: AppColors.white,
       accent: accent,
     );
-    final locked = locks.rideKeys.contains(ride.key);
     return Positioned(
       left: g.x(ride.slot) - _kBarWidth / 2,
       top: top,
@@ -328,13 +388,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         ),
         child: _fade(
           ride.itineraries.contains(selected),
-          _RideBar(
-            ride: ride,
-            color: color,
-            height: height,
-            locked: locked,
-            lockColor: accent,
-          ),
+          _RideBar(ride: ride, color: color, height: height),
         ),
       ),
     );
@@ -359,7 +413,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         _StationMarker.positioned(
           station: station,
           center: Offset(g.x(slot), g.y(at)),
-          width: g.column + 24,
+          width: g.column * 2,
           above: above,
           locked: locks.stationKeys.contains(station.key),
           accent: accent,
@@ -433,15 +487,11 @@ class _RideBar extends StatelessWidget {
     required this.ride,
     required this.color,
     required this.height,
-    required this.locked,
-    required this.lockColor,
   });
 
   final GraphRide ride;
   final Color color;
   final double height;
-  final bool locked;
-  final Color lockColor;
 
   @override
   Widget build(BuildContext context) {
@@ -455,35 +505,28 @@ class _RideBar extends StatelessWidget {
       color: onColor,
       height: 1.15,
     );
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          padding: const EdgeInsets.only(top: 3),
-          alignment: Alignment.topCenter,
-          clipBehavior: Clip.hardEdge,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(line, maxLines: 1, style: style(10, FontWeight.w800)),
-              if (number != null && height > 36)
-                Text(number, maxLines: 1, style: style(8.5, FontWeight.w500)),
-              if (height > 50)
-                Text(
-                  formatTime(ride.leg.startTime),
-                  maxLines: 1,
-                  style: style(8.5, FontWeight.w500),
-                ),
-            ],
-          ),
-        ),
-        if (locked)
-          Positioned(right: -7, top: -7, child: _LockBadge(color: lockColor)),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.only(top: 3),
+      alignment: Alignment.topCenter,
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(line, maxLines: 1, style: style(10, FontWeight.w800)),
+          if (number != null && height > 36)
+            Text(number, maxLines: 1, style: style(8.5, FontWeight.w500)),
+          if (height > 50)
+            Text(
+              formatTime(ride.leg.startTime),
+              maxLines: 1,
+              style: style(8.5, FontWeight.w500),
+            ),
+        ],
+      ),
     );
   }
 
@@ -513,6 +556,13 @@ class _StationMarker extends StatelessWidget {
   final VoidCallback? onTap;
 
   static const double _labelHeight = 15;
+
+  /// Width a label takes beyond its text: padding, and the lock icon a
+  /// locked station shows.
+  static const double chrome = 6 + 11;
+
+  static TextStyle textStyle(Color color) =>
+      TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color);
 
   /// Positioned so the label hangs below [center], the end of a ride, or
   /// sits above it, the start of a ride walked to.
@@ -559,14 +609,11 @@ class _StationMarker extends StatelessWidget {
           ],
           Flexible(
             child: Text(
-              shortStationName(station.name),
+              stationLabel(station.name),
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: ink,
-              ),
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: textStyle(ink),
             ),
           ),
         ],
@@ -584,10 +631,16 @@ class _StationMarker extends StatelessWidget {
   }
 }
 
+/// A ride locked by a tap, or fixed because a later one on the same
+/// results was.
+enum _Lock { explicit, implicit }
+
+/// Filled for a lock the user set, outlined for one that follows from it.
 class _LockBadge extends StatelessWidget {
-  const _LockBadge({required this.color});
+  const _LockBadge({required this.color, this.implicit = false});
 
   final Color color;
+  final bool implicit;
 
   @override
   Widget build(BuildContext context) {
@@ -595,12 +648,19 @@ class _LockBadge extends StatelessWidget {
       width: 16,
       height: 16,
       decoration: BoxDecoration(
-        color: color,
+        color: implicit ? AppColors.white : color,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.white, width: 1.5),
+        border: Border.all(
+          color: implicit ? color : AppColors.white,
+          width: 1.5,
+        ),
       ),
       alignment: Alignment.center,
-      child: const Icon(LucideIcons.lock, size: 9, color: AppColors.solidWhite),
+      child: Icon(
+        LucideIcons.lock,
+        size: 9,
+        color: implicit ? color : AppColors.solidWhite,
+      ),
     );
   }
 }
@@ -617,19 +677,25 @@ String shortStationName(String name) {
   return short.trim();
 }
 
+/// [shortStationName], cut to [_kMaxStationChars] with an ellipsis.
+String stationLabel(String name) {
+  final short = shortStationName(name);
+  if (short.length <= _kMaxStationChars) return short;
+  return '${short.substring(0, _kMaxStationChars - 1).trimRight()}…';
+}
+
 class _GraphPainter extends CustomPainter {
   _GraphPainter(
     this.g,
     this.textStyle, {
-    required this.lockedUpTo,
+    required this.now,
     required this.accent,
     required this.selected,
   });
 
   final _Geometry g;
 
-  /// Where the locked part of the journey ends, if anything is locked.
-  final DateTime? lockedUpTo;
+  final DateTime now;
   final Color accent;
   final int selected;
 
@@ -639,7 +705,7 @@ class _GraphPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _paintHours(canvas, size);
-    _paintLockLine(canvas, size);
+    _paintNow(canvas, size);
     for (final change in g.graph.changes) {
       final onSelected =
           change.from.itineraries.contains(selected) &&
@@ -661,40 +727,16 @@ class _GraphPainter extends CustomPainter {
     }
   }
 
-  /// A dashed accent rule where the locked part ends, with a lock on its
-  /// right end: above it is fixed, below it is what a new search finds.
-  void _paintLockLine(Canvas canvas, Size size) {
-    final at = lockedUpTo;
-    if (at == null) return;
-    final y = g.y(at);
+  /// An accent rule at the current time, with a dot on the axis, once the
+  /// first result has left and until the last has arrived.
+  void _paintNow(Canvas canvas, Size size) {
+    if (now.isBefore(g.graph.start) || now.isAfter(g.graph.end)) return;
+    final y = g.y(now);
     final paint = Paint()
       ..color = accent
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(
-      _dashed(
-        Path()
-          ..moveTo(_kAxisWidth - 4, y)
-          ..lineTo(size.width, y),
-      ),
-      paint,
-    );
-    final icon = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(LucideIcons.lock.codePoint),
-        style: TextStyle(
-          fontSize: 12,
-          fontFamily: LucideIcons.lock.fontFamily,
-          package: LucideIcons.lock.fontPackage,
-          color: accent,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    icon.paint(
-      canvas,
-      Offset(size.width - icon.width - 4, y - icon.height - 2),
-    );
+      ..strokeWidth = 1.5;
+    canvas.drawLine(Offset(_kAxisWidth - 2, y), Offset(size.width, y), paint);
+    canvas.drawCircle(Offset(_kAxisWidth - 2, y), 4, paint);
   }
 
   /// Grid lines at the finest step that leaves room for their labels, and
@@ -778,7 +820,7 @@ class _GraphPainter extends CustomPainter {
       old.g.graph != g.graph ||
       old.g.scale != g.scale ||
       old.g.column != g.column ||
-      old.lockedUpTo != lockedUpTo ||
+      old.now != now ||
       old.accent != accent ||
       old.selected != selected;
 }
