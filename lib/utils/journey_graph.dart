@@ -82,10 +82,13 @@ class GraphChange {
 /// Where a result ends: under its last ride, at the time it reaches the
 /// destination.
 class GraphArrival {
-  const GraphArrival(this.ride, this.time);
+  GraphArrival._(this.ride, this.time);
 
   final GraphRide ride;
   final DateTime time;
+
+  /// Indexes into [JourneyGraph.itineraries] of the results ending here.
+  final List<int> itineraries = [];
 }
 
 /// The results of one search as a single graph: every ride once, laid out
@@ -138,10 +141,13 @@ class JourneyGraph {
       }
       final last = previous!;
       final arrival = itineraries[i].endTime;
-      arrivals.putIfAbsent(
-        '${last.key}@${arrival.millisecondsSinceEpoch}',
-        () => GraphArrival(last, arrival),
-      );
+      arrivals
+          .putIfAbsent(
+            '${last.key}@${arrival.millisecondsSinceEpoch}',
+            () => GraphArrival._(last, arrival),
+          )
+          .itineraries
+          .add(i);
     }
 
     for (final ride in byKey.values) {
@@ -239,4 +245,26 @@ class JourneyLocks {
 
   static Set<String> _toggle(Set<String> set, String value) =>
       set.contains(value) ? ({...set}..remove(value)) : {...set, value};
+}
+
+/// [locked] up to and including [upTo], followed by each of [continuations]:
+/// the results of a search from where [upTo] gets off, at its arrival.
+///
+/// The joined itineraries were never planned as a whole, so they carry no
+/// server id that could be refreshed or shared; wiring this up has to clear
+/// it.
+List<Itinerary> continueAfter(
+  Itinerary locked,
+  GraphRide upTo,
+  List<Itinerary> continuations,
+) {
+  final end = locked.legs.indexWhere(
+    (leg) => leg.isRide && GraphRide.keyOf(leg) == upTo.key,
+  );
+  if (end < 0) return const [];
+  final prefix = locked.legs.sublist(0, end + 1);
+  return [
+    for (final continuation in continuations)
+      locked.withLegs([...prefix, ...continuation.legs]),
+  ];
 }

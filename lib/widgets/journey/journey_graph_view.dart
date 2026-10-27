@@ -28,6 +28,10 @@ const double _kHeaderHeight = 24;
 const double _kTopPad = 14;
 const double _kBottomPad = 44;
 
+/// How far everything off the selected result fades: still readable, so the
+/// other options stay one tap away, but clearly behind the selected one.
+const double _kUnselectedOpacity = 0.35;
+
 /// Every change is drawn in this one colour: a change is no service, and a
 /// spline in a line's colour would read as more of that line.
 const Color _kChangeColor = kStreetLegColor;
@@ -36,21 +40,39 @@ const Color _kChangeColor = kStreetLegColor;
 /// departure, time running down. A ride several results share is drawn once,
 /// centred across their columns, and changes are splines between rides.
 ///
-/// Tapping a station or a ride locks it; what a lock does is up to the
+/// One result is always [selected]; everything else fades. Tapping anything
+/// off the selected result selects a result through it. Tapping a station or
+/// a ride on the selected result locks it; what a lock does is up to the
 /// caller.
 class JourneyGraphView extends StatelessWidget {
   const JourneyGraphView({
     super.key,
     required this.graph,
+    required this.selected,
+    required this.onSelect,
     this.locks = const JourneyLocks(),
     this.onStationTap,
     this.onRideTap,
   });
 
   final JourneyGraph graph;
+
+  /// Index into [JourneyGraph.itineraries].
+  final int selected;
+  final ValueChanged<int> onSelect;
   final JourneyLocks locks;
   final ValueChanged<GraphStation>? onStationTap;
   final ValueChanged<GraphRide>? onRideTap;
+
+  /// What a tap on something [through] those results does: [lock] it when
+  /// the selected result is among them, else select the first of them.
+  VoidCallback _tap(List<int> through, VoidCallback? lock) {
+    if (through.contains(selected)) return lock ?? () {};
+    return () => onSelect(through.first);
+  }
+
+  Widget _fade(bool onSelected, Widget child) =>
+      onSelected ? child : Opacity(opacity: _kUnselectedOpacity, child: child);
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +97,7 @@ class JourneyGraphView extends StatelessWidget {
                     DefaultTextStyle.of(context).style,
                     lockedUpTo: _lockPoint?.leg.endTime,
                     accent: accent,
+                    selected: selected,
                   ),
                 ),
               ),
@@ -114,14 +137,21 @@ class JourneyGraphView extends StatelessWidget {
       left: g.x(column.toDouble()) - g.column / 2,
       top: 4,
       width: g.column,
-      child: Text(
-        formatDuration(graph.itineraries[column].duration),
-        textAlign: TextAlign.center,
-        maxLines: 1,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppColors.black,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onSelect(column),
+        child: _fade(
+          column == selected,
+          Text(
+            formatDuration(graph.itineraries[column].duration),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.black,
+            ),
+          ),
         ),
       ),
     );
@@ -142,13 +172,19 @@ class JourneyGraphView extends StatelessWidget {
       width: _kBarWidth,
       height: height,
       child: GestureDetector(
-        onTap: onRideTap == null ? null : () => onRideTap!(ride),
-        child: _RideBar(
-          ride: ride,
-          color: color,
-          height: height,
-          locked: locked,
-          lockColor: accent,
+        onTap: _tap(
+          ride.itineraries,
+          onRideTap == null ? null : () => onRideTap!(ride),
+        ),
+        child: _fade(
+          ride.itineraries.contains(selected),
+          _RideBar(
+            ride: ride,
+            color: color,
+            height: height,
+            locked: locked,
+            lockColor: accent,
+          ),
         ),
       ),
     );
@@ -159,7 +195,13 @@ class JourneyGraphView extends StatelessWidget {
   List<Widget> _stationMarkers(_Geometry g, Color accent) {
     final seen = <String>{};
     final markers = <Widget>[];
-    void add(GraphStation station, double slot, DateTime at, bool above) {
+    void add(
+      GraphStation station,
+      GraphRide ride,
+      DateTime at, {
+      required bool above,
+    }) {
+      final slot = ride.slot;
       if (!seen.add('${station.key}@$slot@${at.millisecondsSinceEpoch}')) {
         return;
       }
@@ -171,7 +213,11 @@ class JourneyGraphView extends StatelessWidget {
           above: above,
           locked: locks.stationKeys.contains(station.key),
           accent: accent,
-          onTap: onStationTap == null ? null : () => onStationTap!(station),
+          onSelected: ride.itineraries.contains(selected),
+          onTap: _tap(
+            ride.itineraries,
+            onStationTap == null ? null : () => onStationTap!(station),
+          ),
         ),
       );
     }
@@ -179,12 +225,17 @@ class JourneyGraphView extends StatelessWidget {
     for (final change in graph.changes) {
       add(
         change.from.alighting,
-        change.from.slot,
+        change.from,
         change.from.leg.endTime,
-        false,
+        above: false,
       );
       if (change.changesStation) {
-        add(change.to.boarding, change.to.slot, change.to.leg.startTime, true);
+        add(
+          change.to.boarding,
+          change.to,
+          change.to.leg.startTime,
+          above: true,
+        );
       }
     }
     return markers;
@@ -195,18 +246,21 @@ class JourneyGraphView extends StatelessWidget {
       left: g.x(arrival.ride.slot) - 30,
       top: g.y(arrival.ride.leg.endTime) + 2,
       width: 60,
-      child: Column(
-        children: [
-          Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
-          Text(
-            formatTime(arrival.time),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.black,
+      child: _fade(
+        arrival.itineraries.contains(selected),
+        Column(
+          children: [
+            Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
+            Text(
+              formatTime(arrival.time),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.black,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -297,11 +351,13 @@ class _StationMarker extends StatelessWidget {
     required this.station,
     required this.locked,
     required this.accent,
+    required this.onSelected,
     this.onTap,
   });
 
   final GraphStation station;
   final bool locked;
+  final bool onSelected;
   final Color accent;
   final VoidCallback? onTap;
 
@@ -316,6 +372,7 @@ class _StationMarker extends StatelessWidget {
     required bool above,
     required bool locked,
     required Color accent,
+    required bool onSelected,
     VoidCallback? onTap,
   }) {
     return Positioned(
@@ -326,6 +383,7 @@ class _StationMarker extends StatelessWidget {
         station: station,
         locked: locked,
         accent: accent,
+        onSelected: onSelected,
         onTap: onTap,
       ),
     );
@@ -366,7 +424,11 @@ class _StationMarker extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Center(child: label),
+      child: Center(
+        child: onSelected
+            ? label
+            : Opacity(opacity: _kUnselectedOpacity, child: label),
+      ),
     );
   }
 }
@@ -410,6 +472,7 @@ class _GraphPainter extends CustomPainter {
     this.textStyle, {
     required this.lockedUpTo,
     required this.accent,
+    required this.selected,
   });
 
   final _Geometry g;
@@ -417,6 +480,7 @@ class _GraphPainter extends CustomPainter {
   /// Where the locked part of the journey ends, if anything is locked.
   final DateTime? lockedUpTo;
   final Color accent;
+  final int selected;
 
   /// The ambient text style, for its font: a painter inherits none.
   final TextStyle textStyle;
@@ -425,12 +489,17 @@ class _GraphPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     _paintHours(canvas, size);
     _paintLockLine(canvas, size);
-    final paint = Paint()
-      ..color = _kChangeColor
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
     for (final change in g.graph.changes) {
+      final onSelected =
+          change.from.itineraries.contains(selected) &&
+          change.to.itineraries.contains(selected);
+      final paint = Paint()
+        ..color = onSelected
+            ? _kChangeColor
+            : _kChangeColor.withValues(alpha: _kUnselectedOpacity)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
       final from = Offset(g.x(change.from.slot), g.y(change.from.leg.endTime));
       final to = Offset(g.x(change.to.slot), g.y(change.to.leg.startTime));
       final bend = (to.dy - from.dy) / 2;
@@ -522,5 +591,6 @@ class _GraphPainter extends CustomPainter {
       old.g.graph != g.graph ||
       old.g.column != g.column ||
       old.lockedUpTo != lockedUpTo ||
-      old.accent != accent;
+      old.accent != accent ||
+      old.selected != selected;
 }
