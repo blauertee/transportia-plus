@@ -55,6 +55,17 @@ class JourneyLocksController extends ChangeNotifier {
   bool _searching = false;
   bool get searching => _searching;
 
+  /// Cursors to the pages around what the latest search found.
+  String? _earlier;
+  String? _later;
+  bool get hasEarlier => _earlier != null;
+  bool get hasLater => _later != null;
+
+  bool _loadingEarlier = false;
+  bool _loadingLater = false;
+  bool get loadingEarlier => _loadingEarlier;
+  bool get loadingLater => _loadingLater;
+
   /// Why the last lock changed nothing: a search that failed or found
   /// nothing, or a station too many.
   String? _problem;
@@ -114,6 +125,8 @@ class JourneyLocksController extends ChangeNotifier {
   Future<void> _search() async {
     final generation = ++_generation;
     _problem = null;
+    _earlier = _later = null;
+    _loadingEarlier = _loadingLater = false;
     if (!isLocked) {
       _results = null;
       _searching = false;
@@ -128,16 +141,66 @@ class JourneyLocksController extends ChangeNotifier {
       );
       if (_disposed || generation != _generation) return;
       _searching = false;
-      if (found.isEmpty) {
+      if (found.itineraries.isEmpty) {
         _problem = 'Nothing found that keeps these locks.';
       } else {
-        _results = found;
+        _results = found.itineraries;
+        _earlier = found.earlier;
+        _later = found.later;
       }
     } catch (_) {
       if (_disposed || generation != _generation) return;
       _searching = false;
       _problem = 'Could not search again. Check your connection.';
     }
+    notifyListeners();
+  }
+
+  /// Adds the page of results before what is shown.
+  Future<void> loadEarlier() => _loadPage(earlier: true);
+
+  /// Adds the page of results after what is shown.
+  Future<void> loadLater() => _loadPage(earlier: false);
+
+  Future<void> _loadPage({required bool earlier}) async {
+    final cursor = earlier ? _earlier : _later;
+    final shown = _results;
+    if (cursor == null || shown == null || _searching) return;
+    if (earlier ? _loadingEarlier : _loadingLater) return;
+    final generation = _generation;
+    void loading(bool value) {
+      if (earlier) {
+        _loadingEarlier = value;
+      } else {
+        _loadingLater = value;
+      }
+    }
+
+    loading(true);
+    notifyListeners();
+    try {
+      final page = await search(
+        JourneyGraphSearch(
+          query: query(),
+          via: _via,
+          lock: _lock,
+          pageCursor: cursor,
+        ),
+      );
+      // Locks changed meanwhile: this page belongs to a search now gone.
+      if (_disposed || generation != _generation) return;
+      if (earlier) {
+        _results = [...page.itineraries, ..._results!];
+        _earlier = page.earlier;
+      } else {
+        _results = [..._results!, ...page.itineraries];
+        _later = page.later;
+      }
+    } catch (_) {
+      if (_disposed || generation != _generation) return;
+      _problem = 'Could not load more. Check your connection.';
+    }
+    loading(false);
     notifyListeners();
   }
 

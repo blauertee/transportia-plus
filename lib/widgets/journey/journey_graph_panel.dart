@@ -29,6 +29,10 @@ class JourneyGraphPanel extends StatefulWidget {
     required this.results,
     required this.onOpen,
     this.now,
+    this.onLoadEarlier,
+    this.onLoadLater,
+    this.loadingEarlier = false,
+    this.loadingLater = false,
   });
 
   final JourneyLocksController controller;
@@ -40,6 +44,13 @@ class JourneyGraphPanel extends StatefulWidget {
 
   /// The clock, for drafts and tests; the real one when null.
   final DateTime Function()? now;
+
+  /// Loads the results before or after [results], when there are any.
+  /// While locked, the locks' own search pages instead.
+  final VoidCallback? onLoadEarlier;
+  final VoidCallback? onLoadLater;
+  final bool loadingEarlier;
+  final bool loadingLater;
 
   @override
   State<JourneyGraphPanel> createState() => _JourneyGraphPanelState();
@@ -98,9 +109,12 @@ class _JourneyGraphPanelState extends State<JourneyGraphPanel> {
     if (identical(shown, _shown) && shown.length == _graph.itineraries.length) {
       return;
     }
+    // A page more keeps the same result selected.
+    final chosen = _shown == null ? null : _graph.itineraries[_selected];
     _shown = shown;
     _graph = JourneyGraph.build(shown);
-    _selected = 0;
+    final kept = chosen == null ? -1 : _graph.itineraries.indexOf(chosen);
+    _selected = kept < 0 ? 0 : kept;
   }
 
   void _tapRide(GraphRide ride) {
@@ -161,6 +175,18 @@ class _JourneyGraphPanelState extends State<JourneyGraphPanel> {
               onStationTap: _tapStation,
               onRideTap: _tapRide,
               now: _now,
+              onLoadEarlier: controller.isLocked
+                  ? (controller.hasEarlier ? controller.loadEarlier : null)
+                  : widget.onLoadEarlier,
+              onLoadLater: controller.isLocked
+                  ? (controller.hasLater ? controller.loadLater : null)
+                  : widget.onLoadLater,
+              loadingEarlier: controller.isLocked
+                  ? controller.loadingEarlier
+                  : widget.loadingEarlier,
+              loadingLater: controller.isLocked
+                  ? controller.loadingLater
+                  : widget.loadingLater,
             ),
           ),
         ),

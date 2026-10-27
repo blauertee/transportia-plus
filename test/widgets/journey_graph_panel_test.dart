@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/models/itinerary_response.dart';
@@ -10,6 +11,7 @@ import 'package:transportia/providers/journey_locks_controller.dart';
 import 'package:transportia/services/journey_graph_service.dart';
 import 'package:transportia/utils/journey_graph.dart';
 import 'package:transportia/widgets/journey/journey_graph_panel.dart';
+import 'package:transportia/widgets/journey/journey_graph_view.dart';
 
 import '../support/app_shell.dart';
 
@@ -42,22 +44,30 @@ void main() {
   /// Answers a ride lock with the search on from Ingolstadt, joined as the
   /// real service joins it, and anything else with [results].
   late List<JourneyGraphSearch> searches;
-  Future<List<Itinerary>> fakeSearch(JourneyGraphSearch search) async {
+  Future<JourneyGraphPage> fakeSearch(JourneyGraphSearch search) async {
     searches.add(search);
     final lock = search.lock;
-    if (lock == null) return results;
-    return continueAfter(lock.itinerary, lock.upTo, onward);
+    if (lock == null) return JourneyGraphPage(results);
+    return JourneyGraphPage(continueAfter(lock.itinerary, lock.upTo, onward));
   }
 
   Itinerary? opened;
+
+  /// What the screen shows before anything is locked; set to show a page
+  /// more.
+  final shown = ValueNotifier<List<Itinerary>>(const []);
+  var earlier = 0, later = 0;
 
   Future<void> pumpPanel(
     WidgetTester tester, {
     RideLock? initialLock,
     JourneyGraphSearcher? search,
+    List<Itinerary>? first,
   }) async {
     searches = [];
     opened = null;
+    earlier = later = 0;
+    shown.value = first ?? results;
     final controller = JourneyLocksController(
       query: () => _query,
       initialLock: initialLock,
@@ -66,13 +76,31 @@ void main() {
     addTearDown(controller.dispose);
     await pumpInAppShell(
       tester,
-      JourneyGraphPanel(
-        controller: controller,
-        results: results,
-        onOpen: (itinerary) => opened = itinerary,
-        now: () => DateTime.utc(2026, 10, 27, 8),
+      ValueListenableBuilder<List<Itinerary>>(
+        valueListenable: shown,
+        builder: (_, results, _) => JourneyGraphPanel(
+          controller: controller,
+          results: results,
+          onOpen: (itinerary) => opened = itinerary,
+          now: () => DateTime.utc(2026, 10, 27, 8),
+          onLoadEarlier: () => earlier++,
+          onLoadLater: () => later++,
+        ),
       ),
     );
+  }
+
+  /// Drags the graph sideways by [by], a step at a time as a finger would.
+  Future<void> pull(WidgetTester tester, double by) async {
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(JourneyGraphView)),
+    );
+    for (var i = 0; i < 20; i++) {
+      await gesture.moveBy(Offset(by / 20, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
   }
 
   testWidgets('shows the results as they are, with nothing locked', (
@@ -165,7 +193,7 @@ void main() {
   });
 
   testWidgets('an answer to an older search is dropped', (tester) async {
-    final slow = Completer<List<Itinerary>>();
+    final slow = Completer<JourneyGraphPage>();
     var calls = 0;
     await pumpPanel(
       tester,
@@ -173,7 +201,9 @@ void main() {
         searches.add(search);
         calls++;
         // The first search hangs; the second, unlocking, is not sent.
-        return calls == 1 ? slow.future : Future.value(results);
+        return calls == 1
+            ? slow.future
+            : Future.value(JourneyGraphPage(results));
       },
     );
 
@@ -181,10 +211,54 @@ void main() {
     await tester.pump();
     await tester.tap(find.textContaining('Locked until'));
     await tester.pumpAndSettle();
-    slow.complete(continueAfter(viaIngolstadt, ice1009, onward));
+    slow.complete(
+      JourneyGraphPage(continueAfter(viaIngolstadt, ice1009, onward)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Locked until'), findsNothing);
     expect(find.text('1507'), findsOneWidget);
+  });
+
+  group('pulled past an edge', () {
+    testWidgets('asks for later results past the right edge', (tester) async {
+      await pumpPanel(tester);
+
+      await pull(tester, -400);
+
+      expect(later, 1);
+      expect(earlier, 0);
+    });
+
+    testWidgets('asks for earlier results past the left edge', (tester) async {
+      await pumpPanel(tester);
+
+      await pull(tester, 400);
+
+      expect(earlier, 1);
+      expect(later, 0);
+    });
+
+    testWidgets('a short pull asks for nothing', (tester) async {
+      await pumpPanel(tester);
+
+      await pull(tester, 40);
+
+      expect(earlier, 0);
+    });
+
+    testWidgets('keeps the selected result when a page comes in', (
+      tester,
+    ) async {
+      await pumpPanel(tester, first: results.sublist(1));
+      await tester.tap(find.text('1009'));
+      await tester.pumpAndSettle();
+
+      shown.value = results;
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Open journey'));
+
+      expect(opened, same(viaIngolstadt));
+    });
   });
 }

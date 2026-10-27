@@ -386,6 +386,10 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
       controller: _locks,
       results: _itineraries,
       onOpen: _openItinerary,
+      onLoadEarlier: _previousPageCursor == null ? null : _loadPrevious,
+      onLoadLater: _nextPageCursor == null ? null : _loadMore,
+      loadingEarlier: _isLoadingPrevious,
+      loadingLater: _isLoadingMore,
     );
   }
 
