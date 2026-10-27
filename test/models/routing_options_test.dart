@@ -139,21 +139,20 @@ void main() {
     });
   });
 
-  group('car carriage works the same way', () {
-    test('a car at both ends means motorail', () {
-      const motorail = RoutingOptions(
-        firstMileModes: [TransitMode.car],
-        lastMileModes: [TransitMode.car],
-      );
-      expect(_query(motorail)['requireCarTransport'], 'true');
+  group('car carriage is only ever asked for', () {
+    const carBothEnds = RoutingOptions(
+      firstMileModes: [TransitMode.car],
+      lastMileModes: [TransitMode.car],
+    );
+
+    test('a car at both ends does not mean motorail', () {
+      expect(carBothEnds.requireCarTransport, isFalse);
+      expect(_query(carBothEnds).containsKey('requireCarTransport'), isFalse);
     });
 
-    test('park and ride is not motorail', () {
-      const parkAndRide = RoutingOptions(
-        firstMileModes: [TransitMode.carParking],
-        lastMileModes: [TransitMode.carParking],
-      );
-      expect(parkAndRide.requireCarTransport, isFalse);
+    test('turning it on is honoured', () {
+      final motorail = carBothEnds.copyWith(carCarriageOverride: true);
+      expect(_query(motorail)['requireCarTransport'], 'true');
     });
   });
 
@@ -495,7 +494,7 @@ void main() {
       // Carriage follows the modes searched with, not the ones set aside.
       expect(linked.bikeAtBothEnds, isTrue);
       expect(linked.requireBikeTransport, isTrue);
-      expect(linked.carAtBothEnds, isFalse);
+      expect(linked.requireCarTransport, isFalse);
     });
 
     test('a journey without transit gets both budgets as searched', () {

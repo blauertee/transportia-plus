@@ -109,7 +109,10 @@ class RoutingOptions {
   /// advertise carriage.
   final bool? bikeCarriageOverride;
 
-  /// Same rule for taking a car aboard, where carriage means motorail.
+  /// Whether to demand a service that takes cars aboard (motorail). Unlike
+  /// bikes, it never follows the mile modes: driving to and from stations is
+  /// far more often park and ride than motorail, so it is on only when the
+  /// rider asks.
   final bool? carCarriageOverride;
 
   /// A bike is among the modes at both ends, so it travels with the rider
@@ -117,10 +120,6 @@ class RoutingOptions {
   bool get bikeAtBothEnds =>
       firstMileModes.contains(TransitMode.bike) &&
       lastMileModesInUse.contains(TransitMode.bike);
-
-  bool get carAtBothEnds =>
-      firstMileModes.contains(TransitMode.car) &&
-      lastMileModesInUse.contains(TransitMode.car);
 
   /// The value actually sent.
   ///
@@ -131,7 +130,7 @@ class RoutingOptions {
   bool get requireBikeTransport =>
       bikeCarriageOverride ?? (autoBikeCarriage && bikeAtBothEnds);
 
-  bool get requireCarTransport => carCarriageOverride ?? carAtBothEnds;
+  bool get requireCarTransport => carCarriageOverride ?? false;
 
   /// True when the rider set carriage by hand rather than inheriting it.
   bool get bikeCarriageIsManual => bikeCarriageOverride != null;
