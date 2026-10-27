@@ -356,12 +356,12 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       ? _Lock.implicit
       : null;
 
-  /// On the right edge of the bar, just below its top: clear of the
-  /// station label that hangs above it and of the name inside it.
+  /// A tab off the right side of the bar, at its top: a bar has little
+  /// height to spare but room to either side.
   Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
     return Positioned(
-      left: g.x(ride.slot) + _kBarWidth / 2 - 4,
-      top: g.y(ride.leg.startTime) + 3,
+      left: g.x(ride.slot) + _kBarWidth / 2,
+      top: g.y(ride.leg.startTime) + 1,
       child: IgnorePointer(
         child: _LockBadge(color: accent, implicit: lock == _Lock.implicit),
       ),
@@ -635,7 +635,12 @@ class _StationMarker extends StatelessWidget {
 /// results was.
 enum _Lock { explicit, implicit }
 
-/// Filled for a lock the user set, outlined for one that follows from it.
+/// How much a lock that follows from another fades.
+const double _kImplicitLockOpacity = 0.4;
+
+/// A small tab joined to the right side of a locked bar: square where it
+/// meets the bar, rounded at its free end. A lock that follows from a later
+/// one is the same tab, fainter.
 class _LockBadge extends StatelessWidget {
   const _LockBadge({required this.color, this.implicit = false});
 
@@ -644,24 +649,22 @@ class _LockBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 16,
+    final tab = Container(
+      width: 17,
       height: 16,
+      padding: const EdgeInsets.only(right: 1),
       decoration: BoxDecoration(
-        color: implicit ? AppColors.white : color,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: implicit ? color : AppColors.white,
-          width: 1.5,
-        ),
+        color: color,
+        borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
       ),
       alignment: Alignment.center,
-      child: Icon(
+      child: const Icon(
         LucideIcons.lock,
-        size: 9,
-        color: implicit ? color : AppColors.solidWhite,
+        size: 10,
+        color: AppColors.solidWhite,
       ),
     );
+    return implicit ? Opacity(opacity: _kImplicitLockOpacity, child: tab) : tab;
   }
 }
 
