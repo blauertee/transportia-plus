@@ -58,26 +58,6 @@ const double _kUnselectedOpacity = 0.35;
 /// spline in a line's colour would read as more of that line.
 const Color _kChangeColor = kStreetLegColor;
 
-/// Ways to show a locked ride, side by side while the design is open. In
-/// all but [tab], the station where the lock ends carries the lock icon in
-/// its label, and the rides themselves carry no icon.
-enum LockStyle {
-  /// A tab off the right side of each locked bar.
-  tab,
-
-  /// A thin accent rail alongside each locked bar.
-  rail,
-
-  /// A soft accent band behind the locked part of the journey.
-  band,
-
-  /// The time axis turns accent up to the lock point.
-  axis,
-
-  /// Nothing on the rides: only the station where the lock ends.
-  label,
-}
-
 /// The results of one search as a graph: a column per result, ordered by
 /// departure, time running down. A ride several results share is drawn once,
 /// centred across their columns, and changes are splines between rides.
@@ -101,7 +81,6 @@ class JourneyGraphView extends StatefulWidget {
     this.onStationTap,
     this.onRideTap,
     this.now,
-    this.lockStyle = LockStyle.rail,
   });
 
   final JourneyGraph graph;
@@ -116,8 +95,6 @@ class JourneyGraphView extends StatefulWidget {
   /// Where the "now" line goes; the clock when null. Drawn only while the
   /// results are under way.
   final DateTime? now;
-
-  final LockStyle lockStyle;
 
   @override
   State<JourneyGraphView> createState() => _JourneyGraphViewState();
@@ -262,12 +239,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                     now: widget.now ?? DateTime.now(),
                     accent: accent,
                     selected: selected,
-                    lockStyle: widget.lockStyle,
-                    locked: [
-                      for (final ride in graph.rides)
-                        if (_lockOf(ride, implicit) != null) ride,
-                    ],
-                    lockEnd: _lockPoint?.leg.endTime,
                   ),
                 ),
               ),
@@ -275,10 +246,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               ..._stationMarkers(geometry, accent),
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
-                  if (widget.lockStyle == LockStyle.tab)
-                    _lockBadge(geometry, ride, lock, accent)
-                  else if (widget.lockStyle == LockStyle.rail)
-                    _lockRail(geometry, ride, lock, accent),
+                  _lockBadge(geometry, ride, lock, accent),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -382,40 +350,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
   }
 
-  /// The latest locked ride: everything up to where it gets off is fixed.
-  GraphRide? get _lockPoint {
-    GraphRide? latest;
-    for (final ride in graph.rides) {
-      if (!locks.rideKeys.contains(ride.key)) continue;
-      if (latest == null || ride.leg.endTime.isAfter(latest.leg.endTime)) {
-        latest = ride;
-      }
-    }
-    return latest;
-  }
-
-  /// A thin rail beside the bar, as long as it: off to the side, where
-  /// no label reaches.
-  Widget _lockRail(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
-    final top = g.y(ride.leg.startTime);
-    return Positioned(
-      left: g.x(ride.slot) + _kBarWidth / 2 + 3,
-      top: top + 2,
-      width: 3,
-      height: g.y(ride.leg.endTime) - top - 4,
-      child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: lock == _Lock.implicit
-                ? accent.withValues(alpha: _kImplicitLockOpacity)
-                : accent,
-            borderRadius: BorderRadius.circular(1.5),
-          ),
-        ),
-      ),
-    );
-  }
-
   _Lock? _lockOf(GraphRide ride, Set<String> implicit) =>
       locks.rideKeys.contains(ride.key)
       ? _Lock.explicit
@@ -497,10 +431,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
           width: g.column * 2,
           above: above,
           locked: locks.stationKeys.contains(station.key),
-          lockEnd:
-              widget.lockStyle != LockStyle.tab &&
-              !above &&
-              locks.rideKeys.contains(ride.key),
           accent: accent,
           onSelected: ride.itineraries.contains(selected),
           onTap: _tap(
@@ -631,15 +561,11 @@ class _StationMarker extends StatelessWidget {
     required this.locked,
     required this.accent,
     required this.onSelected,
-    this.lockEnd = false,
     this.onTap,
   });
 
   final GraphStation station;
   final bool locked;
-
-  /// Where a locked ride gets off: the journey is fixed up to here.
-  final bool lockEnd;
   final bool onSelected;
   final Color accent;
   final VoidCallback? onTap;
@@ -663,7 +589,6 @@ class _StationMarker extends StatelessWidget {
     required bool locked,
     required Color accent,
     required bool onSelected,
-    bool lockEnd = false,
     VoidCallback? onTap,
   }) {
     return Positioned(
@@ -675,7 +600,6 @@ class _StationMarker extends StatelessWidget {
         locked: locked,
         accent: accent,
         onSelected: onSelected,
-        lockEnd: lockEnd,
         onTap: onTap,
       ),
     );
@@ -688,16 +612,14 @@ class _StationMarker extends StatelessWidget {
       height: _labelHeight,
       padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
-        color: lockEnd
-            ? AppColors.accentWash(accent)
-            : AppColors.white.withValues(alpha: 0.92),
+        color: AppColors.white.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (locked || lockEnd) ...[
-            Icon(LucideIcons.lock, size: 9, color: locked ? ink : accent),
+          if (locked) ...[
+            Icon(LucideIcons.lock, size: 9, color: ink),
             const SizedBox(width: 2),
           ],
           Flexible(
@@ -832,18 +754,7 @@ class _GraphPainter extends CustomPainter {
     required this.now,
     required this.accent,
     required this.selected,
-    required this.lockStyle,
-    required this.locked,
-    required this.lockEnd,
   });
-
-  final LockStyle lockStyle;
-
-  /// Every locked ride, set or implied.
-  final List<GraphRide> locked;
-
-  /// Where the locked part ends, if anything is locked.
-  final DateTime? lockEnd;
 
   final _Geometry g;
 
@@ -856,9 +767,7 @@ class _GraphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (lockStyle == LockStyle.band) _paintLockBand(canvas);
     _paintHours(canvas, size);
-    if (lockStyle == LockStyle.axis) _paintLockAxis(canvas);
     _paintNow(canvas, size);
     for (final change in g.graph.changes) {
       final onSelected =
@@ -879,50 +788,6 @@ class _GraphPainter extends CustomPainter {
         ..cubicTo(from.dx, from.dy + bend, to.dx, to.dy - bend, to.dx, to.dy);
       canvas.drawPath(change.changesStation ? _dashed(path) : path, paint);
     }
-  }
-
-  /// A soft accent band around the locked rides and the label where the
-  /// lock ends.
-  void _paintLockBand(Canvas canvas) {
-    if (locked.isEmpty) return;
-    final top = locked.map((r) => g.y(r.leg.startTime)).reduce(math.min);
-    final bottom = g.y(lockEnd!) + 18;
-    final left = locked.map((r) => g.x(r.slot)).reduce(math.min);
-    final right = locked.map((r) => g.x(r.slot)).reduce(math.max);
-    // Wide enough for the label where the lock ends.
-    final inset = g.column / 2 + 4;
-    canvas.drawRRect(
-      RRect.fromLTRBR(
-        left - inset,
-        top - 6,
-        right + inset,
-        bottom,
-        const Radius.circular(10),
-      ),
-      Paint()..color = AppColors.accentWash(accent),
-    );
-  }
-
-  /// The axis turns accent from the first locked departure to the lock
-  /// point, ending in a lock where an hour label would otherwise go.
-  void _paintLockAxis(Canvas canvas) {
-    if (locked.isEmpty) return;
-    const x = _kAxisWidth - 2;
-    final top = locked.map((r) => g.y(r.leg.startTime)).reduce(math.min);
-    final end = g.y(lockEnd!);
-    canvas.drawLine(
-      Offset(x, top),
-      Offset(x, end),
-      Paint()
-        ..color = accent
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawCircle(Offset(x, end), 9, Paint()..color = accent);
-    canvas.save();
-    canvas.translate(x - 5.5, end - 6);
-    _LockGlyph(AppColors.solidWhite, 1.5).paint(canvas, const Size.square(11));
-    canvas.restore();
   }
 
   /// An accent rule at the current time, with a dot on the axis, once the
@@ -960,11 +825,7 @@ class _GraphPainter extends CustomPainter {
       canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(size.width, y), line);
       // A stretch can push two ticks together; skip a label that would
       // overlap the one above.
-      final nearLock =
-          lockStyle == LockStyle.axis &&
-          lockEnd != null &&
-          (y - g.y(lockEnd!)).abs() < 14;
-      if (y - lastLabel >= _kMinLabelGap / 2 && !nearLock) {
+      if (y - lastLabel >= _kMinLabelGap / 2) {
         final label = TextPainter(
           text: TextSpan(
             text: formatTime(tick),
@@ -1023,8 +884,6 @@ class _GraphPainter extends CustomPainter {
       old.g.scale != g.scale ||
       old.g.column != g.column ||
       old.now != now ||
-      old.lockStyle != lockStyle ||
-      old.lockEnd != lockEnd ||
       old.accent != accent ||
       old.selected != selected;
 }
