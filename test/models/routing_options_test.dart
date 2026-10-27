@@ -43,7 +43,10 @@ void main() {
 
   group('carriage starts from the modes but stays the rider\'s', () {
     test('a bike only to the station leaves it there', () {
-      const options = RoutingOptions(firstMileModes: [TransitMode.bike]);
+      const options = RoutingOptions(
+        firstMileModes: [TransitMode.bike],
+        lastMileSameAsFirst: false,
+      );
       expect(options.bikeAtBothEnds, isFalse);
       expect(options.requireBikeTransport, isFalse);
       expect(_query(options).containsKey('requireBikeTransport'), isFalse);
@@ -423,6 +426,7 @@ void main() {
       final options = RoutingOptions.defaults.copyWith(
         firstMileModes: const [TransitMode.rental],
         firstMileRentalFormFactors: const [RentalFormFactor.bicycle],
+        lastMileSameAsFirst: false,
       );
       final sent = options
           .toRefreshParams(

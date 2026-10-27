@@ -915,14 +915,14 @@ void main() {
           ),
         ),
       );
-      expect(find.byIcon(LucideIcons.flame), findsOneWidget);
+      expect(find.byIcon(LucideIcons.flame), findsNothing);
 
       await Provider.of<ThemeProvider>(
         tester.element(find.byType(JourneyOverviewWidget)),
         listen: false,
-      ).setShowCalories(false);
+      ).setShowCalories(true);
       await tester.pumpAndSettle();
-      expect(find.byIcon(LucideIcons.flame), findsNothing);
+      expect(find.byIcon(LucideIcons.flame), findsOneWidget);
     });
 
     testWidgets('has no box, and a rule under it instead', (tester) async {
