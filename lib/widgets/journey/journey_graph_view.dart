@@ -15,7 +15,7 @@ import '../../utils/time_utils.dart';
 /// Room left of the first column for the hour labels.
 const double _kAxisWidth = 44;
 
-const double _kBarWidth = 30;
+const double _kBarWidth = 36;
 const double _kBarRadius = 6;
 
 /// Station names are cut to this many characters, so the widest label is
@@ -721,10 +721,10 @@ class _RideBar extends StatelessWidget {
       height: 1.15,
     );
     return [
-      (line, style(10, FontWeight.w800)),
-      if (number != null && height > 36) (number, style(8.5, FontWeight.w500)),
-      if (height > 50)
-        (formatTime(ride.leg.startTime), style(8.5, FontWeight.w500)),
+      (line, style(12, FontWeight.w800)),
+      if (number != null && height > 40) (number, style(10, FontWeight.w500)),
+      if (height > 58)
+        (formatTime(ride.leg.startTime), style(10, FontWeight.w500)),
     ];
   }
 
@@ -838,7 +838,7 @@ const double _kImplicitLockOpacity = 0.4;
 
 /// A locked bar is at least this tall, so the badge on its bottom corner
 /// stays clear of the name at its top.
-const double _kLockedRideHeight = 28;
+const double _kLockedRideHeight = 32;
 
 /// A circle on the bottom right corner of a locked bar, outlined in the
 /// bar's colour with the lock in the same line. A lock that follows from a
@@ -1022,10 +1022,7 @@ class _GraphPainter extends CustomPainter {
         final label = TextPainter(
           text: TextSpan(
             text: formatTime(tick),
-            style: textStyle.copyWith(
-              fontSize: 10,
-              color: AppColors.black.withValues(alpha: 0.45),
-            ),
+            style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
           ),
           textDirection: TextDirection.ltr,
         )..layout();
