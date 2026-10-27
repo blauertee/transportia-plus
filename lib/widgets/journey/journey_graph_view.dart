@@ -173,7 +173,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       _kMinZoom,
       _kMaxZoom,
     );
-    final scale = GraphScale(graph, zoom);
+    final scale = GraphScale(graph, zoom, badges: _badges);
     final offset = _kTopPad + scale.yOf(_pinchTime!) - _pinchFocus;
     setState(() => _pxPerMinute = zoom);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -204,12 +204,14 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
           (constraints.maxWidth - _kAxisWidth - 8) / graph.columnCount,
           _columnFor(context),
         );
+        final implicit = _implicitlyLocked;
+        final badges = _badges;
         final zoom = _pxPerMinute ??= graph.fitPxPerMinute(
           graph.firstArrival,
           constraints.maxHeight - _kHeaderHeight - _kTopPad - _kBottomPad,
+          badges: badges,
         );
-        _scale = GraphScale(graph, zoom);
-        final implicit = _implicitlyLocked;
+        _scale = GraphScale(graph, zoom, badges: badges);
         final geometry = _Geometry(graph, column, _scale);
         final width = _kAxisWidth + column * graph.columnCount + 8;
         final header = Container(
@@ -243,10 +245,10 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                 ),
               ),
               for (final ride in graph.rides) _rideBar(geometry, ride, accent),
-              ..._stationMarkers(geometry, accent),
+              ..._stationMarkers(geometry, accent, badges.keys),
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
-                  _lockBadge(context, geometry, ride, lock, accent),
+                  _lockBadge(geometry, ride, lock, accent),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -357,36 +359,22 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       ? _Lock.implicit
       : null;
 
-  /// A circle on the bar's right edge, as high as it can sit without
-  /// touching the text in the bar: below the rounded corner, and lower
-  /// still where a wide line of text reaches towards it.
-  Widget _lockBadge(
-    BuildContext context,
-    _Geometry g,
-    GraphRide ride,
-    _Lock lock,
-    Color accent,
-  ) {
-    final top = g.y(ride.leg.startTime);
-    final height = g.y(ride.leg.endTime) - top;
-    const radius = _LockBadge.size / 2;
-    const centerX = _kBarWidth / 2 - _kLockBadgeOverlap + radius;
-    final text = _RideBar.textBoxes(context, ride, height);
-    bool clear(double centerY) => text.every((box) {
-      final nearest = Offset(
-        centerX.clamp(box.left, box.right),
-        centerY.clamp(box.top, box.bottom),
-      );
-      return (nearest - Offset(centerX, centerY)).distance >=
-          radius + _kLockBadgeClearance;
-    });
-    var inset = _kBarRadius;
-    while (!clear(inset + radius) && inset < height) {
-      inset += 1;
-    }
+  /// Every locked ride carries a badge on its bottom corner, which the
+  /// scale makes room for.
+  RideBadges get _badges => RideBadges(
+    keys: {...locks.rideKeys, ..._implicitlyLocked},
+    rideHeight: _kLockedRideHeight,
+    overhang: _LockBadge.overhang,
+  );
+
+  /// A circle on the bar's bottom right corner, mostly over the bar. The
+  /// scale leaves room for it: the bar is tall enough to keep it clear of
+  /// the name, and the station name below moves down past it.
+  Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
+    const inside = _LockBadge.size - _LockBadge.overhang;
     return Positioned(
-      left: g.x(ride.slot) + centerX - radius,
-      top: top + inset,
+      left: g.x(ride.slot) + _kBarWidth / 2 - inside,
+      top: g.y(ride.leg.endTime) - inside,
       child: IgnorePointer(
         child: _LockBadge(
           color: legSpineColor(
@@ -428,7 +416,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
 
   /// A marker where each change gets off, and another where it gets on when
   /// that is a different station.
-  List<Widget> _stationMarkers(_Geometry g, Color accent) {
+  List<Widget> _stationMarkers(_Geometry g, Color accent, Set<String> badged) {
     final seen = <String>{};
     final markers = <Widget>[];
     void add(
@@ -444,7 +432,11 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       markers.add(
         _StationMarker.positioned(
           station: station,
-          center: Offset(g.x(slot), g.y(at)),
+          center: Offset(
+            g.x(slot),
+            g.y(at) +
+                (!above && badged.contains(ride.key) ? _LockBadge.overhang : 0),
+          ),
           width: g.column * 2,
           above: above,
           locked: locks.stationKeys.contains(station.key),
@@ -572,33 +564,6 @@ class _RideBar extends StatelessWidget {
     ];
   }
 
-  /// Where the lines of text sit, relative to the bar's top centre.
-  static List<Rect> textBoxes(
-    BuildContext context,
-    GraphRide ride,
-    double height,
-  ) {
-    final base = DefaultTextStyle.of(context).style;
-    var y = _textTop;
-    return [
-      for (final (text, style) in lines(ride, height))
-        () {
-          final painter = TextPainter(
-            text: TextSpan(text: text, style: base.merge(style)),
-            textDirection: TextDirection.ltr,
-          )..layout();
-          final box = Rect.fromLTWH(
-            -painter.width / 2,
-            y,
-            painter.width,
-            painter.height,
-          );
-          y += painter.height;
-          return box;
-        }(),
-    ];
-  }
-
   /// "ICE 1507" → ICE over 1507; "RB15 (84284)" → RB15 alone.
   static (String, String?) _splitName(Leg leg) {
     final raw = leg.displayName ?? leg.routeShortName ?? '';
@@ -707,15 +672,13 @@ enum _Lock { explicit, implicit }
 /// How much a lock that follows from another fades.
 const double _kImplicitLockOpacity = 0.4;
 
-/// How far a lock badge reaches over the bar it marks.
-const double _kLockBadgeOverlap = 4;
+/// A locked bar is at least this tall, so the badge on its bottom corner
+/// stays clear of the name at its top.
+const double _kLockedRideHeight = 28;
 
-/// The least room between a lock badge and the text in its bar.
-const double _kLockBadgeClearance = 1.5;
-
-/// A circle on the edge of a locked bar, outlined in the bar's colour with
-/// the lock in the same line. A lock that follows from a later one is the
-/// same badge, fainter.
+/// A circle on the bottom right corner of a locked bar, outlined in the
+/// bar's colour with the lock in the same line. A lock that follows from a
+/// later one is the same badge, fainter.
 class _LockBadge extends StatelessWidget {
   const _LockBadge({required this.color, this.implicit = false});
 
@@ -723,7 +686,11 @@ class _LockBadge extends StatelessWidget {
   final Color color;
   final bool implicit;
 
-  static const double size = 24;
+  static const double size = 20;
+
+  /// How far it reaches past the corner, right and down: as the first
+  /// badges did, a little under half of it.
+  static const double overhang = 9;
 
   /// The border, and the lock drawn in it with the same line.
   static const double _stroke = 1.5;

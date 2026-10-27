@@ -188,11 +188,15 @@ class JourneyGraph {
   ///
   /// Found by bisection rather than solved: the stretching [GraphScale]
   /// adds does not shrink in proportion to the zoom.
-  double fitPxPerMinute(DateTime until, double height) {
+  double fitPxPerMinute(
+    DateTime until,
+    double height, {
+    RideBadges badges = const RideBadges(),
+  }) {
     var low = _kMinPxPerMinute, high = _kMaxPxPerMinute;
     for (var i = 0; i < 24; i++) {
       final mid = (low + high) / 2;
-      if (GraphScale(this, mid).yOf(until) > height) {
+      if (GraphScale(this, mid, badges: badges).yOf(until) > height) {
         high = mid;
       } else {
         low = mid;
@@ -200,6 +204,32 @@ class JourneyGraph {
     }
     return low;
   }
+}
+
+/// Rides with a badge on the bottom corner of their bar, which the scale
+/// makes room for: a bar tall enough to hold the badge clear of its name,
+/// and the badge's [overhang] below the bar before the station name there.
+class RideBadges {
+  const RideBadges({
+    this.keys = const {},
+    this.rideHeight = 0,
+    this.overhang = 0,
+  });
+
+  final Set<String> keys;
+  final double rideHeight;
+  final double overhang;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RideBadges &&
+      other.rideHeight == rideHeight &&
+      other.overhang == overhang &&
+      other.keys.length == keys.length &&
+      other.keys.containsAll(keys);
+
+  @override
+  int get hashCode => Object.hash(rideHeight, overhang, keys.length);
 }
 
 /// Time to height at one zoom: linear, except where text would not fit.
@@ -210,7 +240,11 @@ class JourneyGraph {
 /// two consecutive events, by just enough; the rest stays to scale. A
 /// stretched stretch is flagged so the axis can show it is not to scale.
 class GraphScale {
-  factory GraphScale(JourneyGraph graph, double pxPerMinute) {
+  factory GraphScale(
+    JourneyGraph graph,
+    double pxPerMinute, {
+    RideBadges badges = const RideBadges(),
+  }) {
     final index = {
       for (var i = 0; i < graph.events.length; i++) graph.events[i]: i,
     };
@@ -219,15 +253,19 @@ class GraphScale {
     void need(DateTime from, DateTime to, double room) =>
         needs.putIfAbsent(index[to]!, () => []).add((index[from]!, room));
     for (final ride in graph.rides) {
-      need(ride.leg.startTime, ride.leg.endTime, _kMinRideHeight);
+      need(
+        ride.leg.startTime,
+        ride.leg.endTime,
+        badges.keys.contains(ride.key) ? badges.rideHeight : _kMinRideHeight,
+      );
     }
     for (final change in graph.changes) {
       // Only where the station name would run into the next ride: in the
       // same column, or close enough to overlap it.
       if ((change.from.slot - change.to.slot).abs() >= 1) continue;
-      final room = change.changesStation
-          ? 2 * _kMinChangeHeight
-          : _kMinChangeHeight;
+      final room =
+          (change.changesStation ? 2 * _kMinChangeHeight : _kMinChangeHeight) +
+          (badges.keys.contains(change.from.key) ? badges.overhang : 0);
       need(change.from.leg.endTime, change.to.leg.startTime, room);
     }
 
