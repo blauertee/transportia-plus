@@ -33,6 +33,7 @@ class JourneyGraphPanel extends StatefulWidget {
     this.onLoadLater,
     this.loadingEarlier = false,
     this.loadingLater = false,
+    this.showCopyData = false,
   });
 
   final JourneyLocksController controller;
@@ -51,6 +52,9 @@ class JourneyGraphPanel extends StatefulWidget {
   final VoidCallback? onLoadLater;
   final bool loadingEarlier;
   final bool loadingLater;
+
+  /// See [JourneyGraphView.showCopyData].
+  final bool showCopyData;
 
   @override
   State<JourneyGraphPanel> createState() => _JourneyGraphPanelState();
@@ -187,6 +191,7 @@ class _JourneyGraphPanelState extends State<JourneyGraphPanel> {
               loadingLater: controller.isLocked
                   ? controller.loadingLater
                   : widget.loadingLater,
+              showCopyData: widget.showCopyData,
             ),
           ),
         ),

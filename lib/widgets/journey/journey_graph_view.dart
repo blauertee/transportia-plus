@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -79,8 +81,9 @@ const double _kPullToLoad = 64;
 const Color _kChangeColor = kStreetLegColor;
 
 /// The results of one search as a graph: a column per result, ordered by
-/// departure, time running down. A ride several results share is drawn once,
-/// centred across their columns, and changes are splines between rides.
+/// departure, time running down. A ride several results side by side share
+/// is drawn once, centred across their columns, and changes are splines
+/// between rides.
 ///
 /// One result is always [selected]; everything else fades. Tapping anything
 /// off the selected result selects a result through it. Tapping a station or
@@ -110,6 +113,7 @@ class JourneyGraphView extends StatefulWidget {
     this.onLoadLater,
     this.loadingEarlier = false,
     this.loadingLater = false,
+    this.showCopyData = false,
   });
 
   final JourneyGraph graph;
@@ -130,6 +134,10 @@ class JourneyGraphView extends StatefulWidget {
   final VoidCallback? onLoadLater;
   final bool loadingEarlier;
   final bool loadingLater;
+
+  /// A button that copies what the graph draws, and from what, for
+  /// reporting a drawing problem.
+  final bool showCopyData;
 
   @override
   State<JourneyGraphView> createState() => _JourneyGraphViewState();
@@ -158,6 +166,11 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   /// The last spacing worked out, and what it was worked out for.
   (double, RideBadges, String)? _spacedFor;
   ({List<double> xs, double width}) _columns = (xs: const [], width: 0);
+
+  /// The room it was last laid out in, and whether the copy button has
+  /// just been tapped.
+  Size _size = Size.zero;
+  bool _copied = false;
 
   final Map<int, Offset> _pointers = {};
   double? _pinchStartSpan;
@@ -291,6 +304,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     final accent = AppColors.accentOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
+        _size = constraints.biggest;
         final implicit = _implicitlyLocked;
         final badges = _badges;
         final zoom = _pxPerMinute ??= _fittedPxPerMinute = graph.fitPxPerMinute(
@@ -387,6 +401,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
             ),
             _edgeHint(left: true),
             _edgeHint(left: false),
+            if (widget.showCopyData) _copyButton(),
           ],
         );
       },
@@ -484,6 +499,112 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         },
       ),
     );
+  }
+
+  Widget _copyButton() {
+    final muted = AppColors.black.withValues(alpha: 0.6);
+    return Positioned(
+      right: 12,
+      bottom: 12,
+      child: GestureDetector(
+        onTap: _copyData,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(color: Color(0x22000000), blurRadius: 6),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _copied ? LucideIcons.check : LucideIcons.copy,
+                size: 14,
+                color: muted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _copied ? 'Copied' : 'Copy canvas data',
+                style: TextStyle(fontSize: 12, color: muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyData() async {
+    await Clipboard.setData(ClipboardData(text: jsonEncode(canvasData)));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _copied = false);
+  }
+
+  /// What the graph draws and from what, as JSON: the results as the
+  /// planner sent them, less what only the map needs, the zoom and room it
+  /// was laid out at, and where each ride went. Enough to draw it again.
+  @visibleForTesting
+  Map<String, dynamic> get canvasData {
+    final g = _Geometry(graph, _columns.xs, _scale);
+    return {
+      'view': {
+        'width': _size.width,
+        'height': _size.height,
+        'devicePixelRatio': MediaQuery.maybeDevicePixelRatioOf(context),
+        'textScale': MediaQuery.maybeTextScalerOf(context)?.scale(1),
+      },
+      'pxPerMinute': _pxPerMinute,
+      'fittedPxPerMinute': _fittedPxPerMinute,
+      'scroll': {
+        'across': _across.hasClients ? _across.offset : 0,
+        'down': _scroll.hasClients ? _scroll.offset : 0,
+      },
+      'selected': selected,
+      'locks': {
+        'rides': locks.rideKeys.toList(),
+        'stations': locks.stationKeys.toList(),
+      },
+      'columns': _columns.xs,
+      'rides': [
+        for (final ride in graph.rides)
+          {
+            'key': ride.key,
+            'name': ride.leg.displayName,
+            'itineraries': ride.itineraries,
+            'x': g.x(ride),
+            'top': g.y(ride.leg.startTime),
+            'bottom': g.y(ride.leg.endTime),
+          },
+      ],
+      'itineraries': [
+        for (final itinerary in graph.itineraries)
+          _withoutShapes(itinerary.sourceJson),
+      ],
+    };
+  }
+
+  /// [json] without each leg's shape, steps and stops along the way: most
+  /// of its size, and nothing the graph draws.
+  static Map<String, dynamic>? _withoutShapes(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return {
+      ...json,
+      'legs': [
+        for (final leg in json['legs'] as List? ?? const [])
+          {
+            for (final MapEntry(:key, :value) in (leg as Map).entries)
+              if (key != 'legGeometry' &&
+                  key != 'steps' &&
+                  key != 'intermediateStops')
+                key: value,
+          },
+      ],
+    };
   }
 
   double _textWidth(BuildContext context, String text, TextStyle style) =>

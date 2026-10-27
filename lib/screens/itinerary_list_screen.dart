@@ -390,6 +390,9 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
       onLoadLater: _nextPageCursor == null ? null : _loadMore,
       loadingEarlier: _isLoadingPrevious,
       loadingLater: _isLoadingMore,
+      showCopyData: context.select<ThemeProvider, bool>(
+        (theme) => theme.showGraphCopyButton,
+      ),
     );
   }
 

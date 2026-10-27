@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/itinerary.dart';
@@ -63,6 +64,7 @@ void main() {
     RideLock? initialLock,
     JourneyGraphSearcher? search,
     List<Itinerary>? first,
+    bool showCopyData = false,
   }) async {
     searches = [];
     opened = null;
@@ -85,6 +87,7 @@ void main() {
           now: () => DateTime.utc(2026, 10, 27, 8),
           onLoadEarlier: () => earlier++,
           onLoadLater: () => later++,
+          showCopyData: showCopyData,
         ),
       ),
     );
@@ -259,6 +262,60 @@ void main() {
       await tester.tap(find.textContaining('Open journey'));
 
       expect(opened, same(viaIngolstadt));
+    });
+  });
+
+  group('copying the canvas data', () {
+    testWidgets('has no button unless asked for', (tester) async {
+      await pumpPanel(tester);
+
+      expect(find.text('Copy canvas data'), findsNothing);
+    });
+
+    testWidgets('copies what it draws, enough to draw it again', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await pumpPanel(tester, showCopyData: true);
+
+      await tester.tap(find.text('Copy canvas data'));
+      await tester.pump();
+
+      expect(find.text('Copied'), findsOneWidget);
+      final data = jsonDecode(copied!) as Map<String, dynamic>;
+      final again = JourneyGraph.build(
+        ItineraryResponse.fromJson({
+          'itineraries': data['itineraries'],
+        }).itineraries,
+      );
+      final graph = JourneyGraph.build(results);
+      expect(again.columnCount, graph.columnCount);
+      expect(
+        [for (final ride in again.rides) ride.key],
+        [for (final ride in graph.rides) ride.key],
+      );
+      expect(data['rides'], hasLength(graph.rides.length));
+      expect(data['columns'], hasLength(graph.columnCount));
+      // Without the shapes for the map, which are most of a result.
+      expect(copied, isNot(contains('legGeometry')));
+
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('Copy canvas data'), findsOneWidget);
     });
   });
 }

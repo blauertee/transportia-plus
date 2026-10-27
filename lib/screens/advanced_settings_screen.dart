@@ -50,6 +50,16 @@ class AdvancedSettingsScreen extends StatelessWidget {
                 value: theme.showGtfsFields,
                 onChanged: theme.setShowGtfsFields,
               ),
+              const SizedBox(height: 12),
+              ToggleCard(
+                icon: LucideIcons.clipboardCopy,
+                title: 'Show copy canvas data button',
+                subtitle: theme.showGraphCopyButton
+                    ? 'The journey graph has a button that copies what it draws'
+                    : 'Copy what the journey graph draws, to report a drawing problem',
+                value: theme.showGraphCopyButton,
+                onChanged: theme.setShowGraphCopyButton,
+              ),
             ],
           ),
         ],
