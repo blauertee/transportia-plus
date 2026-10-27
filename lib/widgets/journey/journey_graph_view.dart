@@ -246,7 +246,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               ..._stationMarkers(geometry, accent),
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
-                  _lockBadge(geometry, ride, lock, accent),
+                  _lockBadge(context, geometry, ride, lock, accent),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -357,18 +357,35 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       ? _Lock.implicit
       : null;
 
-  /// A tab off the right side of the bar, where its straight edge starts
-  /// below the rounded corner: a bar has little height to spare but room
-  /// to either side. Centred instead on a bar too short for that.
-  Widget _lockBadge(_Geometry g, GraphRide ride, _Lock lock, Color accent) {
+  /// A circle on the bar's right edge, as high as it can sit without
+  /// touching the text in the bar: below the rounded corner, and lower
+  /// still where a wide line of text reaches towards it.
+  Widget _lockBadge(
+    BuildContext context,
+    _Geometry g,
+    GraphRide ride,
+    _Lock lock,
+    Color accent,
+  ) {
     final top = g.y(ride.leg.startTime);
     final height = g.y(ride.leg.endTime) - top;
-    final inset = math.min(
-      _kBarRadius,
-      math.max(0.0, (height - _LockBadge.height) / 2),
-    );
+    const radius = _LockBadge.size / 2;
+    const centerX = _kBarWidth / 2 - _kLockBadgeOverlap + radius;
+    final text = _RideBar.textBoxes(context, ride, height);
+    bool clear(double centerY) => text.every((box) {
+      final nearest = Offset(
+        centerX.clamp(box.left, box.right),
+        centerY.clamp(box.top, box.bottom),
+      );
+      return (nearest - Offset(centerX, centerY)).distance >=
+          radius + _kLockBadgeClearance;
+    });
+    var inset = _kBarRadius;
+    while (!clear(inset + radius) && inset < height) {
+      inset += 1;
+    }
     return Positioned(
-      left: g.x(ride.slot) + _kBarWidth / 2,
+      left: g.x(ride.slot) + centerX - radius,
       top: top + inset,
       child: IgnorePointer(
         child: _LockBadge(
@@ -513,36 +530,73 @@ class _RideBar extends StatelessWidget {
     final onColor = color.computeLuminance() > 0.5
         ? AppColors.solidBlack
         : AppColors.solidWhite;
-    final (line, number) = _splitName(ride.leg);
-    TextStyle style(double size, FontWeight weight) => TextStyle(
-      fontSize: size,
-      fontWeight: weight,
-      color: onColor,
-      height: 1.15,
-    );
     return Container(
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(_kBarRadius),
       ),
-      padding: const EdgeInsets.only(top: 3),
+      padding: const EdgeInsets.only(top: _textTop),
       alignment: Alignment.topCenter,
       clipBehavior: Clip.hardEdge,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(line, maxLines: 1, style: style(10, FontWeight.w800)),
-          if (number != null && height > 36)
-            Text(number, maxLines: 1, style: style(8.5, FontWeight.w500)),
-          if (height > 50)
-            Text(
-              formatTime(ride.leg.startTime),
-              maxLines: 1,
-              style: style(8.5, FontWeight.w500),
-            ),
+          for (final (text, style) in lines(ride, height, onColor))
+            Text(text, maxLines: 1, style: style),
         ],
       ),
     );
+  }
+
+  static const double _textTop = 3;
+
+  /// The name, the number under it when there is room, and the departure
+  /// when there is more.
+  static List<(String, TextStyle)> lines(
+    GraphRide ride,
+    double height, [
+    Color color = AppColors.solidWhite,
+  ]) {
+    final (line, number) = _splitName(ride.leg);
+    TextStyle style(double size, FontWeight weight) => TextStyle(
+      fontSize: size,
+      fontWeight: weight,
+      color: color,
+      height: 1.15,
+    );
+    return [
+      (line, style(10, FontWeight.w800)),
+      if (number != null && height > 36) (number, style(8.5, FontWeight.w500)),
+      if (height > 50)
+        (formatTime(ride.leg.startTime), style(8.5, FontWeight.w500)),
+    ];
+  }
+
+  /// Where the lines of text sit, relative to the bar's top centre.
+  static List<Rect> textBoxes(
+    BuildContext context,
+    GraphRide ride,
+    double height,
+  ) {
+    final base = DefaultTextStyle.of(context).style;
+    var y = _textTop;
+    return [
+      for (final (text, style) in lines(ride, height))
+        () {
+          final painter = TextPainter(
+            text: TextSpan(text: text, style: base.merge(style)),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          final box = Rect.fromLTWH(
+            -painter.width / 2,
+            y,
+            painter.width,
+            painter.height,
+          );
+          y += painter.height;
+          return box;
+        }(),
+    ];
   }
 
   /// "ICE 1507" → ICE over 1507; "RB15 (84284)" → RB15 alone.
@@ -653,40 +707,48 @@ enum _Lock { explicit, implicit }
 /// How much a lock that follows from another fades.
 const double _kImplicitLockOpacity = 0.4;
 
-/// A small tab joined to the right side of a locked bar: outlined in the
-/// bar's colour, open where it meets the bar, round at its free end. A
-/// lock that follows from a later one is the same tab, fainter.
+/// How far a lock badge reaches over the bar it marks.
+const double _kLockBadgeOverlap = 4;
+
+/// The least room between a lock badge and the text in its bar.
+const double _kLockBadgeClearance = 1.5;
+
+/// A circle on the edge of a locked bar, outlined in the bar's colour with
+/// the lock in the same line. A lock that follows from a later one is the
+/// same badge, fainter.
 class _LockBadge extends StatelessWidget {
   const _LockBadge({required this.color, this.implicit = false});
 
-  /// The colour of the bar it hangs off.
+  /// The colour of the bar it sits on.
   final Color color;
   final bool implicit;
 
-  static const double height = 24;
+  static const double size = 24;
 
   /// The border, and the lock drawn in it with the same line.
   static const double _stroke = 1.5;
 
   @override
   Widget build(BuildContext context) {
-    final edge = BorderSide(color: color, width: _stroke);
-    final tab = Container(
-      height: height,
-      padding: const EdgeInsets.fromLTRB(6, 0, 9, 0),
+    // Faded towards white rather than made see-through, so the bar does
+    // not show through where the badge overlaps it.
+    final ink = implicit
+        ? Color.lerp(color, AppColors.solidWhite, 1 - _kImplicitLockOpacity)!
+        : color;
+    return Container(
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        border: Border(top: edge, right: edge, bottom: edge),
-        borderRadius: const BorderRadius.horizontal(
-          right: Radius.circular(height / 2),
-        ),
+        color: AppColors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: ink, width: _stroke),
       ),
       alignment: Alignment.center,
       child: CustomPaint(
         size: const Size.square(12),
-        painter: _LockGlyph(color, _stroke),
+        painter: _LockGlyph(ink, _stroke),
       ),
     );
-    return implicit ? Opacity(opacity: _kImplicitLockOpacity, child: tab) : tab;
   }
 }
 
