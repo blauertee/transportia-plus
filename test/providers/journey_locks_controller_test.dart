@@ -48,8 +48,10 @@ void main() {
       search: (search) async {
         searches.add(search);
         final lock = search.lock;
-        if (lock == null) return results;
-        return continueAfter(lock.itinerary, lock.upTo, onward);
+        if (lock == null) return JourneyGraphPage(results);
+        return JourneyGraphPage(
+          continueAfter(lock.itinerary, lock.upTo, onward),
+        );
       },
     );
   });
@@ -126,7 +128,7 @@ void main() {
       initialLock: RideLock(viaIngolstadt, ice1009),
       search: (search) async {
         searches.add(search);
-        return continueAfter(viaIngolstadt, ice1009, onward);
+        return JourneyGraphPage(continueAfter(viaIngolstadt, ice1009, onward));
       },
     );
     addTearDown(opened.dispose);
@@ -137,5 +139,72 @@ void main() {
 
     expect(opened.searching, isFalse);
     expect(opened.results, hasLength(onward.length));
+  });
+
+  group('pages', () {
+    late List<JourneyGraphSearch> asked;
+    JourneyLocksController paged() {
+      asked = [];
+      final controller = JourneyLocksController(
+        query: () => _query,
+        search: (search) async {
+          asked.add(search);
+          return switch (search.pageCursor) {
+            null => JourneyGraphPage(
+              [results[1]],
+              earlier: search.lock == null ? 'before' : null,
+              later: 'after',
+            ),
+            'before' => JourneyGraphPage([results[0]], earlier: 'before-2'),
+            _ => JourneyGraphPage([results[2]]),
+          };
+        },
+      );
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    test('adds the page after, with the cursor the search gave', () async {
+      final controller = paged()..toggleStation(_station('Ulm'));
+      await pumpEventQueue();
+
+      await controller.loadLater();
+
+      expect(asked.last.pageCursor, 'after');
+      expect(asked.last.via.single.name, 'Ulm');
+      expect(controller.results, [results[1], results[2]]);
+      expect(controller.hasLater, isFalse);
+    });
+
+    test('adds the page before in front', () async {
+      final controller = paged()..toggleStation(_station('Ulm'));
+      await pumpEventQueue();
+
+      await controller.loadEarlier();
+
+      expect(controller.results, [results[0], results[1]]);
+      expect(controller.hasEarlier, isTrue);
+    });
+
+    test('has nothing earlier on from a locked ride', () async {
+      final controller = paged()..lockRide(viaIngolstadt, ice1009);
+      await pumpEventQueue();
+
+      expect(controller.hasEarlier, isFalse);
+      expect(controller.hasLater, isTrue);
+    });
+
+    test('drops a page that lands after the locks changed', () async {
+      final controller = paged()..toggleStation(_station('Ulm'));
+      await pumpEventQueue();
+
+      final page = controller.loadLater();
+      controller.toggleStation(_station('Ulm'));
+      await page;
+      await pumpEventQueue();
+
+      expect(controller.isLocked, isFalse);
+      expect(controller.results, isNull);
+    });
   });
 }

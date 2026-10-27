@@ -146,7 +146,7 @@ void main() {
       for (final ride in graph.rides) {
         final height =
             scale.yOf(ride.leg.endTime) - scale.yOf(ride.leg.startTime);
-        expect(height, greaterThanOrEqualTo(18 - 1e-9));
+        expect(height, greaterThanOrEqualTo(20 - 1e-9));
       }
     });
 

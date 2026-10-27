@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -15,7 +16,7 @@ import '../../utils/time_utils.dart';
 /// Room left of the first column for the hour labels.
 const double _kAxisWidth = 44;
 
-const double _kBarWidth = 30;
+const double _kBarWidth = 36;
 const double _kBarRadius = 6;
 
 /// Station names are cut to this many characters, so the widest label is
@@ -69,6 +70,10 @@ const List<int> _kLabelMinutes = [10, 15, 30, 60, 120, 180, 360];
 /// other options stay one tap away, but clearly behind the selected one.
 const double _kUnselectedOpacity = 0.35;
 
+/// How far the graph has to be pulled past its left or right edge to load
+/// the results before or after it.
+const double _kPullToLoad = 64;
+
 /// Every change is drawn in this one colour: a change is no service, and a
 /// spline in a line's colour would read as more of that line.
 const Color _kChangeColor = kStreetLegColor;
@@ -86,6 +91,11 @@ const Color _kChangeColor = kStreetLegColor;
 /// zoom where the first result to arrive fits the height it is given; where
 /// a ride or a change is then too short for its text, the scale stretches
 /// that stretch alone and the axis marks it as not to scale.
+///
+/// Pulled past its left edge it asks for earlier results with
+/// [onLoadEarlier], and past its right edge for later ones with
+/// [onLoadLater]. When they come, it keeps its zoom, and keeps what was on
+/// screen where it was.
 class JourneyGraphView extends StatefulWidget {
   const JourneyGraphView({
     super.key,
@@ -96,6 +106,10 @@ class JourneyGraphView extends StatefulWidget {
     this.onStationTap,
     this.onRideTap,
     this.now,
+    this.onLoadEarlier,
+    this.onLoadLater,
+    this.loadingEarlier = false,
+    this.loadingLater = false,
   });
 
   final JourneyGraph graph;
@@ -111,12 +125,25 @@ class JourneyGraphView extends StatefulWidget {
   /// results are under way.
   final DateTime? now;
 
+  /// Null when there are no results that way.
+  final VoidCallback? onLoadEarlier;
+  final VoidCallback? onLoadLater;
+  final bool loadingEarlier;
+  final bool loadingLater;
+
   @override
   State<JourneyGraphView> createState() => _JourneyGraphViewState();
 }
 
 class _JourneyGraphViewState extends State<JourneyGraphView> {
   final ScrollController _scroll = ScrollController();
+  final ScrollController _across = ScrollController();
+
+  /// How far the graph is pulled past an edge: negative past the left one.
+  final ValueNotifier<double> _pull = ValueNotifier(0);
+
+  /// Whether this drag has already asked for a page.
+  bool _pulled = false;
 
   /// Null until fitted to the height available.
   double? _pxPerMinute;
@@ -149,15 +176,53 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   void didUpdateWidget(JourneyGraphView old) {
     super.didUpdateWidget(old);
     if (old.graph == widget.graph) return;
-    // New results: fit them afresh, from the top.
-    _pxPerMinute = null;
     _spacedFor = null;
-    if (_scroll.hasClients) _scroll.jumpTo(0);
+    final before = old.graph.itineraries;
+    final kept = before.isEmpty
+        ? -1
+        : widget.graph.itineraries.indexOf(before.first);
+    if (kept < 0 || _pxPerMinute == null) {
+      // New results: fit them afresh, from the top.
+      _pxPerMinute = null;
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      if (_across.hasClients) _across.jumpTo(0);
+      return;
+    }
+    // A page more of the same results: keep the zoom, and keep the moment
+    // at the top and the first result shown before where they were.
+    final top = _scale.timeAt(
+      _scroll.hasClients ? _scroll.offset - _kTopPad : 0,
+    );
+    final x = _columns.xs.isEmpty ? 0.0 : _columns.xs.first;
+    final across = _across.hasClients ? _across.offset : 0.0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_scroll.hasClients) {
+        final position = _scroll.position;
+        _scroll.jumpTo(
+          (_kTopPad + _scale.yOf(top)).clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          ),
+        );
+      }
+      if (_across.hasClients && kept < _columns.xs.length) {
+        final position = _across.position;
+        _across.jumpTo(
+          (across + _columns.xs[kept] - x).clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          ),
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _scroll.dispose();
+    _across.dispose();
+    _pull.dispose();
     super.dispose();
   }
 
@@ -305,12 +370,119 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
             ],
           ),
         );
-        if (width <= constraints.maxWidth) return body;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: body,
+        // Always scrollable across, however few results, so it can be
+        // pulled past either edge for more.
+        return Stack(
+          children: [
+            NotificationListener<ScrollNotification>(
+              onNotification: _scrolledAcross,
+              child: SingleChildScrollView(
+                controller: _across,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                child: body,
+              ),
+            ),
+            _edgeHint(left: true),
+            _edgeHint(left: false),
+          ],
         );
       },
+    );
+  }
+
+  /// Follows a pull past either edge, and asks for a page once per drag
+  /// when it goes far enough.
+  bool _scrolledAcross(ScrollNotification notification) {
+    if (notification.depth != 0 ||
+        notification.metrics.axis != Axis.horizontal) {
+      return false;
+    }
+    final metrics = notification.metrics;
+    final past = metrics.pixels < metrics.minScrollExtent
+        ? metrics.pixels - metrics.minScrollExtent
+        : metrics.pixels > metrics.maxScrollExtent
+        ? metrics.pixels - metrics.maxScrollExtent
+        : 0.0;
+    _pull.value = past;
+    if (notification is ScrollStartNotification) _pulled = false;
+    final dragging =
+        notification is ScrollUpdateNotification &&
+        notification.dragDetails != null;
+    if (dragging && !_pulled && past.abs() >= _kPullToLoad) {
+      final load = past < 0 ? widget.onLoadEarlier : widget.onLoadLater;
+      if (load != null) {
+        _pulled = true;
+        load();
+      }
+    }
+    return false;
+  }
+
+  /// What pulling past an edge does, in the gap the pull opens: say so
+  /// while pulling, and show the page loading once asked for.
+  Widget _edgeHint({required bool left}) {
+    final load = left ? widget.onLoadEarlier : widget.onLoadLater;
+    final loading = left ? widget.loadingEarlier : widget.loadingLater;
+    final muted = AppColors.black.withValues(alpha: 0.6);
+    return Positioned(
+      left: left ? 0 : null,
+      right: left ? null : 0,
+      top: 0,
+      bottom: 0,
+      width: _kPullToLoad,
+      child: ValueListenableBuilder<double>(
+        valueListenable: _pull,
+        builder: (context, pull, _) {
+          final shown = loading
+              ? 1.0
+              : load == null
+              ? 0.0
+              : ((left ? -pull : pull) / _kPullToLoad).clamp(0.0, 1.0);
+          return IgnorePointer(
+            child: Opacity(
+              opacity: shown,
+              child: Center(
+                child: loading
+                    ? Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x22000000), blurRadius: 6),
+                          ],
+                        ),
+                        child: const CupertinoActivityIndicator(),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            left
+                                ? LucideIcons.chevronsLeft
+                                : LucideIcons.chevronsRight,
+                            size: 18,
+                            color: muted,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            left ? 'Earlier' : 'Later',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: muted,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -721,10 +893,10 @@ class _RideBar extends StatelessWidget {
       height: 1.15,
     );
     return [
-      (line, style(10, FontWeight.w800)),
-      if (number != null && height > 36) (number, style(8.5, FontWeight.w500)),
-      if (height > 50)
-        (formatTime(ride.leg.startTime), style(8.5, FontWeight.w500)),
+      (line, style(12, FontWeight.w800)),
+      if (number != null && height > 40) (number, style(10, FontWeight.w500)),
+      if (height > 58)
+        (formatTime(ride.leg.startTime), style(10, FontWeight.w500)),
     ];
   }
 
@@ -838,7 +1010,7 @@ const double _kImplicitLockOpacity = 0.4;
 
 /// A locked bar is at least this tall, so the badge on its bottom corner
 /// stays clear of the name at its top.
-const double _kLockedRideHeight = 28;
+const double _kLockedRideHeight = 32;
 
 /// A circle on the bottom right corner of a locked bar, outlined in the
 /// bar's colour with the lock in the same line. A lock that follows from a
@@ -1022,10 +1194,7 @@ class _GraphPainter extends CustomPainter {
         final label = TextPainter(
           text: TextSpan(
             text: formatTime(tick),
-            style: textStyle.copyWith(
-              fontSize: 10,
-              color: AppColors.black.withValues(alpha: 0.45),
-            ),
+            style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
           ),
           textDirection: TextDirection.ltr,
         )..layout();

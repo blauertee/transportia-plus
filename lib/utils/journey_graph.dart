@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import '../models/itinerary.dart';
 
 /// The shortest a ride is drawn, whatever the zoom: room for its line name.
-const double _kMinRideHeight = 18;
+const double _kMinRideHeight = 20;
 
 /// The least room between getting off and getting on again in one column:
 /// room for the station name hung under the first ride.

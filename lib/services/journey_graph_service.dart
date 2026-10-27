@@ -36,6 +36,7 @@ class JourneyGraphSearch {
     required this.query,
     this.via = const [],
     this.lock,
+    this.pageCursor,
   });
 
   final JourneyQuery query;
@@ -44,10 +45,25 @@ class JourneyGraphSearch {
   /// passes.
   final List<GraphStation> via;
   final RideLock? lock;
+
+  /// The page before or after an earlier answer to the same search.
+  final String? pageCursor;
+}
+
+/// What one search found, with the cursors to the pages around it.
+class JourneyGraphPage {
+  const JourneyGraphPage(this.itineraries, {this.earlier, this.later});
+
+  final List<Itinerary> itineraries;
+
+  /// Null when there is no page that way. A search on from a locked ride
+  /// has none earlier: those would leave before the ride gets in.
+  final String? earlier;
+  final String? later;
 }
 
 typedef JourneyGraphSearcher =
-    Future<List<Itinerary>> Function(JourneyGraphSearch search);
+    Future<JourneyGraphPage> Function(JourneyGraphSearch search);
 
 /// The searches behind the journey graph's locks.
 ///
@@ -67,7 +83,7 @@ class JourneyGraphService {
   /// nobody could make.
   static const Duration changeMargin = Duration(minutes: 3);
 
-  static Future<List<Itinerary>> search(JourneyGraphSearch search) async {
+  static Future<JourneyGraphPage> search(JourneyGraphSearch search) async {
     final query = search.query;
     final base = query.options ?? await RoutingOptionsService.load();
     final options = base.copyWith(
@@ -86,8 +102,13 @@ class JourneyGraphService {
         toLon: query.toLon,
         timeSelection: query.time,
         options: options,
+        pageCursor: search.pageCursor,
       );
-      return response.itineraries;
+      return JourneyGraphPage(
+        response.itineraries,
+        earlier: response.previousPageCursor,
+        later: response.nextPageCursor,
+      );
     }
 
     final getOff = lock.upTo.to;
@@ -102,7 +123,11 @@ class JourneyGraphService {
         isArriveBy: false,
       ),
       options: options,
+      pageCursor: search.pageCursor,
     );
-    return continueAfter(lock.itinerary, lock.upTo, response.itineraries);
+    return JourneyGraphPage(
+      continueAfter(lock.itinerary, lock.upTo, response.itineraries),
+      later: response.nextPageCursor,
+    );
   }
 }
