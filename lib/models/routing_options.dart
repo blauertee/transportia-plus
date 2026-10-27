@@ -647,8 +647,10 @@ class RoutingOptions {
       lastMileRentalFormFactors: _formFactors(
         json['lastMileRentalFormFactors'],
       ),
-      lastMileSameAsFirst:
-          json['lastMileSameAsFirst'] as bool? ?? fallback.lastMileSameAsFirst,
+      // Options stored before the link existed always set the last mile
+      // apart; linking them now would quietly drop what the rider set there.
+      // Only a fresh install starts linked.
+      lastMileSameAsFirst: json['lastMileSameAsFirst'] as bool? ?? false,
     );
   }
 

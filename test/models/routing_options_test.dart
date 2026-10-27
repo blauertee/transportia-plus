@@ -52,7 +52,7 @@ void main() {
       expect(_query(options).containsKey('requireBikeTransport'), isFalse);
     });
 
-    test('with automatic carriage off, a bike at both ends asks for nothing', () {
+    test('automatic carriage off, a bike at both ends asks for nothing', () {
       final manual = _bikeBothEnds.copyWith(autoBikeCarriage: false);
       expect(manual.bikeAtBothEnds, isTrue);
       expect(manual.requireBikeTransport, isFalse);
@@ -451,9 +451,24 @@ void main() {
       lastMileSameAsFirst: true,
     );
 
-    test('on unless set apart', () {
+    test('a fresh install starts linked', () {
       expect(RoutingOptions.defaults.lastMileSameAsFirst, isTrue);
-      expect(RoutingOptions.fromJson(const {}).lastMileSameAsFirst, isTrue);
+      expect(
+        RoutingOptions.fromJson(
+          RoutingOptions.defaults.toJson(),
+        ).lastMileSameAsFirst,
+        isTrue,
+      );
+    });
+
+    test('options stored before the link existed stay set apart', () {
+      final stored = RoutingOptions.defaults
+          .copyWith(lastMileModes: const [TransitMode.bike])
+          .toJson()
+        ..remove('lastMileSameAsFirst');
+      final restored = RoutingOptions.fromJson(stored);
+      expect(restored.lastMileSameAsFirst, isFalse);
+      expect(restored.lastMileModesInUse, [TransitMode.bike]);
     });
 
     test('a search sends the first mile as the last mile too', () {
