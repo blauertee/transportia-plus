@@ -198,11 +198,15 @@ class JourneyGraph {
   }
 }
 
-/// What the user pinned on the graph: stations to pass through and rides to
-/// take.
+/// What the user pinned on the graph: stations to pass through, and how far
+/// the journey is fixed.
 ///
-/// Stations become via stops of the next search. Rides have no server-side
-/// counterpart yet, so for now they only filter what came back.
+/// Stations become via stops of the next search (the planner takes up to
+/// two). A locked ride fixes the journey up to where it gets off: the next
+/// search starts from there, at its arrival, and its results are joined to
+/// the fixed part. The planner cannot pin a ride in the middle of a search,
+/// which is why a lock reaches back to the start. Until either search is
+/// wired up, locks only filter what already came back.
 class JourneyLocks {
   const JourneyLocks({this.stationKeys = const {}, this.rideKeys = const {}});
 
