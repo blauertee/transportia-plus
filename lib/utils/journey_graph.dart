@@ -51,15 +51,20 @@ class GraphStation {
   }
 }
 
-/// One ride, drawn once however many results take it.
+/// One ride, drawn once across the results side by side that take it.
+///
+/// Results that take it with others in between get a bar each: a bar
+/// across them would run through the columns between, over their own rides.
 class GraphRide {
   GraphRide._(this.key, this.leg);
 
-  /// Same trip between the same stops: the same ride.
+  /// Same trip between the same stops: the same ride, whichever bar it is
+  /// drawn as. What locks and badges go by.
   final String key;
   final Leg leg;
 
-  /// Indexes into [JourneyGraph.itineraries] of the results that take it.
+  /// Indexes into [JourneyGraph.itineraries] of the results it is drawn
+  /// for: neighbouring columns.
   final List<int> itineraries = [];
 
   /// Horizontal position in result columns. Fractional when shared: the
@@ -140,51 +145,50 @@ class JourneyGraph {
       results.where((it) => it.hasTransit).toList(),
     );
 
+    // A ride carries on from the column before when that result takes it
+    // too; otherwise it starts a bar of its own.
     final byKey = <String, GraphRide>{};
-    final changes = <String, GraphChange>{};
-    final arrivals = <String, GraphArrival>{};
+    final rides = <GraphRide>[];
+    final changes = <(GraphRide, GraphRide), GraphChange>{};
+    final arrivals = <(GraphRide, DateTime), GraphArrival>{};
     for (var i = 0; i < itineraries.length; i++) {
       GraphRide? previous;
       for (final leg in itineraries[i].legs.where((leg) => leg.isRide)) {
-        final ride = byKey.putIfAbsent(
-          GraphRide.keyOf(leg),
-          () => GraphRide._(GraphRide.keyOf(leg), leg),
-        );
+        final key = GraphRide.keyOf(leg);
+        var ride = byKey[key];
+        if (ride == null || ride.lastColumn != i - 1) {
+          ride = byKey[key] = GraphRide._(key, leg);
+          rides.add(ride);
+        }
         ride.itineraries.add(i);
         if (previous != null) {
-          changes.putIfAbsent(
-            '${previous.key}>${ride.key}',
-            () => GraphChange(previous!, ride),
-          );
+          changes.putIfAbsent((
+            previous,
+            ride,
+          ), () => GraphChange(previous!, ride!));
         }
         previous = ride;
       }
       final last = previous!;
       final arrival = itineraries[i].endTime;
       arrivals
-          .putIfAbsent(
-            '${last.key}@${arrival.millisecondsSinceEpoch}',
-            () => GraphArrival._(last, arrival),
-          )
+          .putIfAbsent((last, arrival), () => GraphArrival._(last, arrival))
           .itineraries
           .add(i);
     }
 
-    for (final ride in byKey.values) {
+    for (final ride in rides) {
       ride.slot = (ride.firstColumn + ride.lastColumn) / 2;
     }
 
     final events = <DateTime>{
-      for (final ride in byKey.values) ...[
-        ride.leg.startTime,
-        ride.leg.endTime,
-      ],
+      for (final ride in rides) ...[ride.leg.startTime, ride.leg.endTime],
       for (final arrival in arrivals.values) arrival.time,
     }.toList()..sort();
 
     return JourneyGraph._(
       itineraries,
-      byKey.values.toList(),
+      rides,
       changes.values.toList(),
       arrivals.values.toList(),
       events,
@@ -192,9 +196,9 @@ class JourneyGraph {
   }
 
   /// [results] ordered by departure. Results leaving at the same time go
-  /// next to the ones they share rides with: a shared ride is drawn across
-  /// the columns that take it, and a column between them that does not
-  /// would have its own rides drawn through it.
+  /// next to the ones they share rides with: a shared ride is drawn once
+  /// across the columns side by side that take it, and once more past each
+  /// column between them that does not.
   static List<Itinerary> _byDeparture(List<Itinerary> results) {
     Set<String> rides(Itinerary it) => {
       for (final leg in it.legs)
@@ -274,6 +278,8 @@ class GraphBox {
 ///
 /// One pass, left to right. A ride shared by several results is centred
 /// across them, so it moves with the last of them, and is settled with it.
+/// Two that end in the same column move together from then on: how far
+/// apart they are is settled where the later of them starts.
 List<double> packColumns(
   int count,
   List<GraphBox> boxes, {
@@ -282,15 +288,19 @@ List<double> packColumns(
 }) {
   if (count == 0) return const [];
   final byLast = <int, List<GraphBox>>{};
+  final byFirst = <int, List<GraphBox>>{};
   for (final box in boxes) {
     byLast.putIfAbsent(box.ride.lastColumn, () => []).add(box);
+    byFirst.putIfAbsent(box.ride.firstColumn, () => []).add(box);
   }
   final xs = <double>[0];
-  // A box's centre as a * x + c, where x is the column being placed.
+  // A box's centre as a * x + c, where x is the column being placed. For a
+  // box that ends further on, the part still to come is left out: it is
+  // the same for another that ends there too.
   (double, double) centre(GraphBox box, int column) {
     final first = box.ride.firstColumn, last = box.ride.lastColumn;
     if (last < column) return (0, (xs[first] + xs[last]) / 2);
-    if (first == column) return (1, 0);
+    if (first >= column) return (1, 0);
     return (0.5, xs[first] / 2);
   }
 
@@ -299,8 +309,15 @@ List<double> packColumns(
     var x = xs[column - 1] + minGaps[column];
     final placing = byLast[column] ?? const <GraphBox>[];
     settled.addAll(byLast[column - 1] ?? const <GraphBox>[]);
-    for (final box in placing) {
-      for (final other in [...settled, ...placing]) {
+    // Each box against those it is now settled against: those placed with
+    // it, and those ending where it does, further on.
+    final pairs = [
+      for (final box in placing) (box, [...settled, ...placing]),
+      for (final box in byFirst[column] ?? const <GraphBox>[])
+        if (box.ride.lastColumn > column) (box, byLast[box.ride.lastColumn]!),
+    ];
+    for (final (box, others) in pairs) {
+      for (final other in others) {
         if (other.ride == box.ride ||
             other.ride.slot == box.ride.slot ||
             !box.overlapsInTime(other)) {
@@ -312,8 +329,7 @@ List<double> packColumns(
         final (aLeft, cLeft) = centre(left, column);
         final (aRight, cRight) = centre(right, column);
         // Moving this column right only helps when it moves the right box
-        // further than the left one; a ride shared across a column it
-        // does not take cannot be helped by it.
+        // further than the left one.
         if (aRight <= aLeft) continue;
         final room = left.right + right.left + margin;
         x = math.max(x, (room - (cRight - cLeft)) / (aRight - aLeft));

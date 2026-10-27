@@ -61,6 +61,44 @@ void main() {
     );
   });
 
+  group('JourneyGraph.build, results that share rides apart', () {
+    // Köln → Amsterdam: four results by coach over Rotterdam, all on the
+    // same coach. The first and last take the Intercity on to Amsterdam
+    // Centraal; the two between change at Leiden.
+    final graph = JourneyGraph.build(_load('plan_split_ride'));
+    Iterable<GraphRide> rides(String to) => graph.rides.where(
+      (ride) => ride.leg.mode == 'REGIONAL_RAIL' && ride.leg.to.name == to,
+    );
+
+    test('draws a ride once across the results side by side on it', () {
+      expect(rides('Leiden Centraal').single.itineraries, [1, 2]);
+    });
+
+    test('draws a ride again for results with others between them', () {
+      final intercity = rides('Amsterdam Centraal').toList();
+
+      expect(
+        [for (final ride in intercity) ride.itineraries],
+        [
+          [0],
+          [3],
+        ],
+      );
+      // Still one ride, to lock.
+      expect(intercity.map((ride) => ride.key).toSet(), hasLength(1));
+    });
+
+    test('changes onto each of its bars from its own results', () {
+      final [first, last] = rides('Amsterdam Centraal').toList();
+      final onto = graph.changes.where(
+        (change) => change.to == first || change.to == last,
+      );
+
+      expect(onto.map((change) => change.to), [first, last]);
+      expect(onto.map((change) => change.from).toSet(), hasLength(1));
+    });
+  });
+
   group('continueAfter', () {
     final joined = continueAfter(viaIngolstadt, ice1009, onward);
 
@@ -241,6 +279,26 @@ void main() {
 
       final centre = (xs[0] + xs[1]) / 2;
       expect(xs[2] - centre, 15 + 50 + 8);
+    });
+
+    test('keeps apart two rides ending in the same column', () {
+      // The coach all four take, and a train only the last two take into
+      // the stop it leaves from: its name there is beside the coach's.
+      final split = JourneyGraph.build(_load('plan_split_ride'));
+      final coach = split.rides.firstWhere((ride) => ride.leg.mode == 'COACH');
+      final train = split.rides.firstWhere(
+        (ride) => ride.itineraries.length == 2 && ride.firstColumn == 2,
+      );
+      final xs = packColumns(
+        4,
+        [box(coach, 100, 300), box(train, 50, 110, half: 60)],
+        minGaps: const [0, 40, 40, 40],
+        margin: 8,
+      );
+
+      double centre(GraphRide ride) =>
+          (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
+      expect(centre(train) - centre(coach), 15 + 60 + 8);
     });
 
     test('keeps every pair of bars clear in the real results', () {
