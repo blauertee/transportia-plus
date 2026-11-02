@@ -23,6 +23,10 @@ class PrefsKeys {
   /// Absent means off.
   static const String showGraphCopyButton = 'show_graph_copy_button';
 
+  /// Whether requests to the MOTIS server are kept for the request log in
+  /// the advanced settings. Absent means off.
+  static const String logMotisRequests = 'log_motis_requests';
+
   /// Whether the timetable search lists departures near the rider, which
   /// sends their position. Absent means on.
   static const String showNearbyDepartures = 'show_nearby_departures';
