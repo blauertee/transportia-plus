@@ -345,7 +345,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                 child: CustomPaint(
                   painter: _GraphPainter(
                     geometry,
-                    DefaultTextStyle.of(context).style,
                     now: widget.now ?? DateTime.now(),
                     accent: accent,
                     selected: selected,
@@ -401,6 +400,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                 child: body,
               ),
             ),
+            _axis(geometry, accent),
             _edgeHint(left: true),
             _edgeHint(left: false),
             if (widget.showCopyData) _copyButton(),
@@ -409,6 +409,29 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       },
     );
   }
+
+  /// The time axis, pinned to the left edge so the time stays readable
+  /// however far across the graph is scrolled. It follows the graph up and
+  /// down, and covers the columns that scroll under it.
+  Widget _axis(_Geometry g, Color accent) => Positioned(
+    left: 0,
+    top: _kHeaderHeight,
+    bottom: 0,
+    width: _kAxisWidth,
+    child: IgnorePointer(
+      child: ClipRect(
+        child: CustomPaint(
+          painter: _AxisPainter(
+            g,
+            DefaultTextStyle.of(context).style,
+            scroll: _scroll,
+            now: widget.now ?? DateTime.now(),
+            accent: accent,
+          ),
+        ),
+      ),
+    ),
+  );
 
   /// Follows a pull past either edge, and asks for a page once per drag
   /// when it goes far enough.
@@ -1337,8 +1360,7 @@ String stationLabel(String name) {
 
 class _GraphPainter extends CustomPainter {
   _GraphPainter(
-    this.g,
-    this.textStyle, {
+    this.g, {
     required this.now,
     required this.accent,
     required this.selected,
@@ -1349,9 +1371,6 @@ class _GraphPainter extends CustomPainter {
   final DateTime now;
   final Color accent;
   final int selected;
-
-  /// The ambient text style, for its font: a painter inherits none.
-  final TextStyle textStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1378,79 +1397,26 @@ class _GraphPainter extends CustomPainter {
     }
   }
 
-  /// An accent rule at the current time, with a dot on the axis, once the
-  /// first result has left and until the last has arrived.
+  /// An accent rule at the current time, once the first result has left
+  /// and until the last has arrived; its dot is on the axis.
   void _paintNow(Canvas canvas, Size size) {
-    if (now.isBefore(g.graph.start) || now.isAfter(g.graph.end)) return;
+    if (!_isUnderway(g, now)) return;
     final y = g.y(now);
     final paint = Paint()
       ..color = accent
       ..strokeWidth = 1.5;
     canvas.drawLine(Offset(_kAxisWidth - 2, y), Offset(size.width, y), paint);
-    canvas.drawCircle(Offset(_kAxisWidth - 2, y), 4, paint);
   }
 
-  /// Grid lines at the finest step that leaves room for their labels, and
-  /// a break mark wherever the scale was stretched.
+  /// Grid lines at the finest step that leaves room for their labels.
   void _paintHours(Canvas canvas, Size size) {
     final line = Paint()
       ..color = AppColors.hairline
       ..strokeWidth = 1;
-    final step = _kLabelMinutes.firstWhere(
-      (minutes) => minutes * g.scale.pxPerMinute >= _kMinLabelGap,
-      orElse: () => _kLabelMinutes.last,
-    );
-    final start = g.graph.start.toLocal();
-    final midnight = DateTime(start.year, start.month, start.day);
-    var tick = midnight.add(
-      Duration(
-        minutes: (start.difference(midnight).inMinutes ~/ step + 1) * step,
-      ),
-    );
-    var lastLabel = double.negativeInfinity;
-    while (tick.isBefore(g.graph.end)) {
+    for (final tick in _ticks(g)) {
       final y = g.y(tick);
       canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(size.width, y), line);
-      // A stretch can push two ticks together; skip a label that would
-      // overlap the one above.
-      if (y - lastLabel >= _kMinLabelGap / 2) {
-        final label = TextPainter(
-          text: TextSpan(
-            text: formatTime(tick),
-            style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
-        lastLabel = y;
-      }
-      tick = tick.add(Duration(minutes: step));
     }
-
-    // The axis is solid where time is to scale and dotted where it was
-    // stretched to fit labels.
-    final axis = Paint()
-      ..color = AppColors.black.withValues(alpha: 0.3)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-    const x = _kAxisWidth - 2;
-    var y = _kTopPad;
-    final bottom = _kTopPad + g.scale.height;
-    for (final (from, to) in g.scale.stretchedSpans) {
-      canvas.drawLine(Offset(x, y), Offset(x, _kTopPad + from), axis);
-      canvas.drawPath(
-        _dashed(
-          Path()
-            ..moveTo(x, _kTopPad + from)
-            ..lineTo(x, _kTopPad + to),
-          dash: 1.5,
-          gap: 3,
-        ),
-        axis,
-      );
-      y = _kTopPad + to;
-    }
-    canvas.drawLine(Offset(x, y), Offset(x, bottom), axis);
   }
 
   static Path _dashed(Path source, {double dash = 4, double gap = 4}) {
@@ -1471,4 +1437,120 @@ class _GraphPainter extends CustomPainter {
       old.now != now ||
       old.accent != accent ||
       old.selected != selected;
+}
+
+bool _isUnderway(_Geometry g, DateTime now) =>
+    !now.isBefore(g.graph.start) && !now.isAfter(g.graph.end);
+
+/// The times the grid marks: the finest step in [_kLabelMinutes] that
+/// leaves room for a label at the current zoom.
+Iterable<DateTime> _ticks(_Geometry g) sync* {
+  final step = _kLabelMinutes.firstWhere(
+    (minutes) => minutes * g.scale.pxPerMinute >= _kMinLabelGap,
+    orElse: () => _kLabelMinutes.last,
+  );
+  final start = g.graph.start.toLocal();
+  final midnight = DateTime(start.year, start.month, start.day);
+  var tick = midnight.add(
+    Duration(
+      minutes: (start.difference(midnight).inMinutes ~/ step + 1) * step,
+    ),
+  );
+  while (tick.isBefore(g.graph.end)) {
+    yield tick;
+    tick = tick.add(Duration(minutes: step));
+  }
+}
+
+/// The time labels, the axis rule and the "now" dot, drawn in the pinned
+/// strip left of the columns and shifted with the vertical [scroll].
+class _AxisPainter extends CustomPainter {
+  _AxisPainter(
+    this.g,
+    this.textStyle, {
+    required this.scroll,
+    required this.now,
+    required this.accent,
+  }) : super(repaint: scroll);
+
+  final _Geometry g;
+
+  /// The ambient text style, for its font: a painter inherits none.
+  final TextStyle textStyle;
+  final ScrollController scroll;
+  final DateTime now;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.white);
+    canvas.translate(0, scroll.hasClients ? -scroll.offset : 0);
+    _paintLabels(canvas);
+    _paintRule(canvas);
+    if (_isUnderway(g, now)) {
+      canvas.drawCircle(
+        Offset(_kAxisWidth - 2, g.y(now)),
+        4,
+        Paint()..color = accent,
+      );
+    }
+  }
+
+  void _paintLabels(Canvas canvas) {
+    final line = Paint()
+      ..color = AppColors.hairline
+      ..strokeWidth = 1;
+    var lastLabel = double.negativeInfinity;
+    for (final tick in _ticks(g)) {
+      final y = g.y(tick);
+      canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(_kAxisWidth, y), line);
+      // A stretch can push two ticks together; skip a label that would
+      // overlap the one above.
+      if (y - lastLabel < _kMinLabelGap / 2) continue;
+      final label = TextPainter(
+        text: TextSpan(
+          text: formatTime(tick),
+          style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
+      lastLabel = y;
+    }
+  }
+
+  /// Solid where time is to scale and dotted where it was stretched to fit
+  /// labels.
+  void _paintRule(Canvas canvas) {
+    final axis = Paint()
+      ..color = AppColors.black.withValues(alpha: 0.3)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    const x = _kAxisWidth - 2;
+    var y = _kTopPad;
+    final bottom = _kTopPad + g.scale.height;
+    for (final (from, to) in g.scale.stretchedSpans) {
+      canvas.drawLine(Offset(x, y), Offset(x, _kTopPad + from), axis);
+      canvas.drawPath(
+        _GraphPainter._dashed(
+          Path()
+            ..moveTo(x, _kTopPad + from)
+            ..lineTo(x, _kTopPad + to),
+          dash: 1.5,
+          gap: 3,
+        ),
+        axis,
+      );
+      y = _kTopPad + to;
+    }
+    canvas.drawLine(Offset(x, y), Offset(x, bottom), axis);
+  }
+
+  @override
+  bool shouldRepaint(_AxisPainter old) =>
+      old.g.graph != g.graph ||
+      old.g.scale != g.scale ||
+      old.now != now ||
+      old.accent != accent ||
+      old.scroll != scroll;
 }
