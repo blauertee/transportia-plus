@@ -4,6 +4,8 @@ import '../models/itinerary.dart';
 import '../theme/app_colors.dart';
 import 'color_utils.dart';
 
+export 'color_utils.dart' show contrastRatio, ensureContrast;
+
 /// What a street leg is drawn in.
 ///
 /// A walk or a ride on your own bike belongs to no line, so it borrows no
@@ -68,58 +70,6 @@ Color delayNoteColor() => AppColors.black.withValues(alpha: _kDelayNoteAlpha);
 
 const double _kDelayNoteAlpha = 0.45;
 
-/// Contrast ratio between two opaque colours, per WCAG.
-double contrastRatio(Color a, Color b) {
-  final la = a.computeLuminance();
-  final lb = b.computeLuminance();
-  final lighter = la > lb ? la : lb;
-  final darker = la > lb ? lb : la;
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-/// Above this luminance a background counts as light, and colours have to be
-/// darkened rather than lightened to stand out against it.
-const double _kMidLuminance = 0.5;
-
-/// How far each attempt moves the colour's lightness: fine enough that the
-/// result still looks like the feed's colour, coarse enough to settle in a
-/// few dozen iterations.
-const double _kContrastStep = 0.02;
-
-/// Enough steps to cross the whole lightness range at [_kContrastStep].
-const int _kMaxContrastSteps = 50;
-
-/// Pushes [color] away from [background] until it clears [minRatio].
-///
-/// Hue and saturation are kept, so the line still reads as the operator's —
-/// only lightness moves. Feeds ship pale yellows that vanish on white and
-/// near-blacks that vanish on the dark theme, and a 2px line has less room to
-/// survive that than a block of colour does. 3:1 is the WCAG threshold for
-/// non-text graphics, which is what this is.
-///
-/// Returns [color] untouched when it already passes.
-Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
-  if (contrastRatio(color, background) >= minRatio) return color;
-
-  // On a light background darken, on a dark one lighten — moving the other
-  // way would have to cross the background to find contrast on the far side.
-  final darken = background.computeLuminance() > _kMidLuminance;
-  final hsl = HSLColor.fromColor(color);
-
-  for (var step = 1; step <= _kMaxContrastSteps; step++) {
-    final shift = step * _kContrastStep;
-    final lightness = (darken ? hsl.lightness - shift : hsl.lightness + shift)
-        .clamp(0.0, 1.0);
-    final candidate = hsl.withLightness(lightness).toColor();
-    if (contrastRatio(candidate, background) >= minRatio) return candidate;
-    if (lightness == 0.0 || lightness == 1.0) break;
-  }
-
-  // Saturated hues can run out of lightness before they clear the bar — a
-  // mid-blue on black, say. Black or white always clears it.
-  return darken ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
-}
-
 /// The colour of one leg's stretch of the spine.
 ///
 /// The line changes colour exactly where the mode changes, which is what makes
@@ -132,9 +82,7 @@ Color legSpineColor({
 }) {
   // A change between two services is not itself a service.
   if (isTransfer || isStreetLeg(leg.mode)) return kStreetLegColor;
-  final routeColor = parseHexColor(leg.routeColor);
-  if (routeColor == null) return accent;
-  return ensureContrast(routeColor, background);
+  return lineColor(leg.routeColor, background: background) ?? accent;
 }
 
 /// Modes the traveller covers under their own power or in their own vehicle.

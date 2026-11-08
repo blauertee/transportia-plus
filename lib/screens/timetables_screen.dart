@@ -801,10 +801,11 @@ class _StopTimeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final routeColor = parseHexColorOrAccent(context, stopTime.routeColor);
-    final routeTextColor = parseHexColorOr(
+    final routeColor = lineColorOrAccent(context, stopTime.routeColor);
+    final routeTextColor = onLineColor(
+      routeColor,
       stopTime.routeTextColor,
-      AppColors.solidWhite,
+      fallback: AppColors.solidWhite,
     );
 
     final modeIcon = getLegIcon(stopTime.mode);
