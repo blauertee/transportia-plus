@@ -58,6 +58,9 @@ const int _kMaxContrastSteps = 50;
 
 /// Pushes [color] away from [background] until it clears [minRatio].
 ///
+/// [saturationGain] is how much saturation a darkening colour gains per unit
+/// of lightness lost; the hue is never touched.
+///
 /// Hue and saturation are kept, so the line still reads as the operator's —
 /// only lightness moves. Feeds ship pale yellows that vanish on white and
 /// near-blacks that vanish on the dark theme, and a 2px line has less room to
@@ -65,7 +68,12 @@ const int _kMaxContrastSteps = 50;
 /// non-text graphics, which is what this is.
 ///
 /// Returns [color] untouched when it already passes.
-Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
+Color ensureContrast(
+  Color color,
+  Color background, {
+  double minRatio = 3.0,
+  double saturationGain = 0.0,
+}) {
   if (contrastRatio(color, background) >= minRatio) return color;
 
   // On a light background darken, on a dark one lighten — moving the other
@@ -77,7 +85,16 @@ Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
     final shift = step * _kContrastStep;
     final lightness = (darken ? hsl.lightness - shift : hsl.lightness + shift)
         .clamp(0.0, 1.0);
-    final candidate = hsl.withLightness(lightness).toColor();
+    // Darkening a colour alone turns it muddy (a pale yellow goes olive), so
+    // darkening may also add saturation, in proportion to how far it has
+    // been darkened. Lightening never does: it would glow.
+    final saturation = darken
+        ? (hsl.saturation + saturationGain * shift).clamp(0.0, 1.0)
+        : hsl.saturation;
+    final candidate = hsl
+        .withLightness(lightness)
+        .withSaturation(saturation)
+        .toColor();
     if (contrastRatio(candidate, background) >= minRatio) return candidate;
     if (lightness == 0.0 || lightness == 1.0) break;
   }
@@ -88,8 +105,14 @@ Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
 }
 
 /// The weakest contrast a line colour, or the text on it, may have against
-/// what it sits on.
+/// what it sits on. Raising it on light surfaces only muddied pale colours
+/// (a yellow goes brown), so both themes share it.
 const double _kMinLineContrast = 3.0;
+
+/// Saturation a line colour gains per unit of lightness it loses when it is
+/// darkened for a light background, so a darkened yellow stays golden rather
+/// than olive.
+const double _kDarkenedLineSaturationGain = 1.0;
 
 /// What the dark map is painted with, for judging a line drawn on it.
 const Color _kDarkMapBackground = Color(0xFF1A1A1A);
@@ -104,10 +127,12 @@ const Color _kDarkMapBackground = Color(0xFF1A1A1A);
 Color? lineColor(String? hex, {Color? background}) {
   final parsed = parseHexColor(hex?.trim());
   if (parsed == null) return null;
+  final surface = background ?? AppColors.white;
   return ensureContrast(
     parsed,
-    background ?? AppColors.white,
+    surface,
     minRatio: _kMinLineContrast,
+    saturationGain: _kDarkenedLineSaturationGain,
   );
 }
 
