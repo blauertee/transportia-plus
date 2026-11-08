@@ -182,12 +182,61 @@ void main() {
       final changing = joined;
       final merged = JourneyGraphService.mergeOnward(changing, [
         joined.last,
+        // The way the lock was found: on the same vehicles as the first
+        // change, and no sooner.
         lock.itinerary,
       ]);
 
-      expect(merged, hasLength(changing.length + 1));
+      expect(merged, changing);
       final arrivals = merged.map((it) => it.endTime).toList();
       expect(arrivals, [...arrivals]..sort());
+    });
+
+    test('leaves out staying on for the same vehicles, a stop later', () {
+      // Staying on to Ingolstadt and boarding the onward train there,
+      // when changing a stop earlier boards the very same train.
+      final (stayingOn, _) = stayOn(
+        lock,
+        ice1009,
+        ice1009.to,
+        onward.first,
+        margin: JourneyGraphService.changeMargin,
+      )!;
+      final changing = stayingOn.withLegs([
+        for (final leg in stayingOn.legs)
+          if (leg.tripId == ice1009.tripId) short else leg,
+      ]);
+
+      expect(JourneyGraphService.mergeOnward([changing], [stayingOn]), [
+        changing,
+      ]);
+    });
+
+    test('keeps staying on that arrives earlier on the same vehicles', () {
+      final (stayingOn, _) = stayOn(
+        lock,
+        ice1009,
+        ice1009.to,
+        onward.first,
+        margin: JourneyGraphService.changeMargin,
+      )!;
+      final later = stayingOn.legs.last;
+      final changing = Itinerary(
+        duration: stayingOn.duration + 600,
+        startTime: stayingOn.startTime,
+        endTime: stayingOn.endTime.add(const Duration(minutes: 10)),
+        transfers: stayingOn.transfers,
+        legs: [
+          for (final leg in stayingOn.legs)
+            if (leg.tripId == ice1009.tripId) short else leg,
+        ],
+      );
+
+      expect(later, isNotNull);
+      expect(JourneyGraphService.mergeOnward([changing], [stayingOn]), [
+        stayingOn,
+        changing,
+      ]);
     });
   });
 }
