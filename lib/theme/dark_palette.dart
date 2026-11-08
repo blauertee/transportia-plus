@@ -26,29 +26,6 @@ class DarkPalette {
   /// Lightness every accent is moved to; null leaves it alone.
   final double? lightness;
 
-  /// Draft switch: whether a transit line's own colour is capped on the dark
-  /// theme. Feeds colour lines for white paper; saturated ones glow on dark.
-  static bool capLineColors = false;
-
-  /// The most saturated and lightest a line colour may be when capped.
-  static const double maxLineSaturation = 0.6;
-  static const double maxLineLightness = 0.55;
-
-  /// [line] as drawn on the dark theme: hue kept, saturation and lightness
-  /// capped. Colours already under both caps come back untouched.
-  static Color capLine(Color line) {
-    if (!capLineColors) return line;
-    final hsl = HSLColor.fromColor(line);
-    if (hsl.saturation <= maxLineSaturation &&
-        hsl.lightness <= maxLineLightness) {
-      return line;
-    }
-    return hsl
-        .withSaturation(hsl.saturation.clamp(0.0, maxLineSaturation).toDouble())
-        .withLightness(hsl.lightness.clamp(0.0, maxLineLightness).toDouble())
-        .toColor();
-  }
-
   /// The palette in use. Mutable only so drafts can render each option.
   static DarkPalette current = liftedMuted;
 

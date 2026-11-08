@@ -132,7 +132,7 @@ Color legSpineColor({
 }) {
   // A change between two services is not itself a service.
   if (isTransfer || isStreetLeg(leg.mode)) return kStreetLegColor;
-  final routeColor = parseLineColor(leg.routeColor);
+  final routeColor = parseHexColor(leg.routeColor);
   if (routeColor == null) return accent;
   return ensureContrast(routeColor, background);
 }

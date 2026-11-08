@@ -383,7 +383,7 @@ class _DepartureRow extends StatelessWidget {
         children: [
           RouteBadgePill(
             label: stopTime.displayName,
-            background: parseLineColorOrAccent(context, stopTime.routeColor),
+            background: parseHexColorOrAccent(context, stopTime.routeColor),
             foreground: parseHexColorOr(
               stopTime.routeTextColor,
               AppColors.solidWhite,

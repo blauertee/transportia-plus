@@ -265,7 +265,7 @@ class _StopTimePreviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final routeColor = parseLineColorOrAccent(context, stopTime.routeColor);
+    final routeColor = parseHexColorOrAccent(context, stopTime.routeColor);
     final routeTextColor = parseHexColorOr(
       stopTime.routeTextColor,
       AppColors.solidWhite,
