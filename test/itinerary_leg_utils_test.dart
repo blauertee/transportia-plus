@@ -221,4 +221,54 @@ void main() {
       expect(display.single.isTransfer, isFalse);
     });
   });
+
+  group('endpointLabel', () {
+    test('keeps a real name', () {
+      expect(
+        endpointLabel('Pankow', searched: 'Home', fallback: 'Start'),
+        'Pankow',
+      );
+    });
+
+    test('takes the searched name for a placeholder', () {
+      expect(
+        endpointLabel('START', searched: 'Home', fallback: 'Start'),
+        'Home',
+      );
+    });
+
+    test('falls back when nothing is named', () {
+      expect(
+        endpointLabel('END', searched: 'END', fallback: 'Destination'),
+        'Destination',
+      );
+      expect(endpointLabel(null, fallback: 'Start'), 'Start');
+    });
+  });
+
+  group('destinationLabel', () {
+    test('names the searched place at the end of a walk', () {
+      expect(
+        destinationLabel(_coordinateToCoordinate(), searched: 'Terminal 1'),
+        'Terminal 1',
+      );
+      expect(destinationLabel(_coordinateToCoordinate()), 'Destination');
+    });
+
+    test('names the last stop where the walk from it is not shown', () {
+      final legs = [
+        ..._coordinateToCoordinate().take(2),
+        _shortWalk(from: 'Flughafen BER', to: 'END'),
+      ];
+
+      expect(destinationLabel(legs, searched: 'Terminal 1'), 'Flughafen BER');
+    });
+
+    test('names the last stop of a journey that ends on a ride', () {
+      expect(
+        destinationLabel(_coordinateToCoordinate().take(2).toList()),
+        'Flughafen BER',
+      );
+    });
+  });
 }
