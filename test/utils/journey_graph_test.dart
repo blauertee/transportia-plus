@@ -61,6 +61,33 @@ void main() {
     );
   });
 
+  group('JourneyGraph.build, results that share rides after the start', () {
+    // Pankow → Potsdam: at 10:00 on foot to the S2, at 10:01 by U2, at 10:05
+    // by tram 50 to the same S2, and on the same rides from there.
+    final graph = JourneyGraph.build(_load('plan_shared_after_first_mile'));
+
+    test('puts results that share rides side by side', () {
+      final s2 = graph.rides.where((ride) => ride.leg.displayName == 'S2');
+      final shared = s2.firstWhere((ride) => ride.itineraries.length > 1);
+
+      expect(shared.itineraries, [0, 1]);
+      expect(
+        graph.itineraries[1].legs.any((leg) => leg.displayName == '50'),
+        isTrue,
+      );
+    });
+
+    test('keeps departure order where nothing is shared', () {
+      final u2 = [
+        for (final (i, it) in graph.itineraries.indexed)
+          if (it.legs.any((leg) => leg.displayName == 'U2')) i,
+      ];
+      final starts = [for (final i in u2) graph.itineraries[i].startTime];
+
+      expect(starts, [...starts]..sort());
+    });
+  });
+
   group('JourneyGraph.build, results that share rides apart', () {
     // Köln → Amsterdam: four results by coach over Rotterdam, all on the
     // same coach. The first and last take the Intercity on to Amsterdam

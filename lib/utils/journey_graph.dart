@@ -278,10 +278,11 @@ class JourneyGraph {
     );
   }
 
-  /// [results] ordered by departure. Results leaving at the same time go
-  /// next to the ones they share rides with: a shared ride is drawn once
-  /// across the columns side by side that take it, and once more past each
-  /// column between them that does not.
+  /// [results] in departure order, except that each result goes next to
+  /// the one placed before it that it shares the most rides with: a shared
+  /// ride is drawn once across the columns side by side that take it, and
+  /// once more past each column between them that does not. A result that
+  /// shares nothing with the last one placed is the earliest left.
   static List<Itinerary> _byDeparture(List<Itinerary> results) {
     Set<String> rides(Itinerary it) => {
       for (final leg in it.legs)
@@ -291,15 +292,19 @@ class JourneyGraph {
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final ordered = <Itinerary>[];
     while (left.isNotEmpty) {
-      final start = left.first.startTime;
-      final tied = left.takeWhile((it) => it.startTime == start).toList();
-      final next = ordered.isEmpty
-          ? tied.first
-          : tied.reduce((best, it) {
-              final previous = rides(ordered.last);
-              int shared(Itinerary x) => rides(x).intersection(previous).length;
-              return shared(it) > shared(best) ? it : best;
-            });
+      var next = left.first;
+      if (ordered.isNotEmpty) {
+        final previous = rides(ordered.last);
+        var most = 0;
+        // Earliest first, so a tie keeps departure order.
+        for (final it in left) {
+          final shared = rides(it).intersection(previous).length;
+          if (shared > most) {
+            most = shared;
+            next = it;
+          }
+        }
+      }
       ordered.add(next);
       left.remove(next);
     }

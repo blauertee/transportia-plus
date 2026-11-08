@@ -36,6 +36,7 @@ than against hand-written JSON that agrees with our assumptions.
 | `plan_journey_graph_onward.json` | `/api/v5/plan` from Ingolstadt Hbf by stop id at 15:58 the same day, to Lindau Insel: the search on from ICE 1009, first two itineraries |
 | `plan_same_departure.json` | `/api/v6/plan` from London Kings Cross by stop id, 28 Oct 2026 15:05, to central Prague, the first three of five itineraries: two leave together on EST 9040, and the one over Paris Est shares its TGV onward with the earlier EST 9036 (2026-10-27) |
 | `plan_split_ride.json` | four itineraries from `/api/v5/plan` Köln Hbf → Amsterdam Centraal, 28 Oct 2026 17:00, `detailedTransfers=false`, from the first pages merged: all four on one coach to Rotterdam; two go on by Intercity to Amsterdam Centraal and two change at Leiden, and by departure the two that change sit between the other two (2026-10-27) |
+| `plan_shared_after_first_mile.json` | `/api/v6/plan` Pankow (52.573,13.412) → Potsdam Hbf, 9 Nov 2026 10:00: one result walks to S+U Pankow and another takes tram 50 there, both for the same S2, S42 and S7, with a result over U2 leaving between them (2026-11-08) |
 
 ## Trimming
 
