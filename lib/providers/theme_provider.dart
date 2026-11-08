@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../api/motis_request_log.dart';
 import '../constants/prefs_keys.dart';
 
 enum AppThemeMode { light, dark, system }
@@ -166,6 +167,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _logMotisRequests =
         await prefs.getBool(_logMotisRequestsKey) ?? defaultLogMotisRequests;
+    MotisRequestLog.enabled = _logMotisRequests;
 
     _showNearbyDepartures =
         await prefs.getBool(_showNearbyDeparturesKey) ??
@@ -280,6 +282,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_logMotisRequests == log) return;
 
     _logMotisRequests = log;
+    MotisRequestLog.enabled = log;
     notifyListeners();
 
     final prefs = SharedPreferencesAsync();

@@ -37,6 +37,23 @@ class MotisRequestRecord {
   final String? error;
 
   bool get isPending => duration == null;
+
+  /// This request with its outcome filled in.
+  MotisRequestRecord finished({
+    required Duration duration,
+    int? statusCode,
+    String? error,
+  }) => MotisRequestRecord(
+    endpoint: endpoint,
+    method: method,
+    uri: uri,
+    headers: headers,
+    body: body,
+    sentAt: sentAt,
+    duration: duration,
+    statusCode: statusCode,
+    error: error,
+  );
   bool get isFailure => error != null;
 
   /// The whole request as plain text: method and URL, headers, then the body

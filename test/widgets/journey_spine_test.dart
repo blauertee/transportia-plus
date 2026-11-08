@@ -1016,9 +1016,7 @@ void main() {
       await _quiet(tester);
     });
 
-    testWidgets('linking says when it takes the bike on board', (
-      tester,
-    ) async {
+    testWidgets('linking says when it takes the bike on board', (tester) async {
       final host = await _pumpSpine(
         tester,
         initial: _separate.copyWith(firstMileModes: const [TransitMode.bike]),

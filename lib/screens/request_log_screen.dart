@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../api/transitous_endpoint.dart';
 import '../models/motis_request_record.dart';
 import '../providers/theme_provider.dart';
-import '../services/motis_request_log.dart';
+import '../api/motis_request_log.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../utils/custom_page_route.dart';
