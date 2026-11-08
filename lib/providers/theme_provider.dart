@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/motis_request_log.dart';
 import '../constants/prefs_keys.dart';
+import '../theme/dark_palette.dart';
 
 enum AppThemeMode { light, dark, system }
 
@@ -73,7 +74,12 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   static ThemeProvider? get instance => _instance;
 
-  Color get accentColor => _accentColor;
+  /// The accent as drawn: toned down on the dark theme, as picked otherwise.
+  Color get accentColor =>
+      isDark ? DarkPalette.current.accentFor(_accentColor) : _accentColor;
+
+  /// The swatch the rider picked, before the dark theme adapts it.
+  Color get pickedAccentColor => _accentColor;
   String get mapStyle => _mapStyle;
 
   /// Whether the map is drawn dark. Only the dark style is; the default style
@@ -115,9 +121,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get isDark => _effectiveAppThemeMode == AppThemeMode.dark;
 
-  Color get backgroundColor => isDark ? darkBackground : lightBackground;
+  Color get backgroundColor =>
+      isDark ? DarkPalette.current.background : lightBackground;
 
-  Color get textColor => isDark ? darkText : lightText;
+  Color get textColor => isDark ? DarkPalette.current.text : lightText;
 
   ThemeProvider() {
     _instance = this;
