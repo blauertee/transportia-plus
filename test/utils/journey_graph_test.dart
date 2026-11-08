@@ -318,12 +318,23 @@ void main() {
   group('GraphScale', () {
     final graph = JourneyGraph.build(results);
 
-    test('is linear where every ride has room for its name', () {
-      final scale = GraphScale(graph, 10);
+    test('is linear where every ride and street leg has room for its text', () {
+      // Zoomed in far enough for the shortest walk to the first ride or from
+      // the last to hold its station name, its node and its time.
+      final scale = GraphScale(graph, 30);
 
       expect(scale.stretchedSpans, isEmpty);
       final minutes = graph.end.difference(graph.start).inMinutes;
-      expect(scale.height, closeTo(minutes * 10, 1));
+      expect(scale.height, closeTo(minutes * 30, 1));
+    });
+
+    test('makes room on a short street leg for its text', () {
+      final scale = GraphScale(graph, 10);
+
+      for (final end in graph.arrivals.where((end) => end.hasStreetLeg)) {
+        final height = scale.yOf(end.time) - scale.yOf(end.ride.leg.endTime);
+        expect(height, greaterThanOrEqualTo(48 - 1e-9));
+      }
     });
 
     test('stretches short stretches when zoomed out', () {
