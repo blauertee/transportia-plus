@@ -148,6 +148,67 @@ void main() {
     });
   });
 
+  group('joinedItineraryId', () {
+    final joined = continueAfter(viaIngolstadt, ice1009, onward).first;
+    final cut = joined.legs.indexWhere((leg) => leg.displayName == 'ICE 1009');
+
+    test('puts a walk between the locked ride and the next one', () {
+      // The search on from Ingolstadt boards straight away.
+      expect(joined.legs[cut + 1].isStreet, isFalse);
+
+      final legs = joinedItineraryId(joined, ice1009)!.legs;
+
+      expect(legs, hasLength(joined.legs.length + 1));
+      final walk = legs[cut + 1];
+      expect(walk.mode, 'WALK');
+      expect(walk.tripId, isEmpty);
+      expect(walk.fromId, ice1009.to.stopId);
+      expect(walk.toId, joined.legs[cut + 1].from.stopId);
+      expect(legs[cut + 2].tripId, joined.legs[cut + 1].tripId);
+    });
+
+    test('puts no walk in where one is already there', () {
+      final before = viaIngolstadt.legs.indexOf(ice1009);
+      expect(viaIngolstadt.legs[before + 1].isStreet, isTrue);
+
+      final legs = joinedItineraryId(viaIngolstadt, ice1009)!.legs;
+
+      expect(legs, hasLength(viaIngolstadt.legs.length));
+    });
+
+    test('puts no walk after a locked ride that is the last leg', () {
+      final last = Itinerary(
+        duration: 0,
+        startTime: joined.startTime,
+        endTime: ice1009.endTime,
+        transfers: 0,
+        legs: joined.legs.sublist(0, cut + 1),
+      );
+
+      expect(joinedItineraryId(last, ice1009)!.legs, hasLength(cut + 1));
+    });
+
+    test('is null for a journey that does not take the ride', () {
+      final other = results.firstWhere((it) => it != viaIngolstadt);
+
+      expect(joinedItineraryId(other, ice1009), isNull);
+    });
+  });
+
+  group('isSameJoinedJourney', () {
+    final joined = continueAfter(viaIngolstadt, ice1009, onward);
+
+    test('holds for the same rides, whatever the walks', () {
+      final planned = Itinerary.fromJson(joined.first.sourceJson!);
+
+      expect(isSameJoinedJourney(joined.first, planned), isTrue);
+    });
+
+    test('fails for other rides', () {
+      expect(isSameJoinedJourney(joined.first, joined.last), isFalse);
+    });
+  });
+
   group('RideLock', () {
     final lock = RideLock(viaIngolstadt, ice1009);
 

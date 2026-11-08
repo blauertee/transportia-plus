@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import '../api/endpoints/trip_endpoint.dart';
 import '../models/itinerary.dart';
 import '../models/routing_options.dart';
 import '../models/time_selection.dart';
+import '../models/transitous/itinerary_id.dart';
 import '../utils/journey_graph.dart';
+import 'rental_providers_service.dart';
 import 'routing_options_service.dart';
 import 'routing_service.dart';
+import 'server_capabilities_service.dart';
 
 /// The search the results screen was opened with, which the journey graph
 /// searches again with whatever has been locked.
@@ -64,6 +68,9 @@ class JourneyGraphPage {
 
 typedef JourneyGraphSearcher =
     Future<JourneyGraphPage> Function(JourneyGraphSearch search);
+
+/// Asks the planner for one journey by its legs.
+typedef JoinedJourneyFetcher = Future<Itinerary> Function(ItineraryId id);
 
 /// The searches behind the journey graph's locks.
 ///
@@ -125,9 +132,56 @@ class JourneyGraphService {
       options: options,
       pageCursor: search.pageCursor,
     );
+    final joined = continueAfter(
+      lock.itinerary,
+      lock.upTo,
+      response.itineraries,
+    );
+    final rentalGroups = await RentalProvidersService.activeGroupIds();
     return JourneyGraphPage(
-      continueAfter(lock.itinerary, lock.upTo, response.itineraries),
+      await planJoined(
+        joined,
+        lock.upTo,
+        fetch: (id) => TripEndpoint.refreshItineraryById(
+          id: id,
+          options: options.toRefreshParams(
+            serverLimit: ServerCapabilitiesService
+                .capabilities
+                .value
+                .maxPrePostTransitTime,
+            rentalProviderGroups: rentalGroups,
+          ),
+        ),
+      ),
       later: response.nextPageCursor,
     );
+  }
+
+  /// [joined], each asked of the planner as one journey, so it comes back
+  /// with an id to share it by and with the walk from the locked ride to
+  /// the next. One that cannot be planned so, or comes back as other
+  /// rides, stays as it was joined.
+  static Future<List<Itinerary>> planJoined(
+    List<Itinerary> joined,
+    Leg upTo, {
+    required JoinedJourneyFetcher fetch,
+  }) => Future.wait([
+    for (final journey in joined) _planJoined(journey, upTo, fetch),
+  ]);
+
+  static Future<Itinerary> _planJoined(
+    Itinerary joined,
+    Leg upTo,
+    JoinedJourneyFetcher fetch,
+  ) async {
+    final id = joinedItineraryId(joined, upTo);
+    if (id == null) return joined;
+    try {
+      final planned = await fetch(id);
+      final hasId = planned.id?.isNotEmpty ?? false;
+      return hasId && isSameJoinedJourney(joined, planned) ? planned : joined;
+    } catch (_) {
+      return joined;
+    }
   }
 }

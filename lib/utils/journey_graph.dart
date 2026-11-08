@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
+
 import '../models/itinerary.dart';
+import '../models/transitous/itinerary_id.dart';
 
 /// The shortest a ride is drawn, whatever the zoom: room for its line name.
 const double _kMinRideHeight = 20;
@@ -566,8 +569,9 @@ int _endOf(Itinerary itinerary, Leg upTo) {
 /// the results of a search from where [upTo] gets off, at its arrival.
 ///
 /// The joined itineraries were never planned as a whole, so they carry no
-/// server id to refresh them by and no fare, which covered only one of the
-/// halves. Their snapshot is the two halves' legs joined, so a joined
+/// server id to share or refresh them by and no fare, which covered only
+/// one of the halves; [JourneyGraphService.planJoined] asks the planner for
+/// each as one journey, by [joinedItineraryId]. Their snapshot is the two halves' legs joined, so a joined
 /// journey can still be saved.
 List<Itinerary> continueAfter(
   Itinerary locked,
@@ -622,4 +626,60 @@ Map<String, dynamic>? _joinedSnapshot(
     'transfers': transfers,
     'legs': legs,
   };
+}
+
+/// The id to ask the planner for [joined] as one journey: its legs, with a
+/// walk put in where [upTo] gets off and the onward part boards straight
+/// away.
+///
+/// Two rides back to back read to the planner as staying seated, and it
+/// merges them into one blank leg. The walk's place and times only say
+/// that there is one: the planner works out the real walk itself. Null when
+/// [upTo] is not on [joined].
+ItineraryId? joinedItineraryId(Itinerary joined, Leg upTo) {
+  final end = _endOf(joined, upTo);
+  if (end < 0) return null;
+  final legs = [for (final leg in joined.legs) LegId.fromLeg(leg)];
+  if (end + 1 < joined.legs.length) {
+    final next = joined.legs[end + 1];
+    if (!next.isStreet) {
+      final off = LegId.fromLeg(upTo);
+      final on = LegId.fromLeg(next);
+      legs.insert(
+        end + 1,
+        LegId(
+          displayName: '',
+          tripId: '',
+          fromId: off.toId,
+          fromLat: off.toLat,
+          fromLon: off.toLon,
+          fromLevel: off.toLevel,
+          toId: on.fromId,
+          toLat: on.fromLat,
+          toLon: on.fromLon,
+          toLevel: on.fromLevel,
+          scheduledStart: off.scheduledEnd,
+          scheduledEnd: on.scheduledStart,
+          mode: 'WALK',
+          scheduled: true,
+        ),
+      );
+    }
+  }
+  return ItineraryId(legs: legs);
+}
+
+/// Whether [planned] is [joined] as the planner sees it: the same rides,
+/// between the same stops, in the same order. The planner may route the
+/// walks differently; that is what it was asked for.
+bool isSameJoinedJourney(Itinerary joined, Itinerary planned) {
+  final before = [
+    for (final leg in joined.legs)
+      if (leg.isRide) GraphRide.keyOf(leg),
+  ];
+  final after = [
+    for (final leg in planned.legs)
+      if (leg.isRide) GraphRide.keyOf(leg),
+  ];
+  return before.isNotEmpty && listEquals(before, after);
 }
