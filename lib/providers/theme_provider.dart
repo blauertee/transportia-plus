@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../api/motis_request_log.dart';
 import '../constants/prefs_keys.dart';
 
 enum AppThemeMode { light, dark, system }
@@ -27,6 +28,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _showCaloriesKey = PrefsKeys.showCalories;
   static const String _showGtfsFieldsKey = PrefsKeys.showGtfsFields;
   static const String _showGraphCopyButtonKey = PrefsKeys.showGraphCopyButton;
+  static const String _logMotisRequestsKey = PrefsKeys.logMotisRequests;
   static const String _showNearbyDeparturesKey = PrefsKeys.showNearbyDepartures;
 
   static const Color defaultAccentColor = Color.fromARGB(255, 0, 113, 133);
@@ -39,6 +41,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultShowCalories = false;
   static const bool defaultShowGtfsFields = false;
   static const bool defaultShowGraphCopyButton = false;
+  static const bool defaultLogMotisRequests = false;
   static const bool defaultShowNearbyDepartures = true;
 
   static const Color lightBackground = Color(0xFFFFFFFF);
@@ -64,6 +67,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _showCalories = defaultShowCalories;
   bool _showGtfsFields = defaultShowGtfsFields;
   bool _showGraphCopyButton = defaultShowGraphCopyButton;
+  bool _logMotisRequests = defaultLogMotisRequests;
   bool _showNearbyDepartures = defaultShowNearbyDepartures;
   bool _isInitialized = false;
 
@@ -83,6 +87,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get showCalories => _showCalories;
   bool get showGtfsFields => _showGtfsFields;
   bool get showGraphCopyButton => _showGraphCopyButton;
+  bool get logMotisRequests => _logMotisRequests;
   bool get showNearbyDepartures => _showNearbyDepartures;
 
   /// The rider's choice, as the appearance toggle shows it.
@@ -159,6 +164,10 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     _showGraphCopyButton =
         await prefs.getBool(_showGraphCopyButtonKey) ??
         defaultShowGraphCopyButton;
+
+    _logMotisRequests =
+        await prefs.getBool(_logMotisRequestsKey) ?? defaultLogMotisRequests;
+    MotisRequestLog.enabled = _logMotisRequests;
 
     _showNearbyDepartures =
         await prefs.getBool(_showNearbyDeparturesKey) ??
@@ -267,6 +276,17 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final prefs = SharedPreferencesAsync();
     await prefs.setBool(_showGraphCopyButtonKey, show);
+  }
+
+  Future<void> setLogMotisRequests(bool log) async {
+    if (_logMotisRequests == log) return;
+
+    _logMotisRequests = log;
+    MotisRequestLog.enabled = log;
+    notifyListeners();
+
+    final prefs = SharedPreferencesAsync();
+    await prefs.setBool(_logMotisRequestsKey, log);
   }
 
   Future<void> setShowNearbyDepartures(bool show) async {
