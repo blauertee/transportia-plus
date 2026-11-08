@@ -1280,7 +1280,7 @@ class _TicketFaresState extends State<TicketFares> {
   }
 
   Widget _buildRouteBadge(RouteBadge badge) {
-    final routeColor = parseHexColor(badge.routeColor);
+    final routeColor = parseLineColor(badge.routeColor);
     return RouteBadgePill(
       label: badge.name,
       background: routeColor ?? AppColors.accentOf(context),
@@ -1797,7 +1797,7 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
 
   Widget _buildTitleWidget() {
     if (widget.leg.displayName != null) {
-      final routeColor = parseHexColor(widget.leg.routeColor);
+      final routeColor = parseLineColor(widget.leg.routeColor);
       final isWalkLeg = widget.leg.mode == 'WALK';
       final bg = routeColor ?? (isWalkLeg ? null : AppColors.accentOf(context));
       final txt =

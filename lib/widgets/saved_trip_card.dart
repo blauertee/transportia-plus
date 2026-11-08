@@ -320,7 +320,7 @@ class _LegBadges extends StatelessWidget {
   }
 
   Widget _badge(BuildContext context, Leg leg) {
-    final routeColor = parseHexColor(leg.routeColor);
+    final routeColor = parseLineColor(leg.routeColor);
 
     return RouteBadgePill(
       label: leg.displayName!,
