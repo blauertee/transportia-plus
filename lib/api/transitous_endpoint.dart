@@ -30,7 +30,7 @@ enum TransitousEndpoint {
   ),
   stopTimes(prefKey: 'stoptimes', path: 'stoptimes', label: 'Stop times'),
   stop(prefKey: 'stop', path: 'stop', label: 'Stop'),
-  mapTrips(prefKey: 'mapTrips', path: 'map/trips', label: 'Map trips'),
+  mapTrips(prefKey: 'mapTrips', path: 'map/trips', label: 'Map vehicles'),
   mapStops(prefKey: 'mapStops', path: 'map/stops', label: 'Map stops'),
   oneToAll(prefKey: 'oneToAll', path: 'one-to-all', label: 'One to all'),
 

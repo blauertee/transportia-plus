@@ -48,6 +48,7 @@ import '../theme/system_bars.dart';
 import '../utils/color_utils.dart';
 import '../utils/geo_utils.dart';
 import '../utils/map_framing.dart';
+import '../utils/map_visibility.dart';
 import '../utils/haptics.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/leg_helper.dart';
@@ -90,6 +91,7 @@ class MapScreen extends StatefulWidget {
     this.onOverlayVisibilityChanged,
     this.onTabChangeRequested,
     this.onTimetableRequested,
+    this.isActive = true,
   });
 
   final bool deferInit;
@@ -99,12 +101,17 @@ class MapScreen extends StatefulWidget {
   final ValueChanged<bool>? onOverlayVisibilityChanged;
   final ValueChanged<int>? onTabChangeRequested;
   final ValueChanged<TransitousLocationSuggestion>? onTimetableRequested;
+
+  /// Whether this screen is the one on show. The navigation shell keeps the
+  /// map alive behind its other tabs, and it stops fetching vehicles there.
+  final bool isActive;
+
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const CameraPosition _initCam = CameraPosition(
     target: LatLng(kFallbackMapLat, kFallbackMapLon),
     zoom: kFallbackMapZoom,
@@ -173,6 +180,8 @@ class _MapScreenState extends State<MapScreen>
   Timer? _tripRefreshDebounce;
   Timer? _stopRefreshDebounce;
   Timer? _vehicleAnimationTimer;
+
+  late MapVisibility _visibility;
   int _tripRequestId = 0;
   int _stopRequestId = 0;
   int _stopTimesRequestId = 0;
@@ -262,6 +271,14 @@ class _MapScreenState extends State<MapScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Whether a page covers it is read in didChangeDependencies, the first
+    // place inherited widgets can be.
+    _visibility = MapVisibility.initial(
+      isTabActive: widget.isActive,
+      isOnstage: true,
+      lifecycleState: WidgetsBinding.instance.lifecycleState,
+    );
     unawaited(_initStartup());
     PlanRequests.pending.addListener(_applyPlanRequest);
     // One may already be waiting: the shell brings this tab forward in the
@@ -442,6 +459,7 @@ class _MapScreenState extends State<MapScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _followMapSetting();
+    _followVisibility(_visibility.withOnstage(TickerMode.of(context)));
     final accent = AppColors.accentOf(context);
     if (_stopAccentColor?.toARGB32() == accent.toARGB32()) return;
     _stopAccentColor = accent;
@@ -452,6 +470,7 @@ class _MapScreenState extends State<MapScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     PlanRequests.pending.removeListener(_applyPlanRequest);
     RoutingOptionsService.optionsListenable.removeListener(
       _onStoredOptionsChanged,
@@ -503,6 +522,9 @@ class _MapScreenState extends State<MapScreen>
   @override
   void didUpdateWidget(covariant MapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive) {
+      _followVisibility(_visibility.withTabActive(widget.isActive));
+    }
     if (oldWidget.activateOnShow != widget.activateOnShow) {
       _activateListener?.call();
       _activateListener = null;
@@ -624,6 +646,45 @@ class _MapScreenState extends State<MapScreen>
     _isLongPressClosing = false;
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _followVisibility(_visibility.withLifecycleState(state));
+  }
+
+  /// Vehicles are only fetched while the map can be seen, since polling
+  /// `/map/trips` for a hidden map spends data on positions nobody looks at.
+  bool get _isVisibleToUser => _visibility.isVisible;
+
+  /// Pauses the vehicle timers while the map is hidden, and on its return
+  /// restarts them with a fetch straight away, since the vehicles shown are
+  /// as old as the time it was away.
+  void _followVisibility(MapVisibility next) {
+    final wasVisible = _visibility.isVisible;
+    _visibility = next;
+    final isVisible = next.isVisible;
+    if (isVisible == wasVisible) return;
+    if (!isVisible) {
+      _stopMapTimers();
+      return;
+    }
+    if (!_isMapReady) return;
+    _startMapTimers();
+    _handleTripRefreshTick();
+  }
+
+  void _startMapTimers() {
+    _vehicleAnimationTimer?.cancel();
+    _vehicleAnimationTimer = Timer.periodic(
+      _vehicleAnimationFrame,
+      (_) => _updateVehiclePositions(),
+    );
+    _tripRefreshTimer?.cancel();
+    _tripRefreshTimer = Timer.periodic(
+      _tripRefreshTick,
+      (_) => _handleTripRefreshTick(),
+    );
+  }
+
   void _stopMapTimers() {
     _tripRefreshTimer?.cancel();
     _tripRefreshDebounce?.cancel();
@@ -681,14 +742,7 @@ class _MapScreenState extends State<MapScreen>
     unawaited(_ensureVehicleLayer());
     unawaited(_refreshRouteMarkers());
     _vehicleAnimationTimer?.cancel();
-    _vehicleAnimationTimer = Timer.periodic(
-      _vehicleAnimationFrame,
-      (_) => _updateVehiclePositions(),
-    );
-    _tripRefreshTimer = Timer.periodic(
-      _tripRefreshTick,
-      (_) => _handleTripRefreshTick(),
-    );
+    if (_isVisibleToUser) _startMapTimers();
     _scheduleTripRefresh();
     _scheduleStopRefresh();
     unawaited(_applySymbolOverlapSettings());
@@ -1082,6 +1136,7 @@ class _MapScreenState extends State<MapScreen>
       _applyVehiclesLayerVisibility();
       return;
     }
+    if (!_isVisibleToUser) return;
     if (controller.isCameraMoving) return;
     final token = ++_tripRequestId;
     LatLngBounds bounds;
@@ -1130,6 +1185,7 @@ class _MapScreenState extends State<MapScreen>
     if (tripId == null || tripId.isEmpty) return;
     final controller = _controller;
     if (controller == null || !_isMapReady) return;
+    if (!_isVisibleToUser) return;
     if (controller.isCameraMoving) return;
     final token = ++_tripRequestId;
     LatLngBounds bounds;
