@@ -122,7 +122,7 @@ class GraphChange {
 /// leave or arrive, so that time reads off the axis, and joined to the ride
 /// by a street spline when the way there takes any time at all.
 sealed class GraphEnd implements GraphSpan {
-  GraphEnd._(this.ride, this.time);
+  GraphEnd._(this.ride, this.time, this.streetLegs);
 
   /// The first ride of the results leaving here, or the last of those
   /// arriving.
@@ -131,6 +131,21 @@ sealed class GraphEnd implements GraphSpan {
 
   /// Indexes into [JourneyGraph.itineraries] of the results that end here.
   final List<int> itineraries = [];
+
+  /// The way between this end and [ride], as the first result through here
+  /// goes it: empty when the result starts or ends on the ride itself.
+  final List<Leg> streetLegs;
+
+  /// How long the way between this end and [ride] takes, not counting any
+  /// wait for the ride.
+  Duration get streetTime =>
+      Duration(seconds: streetLegs.fold(0, (sum, leg) => sum + leg.duration));
+
+  /// What the way is made by: a bike, car or scooter where one is used,
+  /// else on foot.
+  String get streetMode => streetLegs
+      .map((leg) => leg.mode)
+      .firstWhere((mode) => mode != 'WALK', orElse: () => 'WALK');
 
   @override
   int get firstColumn => itineraries.reduce(math.min);
@@ -146,7 +161,7 @@ sealed class GraphEnd implements GraphSpan {
 
 /// Where a result starts: above its first ride, at the time it leaves.
 final class GraphDeparture extends GraphEnd {
-  GraphDeparture._(super.ride, super.time) : super._();
+  GraphDeparture._(super.ride, super.time, super.streetLegs) : super._();
 
   @override
   bool get hasStreetLeg => time.isBefore(ride.leg.startTime);
@@ -155,7 +170,7 @@ final class GraphDeparture extends GraphEnd {
 /// Where a result ends: under its last ride, at the time it reaches the
 /// destination.
 final class GraphArrival extends GraphEnd {
-  GraphArrival._(super.ride, super.time) : super._();
+  GraphArrival._(super.ride, super.time, super.streetLegs) : super._();
 
   @override
   bool get hasStreetLeg => time.isAfter(ride.leg.endTime);
@@ -226,13 +241,19 @@ class JourneyGraph {
       }
       final start = itineraries[i].startTime;
       departures
-          .putIfAbsent((first!, start), () => GraphDeparture._(first!, start))
+          .putIfAbsent(
+            (first!, start),
+            () => GraphDeparture._(first!, start, itineraries[i].firstMileLegs),
+          )
           .itineraries
           .add(i);
       final last = previous!;
       final arrival = itineraries[i].endTime;
       arrivals
-          .putIfAbsent((last, arrival), () => GraphArrival._(last, arrival))
+          .putIfAbsent((
+            last,
+            arrival,
+          ), () => GraphArrival._(last, arrival, itineraries[i].lastMileLegs))
           .itineraries
           .add(i);
     }

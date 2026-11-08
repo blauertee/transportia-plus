@@ -127,6 +127,20 @@ void main() {
       }
     });
 
+    test('knows how the way to the first ride goes, and how long', () {
+      for (final end in graph.departures) {
+        final itinerary = graph.itineraries[end.itineraries.first];
+        expect(end.streetMode, 'WALK');
+        expect(
+          end.streetTime.inSeconds,
+          itinerary.firstMileLegs.fold<int>(
+            0,
+            (sum, leg) => sum + leg.duration,
+          ),
+        );
+      }
+    });
+
     test('puts every end on the scale', () {
       for (final end in [...graph.departures, ...graph.arrivals]) {
         expect(graph.events, contains(end.time));

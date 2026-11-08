@@ -15,6 +15,7 @@ import '../../utils/duration_formatter.dart';
 import '../../utils/journey_colors.dart';
 import '../../utils/hyphenation.dart';
 import '../../utils/journey_graph.dart';
+import '../../utils/leg_helper.dart';
 import '../../utils/time_utils.dart';
 
 /// Room left of the first column for the hour labels.
@@ -44,6 +45,18 @@ const double _kArrivalHeight = 32;
 /// The time over each result's first ride.
 const double _kDepartureHeight = 16;
 
+/// The circle where a result sets off on foot, by bike or by car.
+const double _kStartNodeSize = 22;
+
+/// Room between a street leg and the time it takes, written beside it.
+const double _kStreetTimeGap = 6;
+
+TextStyle get _streetTimeStyle => TextStyle(
+  fontSize: 10,
+  fontWeight: FontWeight.w600,
+  color: AppColors.black.withValues(alpha: 0.6),
+);
+
 TextStyle get _durationStyle => TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -55,7 +68,7 @@ const double _kHeaderHeight = 24;
 
 /// Space above the first departure and below the last arrival, for the
 /// labels that hang off either end.
-const double _kTopPad = _kDepartureHeight + 14;
+const double _kTopPad = _kDepartureHeight + _kStartNodeSize / 2 + 14;
 const double _kBottomPad = 44;
 
 /// Zoom bounds, in pixels per minute: from a whole day on one screen to a
@@ -360,6 +373,10 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
                   _lockBadge(geometry, ride, lock, accent),
+              for (final end in [...graph.departures, ...graph.arrivals])
+                if (_streetTime(geometry, end) case final label?) label,
+              for (final departure in graph.departures)
+                if (departure.hasStreetLeg) _startNode(geometry, departure),
               for (final departure in graph.departures)
                 _departureLabel(geometry, departure),
               for (final arrival in graph.arrivals)
@@ -748,14 +765,34 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       );
     }
     for (final departure in graph.departures) {
-      final at = y(departure.time) - 2;
+      final node = departure.hasStreetLeg ? _kStartNodeSize / 2 : 0;
+      final at = y(departure.time) - 2 - node;
       boxes.add(
         GraphBox(
           departure,
           left: _kArrivalWidth / 2,
           right: _kArrivalWidth / 2,
           top: at - _kDepartureHeight,
-          bottom: at,
+          bottom: y(departure.time) + node,
+        ),
+      );
+    }
+    // The time a street leg takes, beside it halfway: right of the end,
+    // and as far again as the ride may lie to that side.
+    for (final end in [...graph.departures, ...graph.arrivals]) {
+      final text = _streetTimeText(end);
+      if (text == null) continue;
+      final mid = (y(end.time) + y(_rideTimeAt(end))) / 2;
+      boxes.add(
+        GraphBox(
+          end,
+          left: 0,
+          right:
+              _kBarWidth / 2 +
+              _kStreetTimeGap +
+              _textWidth(context, text, _streetTimeStyle),
+          top: mid - 7,
+          bottom: mid + 7,
         ),
       );
     }
@@ -1026,9 +1063,10 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   /// When the results leave, over where they set off: on the axis's level
   /// for that time.
   Widget _departureLabel(_Geometry g, GraphDeparture departure) {
+    final node = departure.hasStreetLeg ? _kStartNodeSize / 2 : 0;
     return Positioned(
       left: g.x(departure) - _kArrivalWidth / 2,
-      top: g.y(departure.time) - 2 - _kDepartureHeight,
+      top: g.y(departure.time) - 2 - node - _kDepartureHeight,
       width: _kArrivalWidth,
       height: _kDepartureHeight,
       child: GestureDetector(
@@ -1045,6 +1083,67 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               color: AppColors.black,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Where a result sets off on its way to the first ride: a circle with
+  /// what it sets off on.
+  Widget _startNode(_Geometry g, GraphDeparture departure) {
+    final color = kStreetLegColor;
+    return Positioned(
+      left: g.x(departure) - _kStartNodeSize / 2,
+      top: g.y(departure.time) - _kStartNodeSize / 2,
+      width: _kStartNodeSize,
+      height: _kStartNodeSize,
+      child: GestureDetector(
+        onTap: _tap(departure.itineraries, null),
+        child: _fade(
+          departure.itineraries.contains(selected),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Icon(
+              getLegIcon(departure.streetMode),
+              size: 12,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// When the street leg at [end] meets its ride.
+  static DateTime _rideTimeAt(GraphEnd end) =>
+      end is GraphDeparture ? end.ride.leg.startTime : end.ride.leg.endTime;
+
+  /// How long the street leg at [end] takes, in whole minutes; null with
+  /// no street leg, or one too short to say.
+  static String? _streetTimeText(GraphEnd end) {
+    if (!end.hasStreetLeg) return null;
+    final seconds = end.streetTime.inSeconds;
+    if (seconds < 60) return null;
+    return formatDuration(seconds);
+  }
+
+  /// The time the street leg at [end] takes, beside it halfway along.
+  Widget? _streetTime(_Geometry g, GraphEnd end) {
+    final text = _streetTimeText(end);
+    if (text == null) return null;
+    final x = (g.x(end) + g.x(end.ride)) / 2;
+    final y = (g.y(end.time) + g.y(_rideTimeAt(end))) / 2;
+    return Positioned(
+      left: x + _kStreetTimeGap,
+      top: y - 7,
+      child: IgnorePointer(
+        child: _fade(
+          end.itineraries.contains(selected),
+          Text(text, style: _streetTimeStyle),
         ),
       ),
     );
@@ -1455,7 +1554,7 @@ class _GraphPainter extends CustomPainter {
     }
   }
 
-  /// The way to the first ride or from the last, as a dotted spline from
+  /// The way to the first ride or from the last, as a dashed spline from
   /// the ride to the time the result leaves or arrives.
   void _paintStreetLeg(Canvas canvas, GraphEnd end) {
     if (!end.hasStreetLeg) return;
@@ -1472,12 +1571,12 @@ class _GraphPainter extends CustomPainter {
       ..cubicTo(at.dx, at.dy + bend, ride.dx, ride.dy - bend, ride.dx, ride.dy);
     final onSelected = end.itineraries.contains(selected);
     canvas.drawPath(
-      _dashed(path, dash: 0.1, gap: 5),
+      _dashed(path, dash: 6, gap: 4),
       Paint()
         ..color = onSelected
             ? kStreetLegColor
             : kStreetLegColor.withValues(alpha: _kUnselectedOpacity)
-        ..strokeWidth = 3
+        ..strokeWidth = 2.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round,
     );
