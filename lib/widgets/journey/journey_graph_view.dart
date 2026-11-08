@@ -4,6 +4,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -451,7 +452,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         : metrics.pixels > metrics.maxScrollExtent
         ? metrics.pixels - metrics.maxScrollExtent
         : 0.0;
-    _pull.value = past;
+    // A pull can be reported while the graph is being laid out, when the
+    // scroll settles against a changed width; the hint waits for the frame.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pull.value = past;
+      });
+    } else {
+      _pull.value = past;
+    }
     if (notification is ScrollStartNotification) _pulled = false;
     final dragging =
         notification is ScrollUpdateNotification &&
