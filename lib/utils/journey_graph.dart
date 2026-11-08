@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show listEquals;
+
 import '../models/itinerary.dart';
+import '../models/transitous/itinerary_id.dart';
 
 /// The shortest a ride is drawn, whatever the zoom: room for its line name.
 const double _kMinRideHeight = 20;
@@ -51,11 +54,21 @@ class GraphStation {
   }
 }
 
+/// Something drawn across one or more neighbouring result columns, centred
+/// across them: what the columns are spaced around.
+abstract interface class GraphSpan {
+  int get firstColumn;
+  int get lastColumn;
+
+  /// Horizontal position in result columns.
+  double get slot;
+}
+
 /// One ride, drawn once across the results side by side that take it.
 ///
 /// Results that take it with others in between get a bar each: a bar
 /// across them would run through the columns between, over their own rides.
-class GraphRide {
+class GraphRide implements GraphSpan {
   GraphRide._(this.key, this.leg);
 
   /// Same trip between the same stops: the same ride, whichever bar it is
@@ -69,10 +82,13 @@ class GraphRide {
 
   /// Horizontal position in result columns. Fractional when shared: the
   /// ride sits centred under (or over) every result that takes it.
+  @override
   double slot = 0;
 
   /// The first and last of [itineraries], the columns it is centred across.
+  @override
   int get firstColumn => itineraries.reduce(math.min);
+  @override
   int get lastColumn => itineraries.reduce(math.max);
 
   GraphStation get boarding => GraphStation.of(leg, arriving: false);
@@ -99,16 +115,65 @@ class GraphChange {
       from.alighting.name != to.boarding.name;
 }
 
-/// Where a result ends: under its last ride, at the time it reaches the
-/// destination.
-class GraphArrival {
-  GraphArrival._(this.ride, this.time);
+/// One end of a result: where it leaves from or gets to, and the way on
+/// foot (or by bike, or car) between there and its first or last ride.
+///
+/// Drawn in the columns of the results it is the end of, at the time they
+/// leave or arrive, so that time reads off the axis, and joined to the ride
+/// by a street spline when the way there takes any time at all.
+sealed class GraphEnd implements GraphSpan {
+  GraphEnd._(this.ride, this.time, this.streetLegs);
 
+  /// The first ride of the results leaving here, or the last of those
+  /// arriving.
   final GraphRide ride;
   final DateTime time;
 
-  /// Indexes into [JourneyGraph.itineraries] of the results ending here.
+  /// Indexes into [JourneyGraph.itineraries] of the results that end here.
   final List<int> itineraries = [];
+
+  /// The way between this end and [ride], as the first result through here
+  /// goes it: empty when the result starts or ends on the ride itself.
+  final List<Leg> streetLegs;
+
+  /// How long the way between this end and [ride] takes, not counting any
+  /// wait for the ride.
+  Duration get streetTime =>
+      Duration(seconds: streetLegs.fold(0, (sum, leg) => sum + leg.duration));
+
+  /// What the way is made by: a bike, car or scooter where one is used,
+  /// else on foot.
+  String get streetMode => streetLegs
+      .map((leg) => leg.mode)
+      .firstWhere((mode) => mode != 'WALK', orElse: () => 'WALK');
+
+  @override
+  int get firstColumn => itineraries.reduce(math.min);
+  @override
+  int get lastColumn => itineraries.reduce(math.max);
+  @override
+  double get slot => (firstColumn + lastColumn) / 2;
+
+  /// Whether there is a way between this end and [ride] that takes time:
+  /// a walk to the first station, or from the last.
+  bool get hasStreetLeg;
+}
+
+/// Where a result starts: above its first ride, at the time it leaves.
+final class GraphDeparture extends GraphEnd {
+  GraphDeparture._(super.ride, super.time, super.streetLegs) : super._();
+
+  @override
+  bool get hasStreetLeg => time.isBefore(ride.leg.startTime);
+}
+
+/// Where a result ends: under its last ride, at the time it reaches the
+/// destination.
+final class GraphArrival extends GraphEnd {
+  GraphArrival._(super.ride, super.time, super.streetLegs) : super._();
+
+  @override
+  bool get hasStreetLeg => time.isAfter(ride.leg.endTime);
 }
 
 /// The results of one search as a single graph: every ride once, laid out
@@ -118,6 +183,7 @@ class JourneyGraph {
     this.itineraries,
     this.rides,
     this.changes,
+    this.departures,
     this.arrivals,
     this.events,
   );
@@ -126,6 +192,7 @@ class JourneyGraph {
   final List<Itinerary> itineraries;
   final List<GraphRide> rides;
   final List<GraphChange> changes;
+  final List<GraphDeparture> departures;
   final List<GraphArrival> arrivals;
 
   /// Every departure and arrival, in order: where the scale may bend.
@@ -150,9 +217,11 @@ class JourneyGraph {
     final byKey = <String, GraphRide>{};
     final rides = <GraphRide>[];
     final changes = <(GraphRide, GraphRide), GraphChange>{};
+    final departures = <(GraphRide, DateTime), GraphDeparture>{};
     final arrivals = <(GraphRide, DateTime), GraphArrival>{};
     for (var i = 0; i < itineraries.length; i++) {
       GraphRide? previous;
+      GraphRide? first;
       for (final leg in itineraries[i].legs.where((leg) => leg.isRide)) {
         final key = GraphRide.keyOf(leg);
         var ride = byKey[key];
@@ -161,6 +230,7 @@ class JourneyGraph {
           rides.add(ride);
         }
         ride.itineraries.add(i);
+        first ??= ride;
         if (previous != null) {
           changes.putIfAbsent((
             previous,
@@ -169,10 +239,21 @@ class JourneyGraph {
         }
         previous = ride;
       }
+      final start = itineraries[i].startTime;
+      departures
+          .putIfAbsent(
+            (first!, start),
+            () => GraphDeparture._(first!, start, itineraries[i].firstMileLegs),
+          )
+          .itineraries
+          .add(i);
       final last = previous!;
       final arrival = itineraries[i].endTime;
       arrivals
-          .putIfAbsent((last, arrival), () => GraphArrival._(last, arrival))
+          .putIfAbsent((
+            last,
+            arrival,
+          ), () => GraphArrival._(last, arrival, itineraries[i].lastMileLegs))
           .itineraries
           .add(i);
     }
@@ -183,6 +264,7 @@ class JourneyGraph {
 
     final events = <DateTime>{
       for (final ride in rides) ...[ride.leg.startTime, ride.leg.endTime],
+      for (final departure in departures.values) departure.time,
       for (final arrival in arrivals.values) arrival.time,
     }.toList()..sort();
 
@@ -190,15 +272,17 @@ class JourneyGraph {
       itineraries,
       rides,
       changes.values.toList(),
+      departures.values.toList(),
       arrivals.values.toList(),
       events,
     );
   }
 
-  /// [results] ordered by departure. Results leaving at the same time go
-  /// next to the ones they share rides with: a shared ride is drawn once
-  /// across the columns side by side that take it, and once more past each
-  /// column between them that does not.
+  /// [results] in departure order, except that each result goes next to
+  /// the one placed before it that it shares the most rides with: a shared
+  /// ride is drawn once across the columns side by side that take it, and
+  /// once more past each column between them that does not. A result that
+  /// shares nothing with the last one placed is the earliest left.
   static List<Itinerary> _byDeparture(List<Itinerary> results) {
     Set<String> rides(Itinerary it) => {
       for (final leg in it.legs)
@@ -208,15 +292,19 @@ class JourneyGraph {
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final ordered = <Itinerary>[];
     while (left.isNotEmpty) {
-      final start = left.first.startTime;
-      final tied = left.takeWhile((it) => it.startTime == start).toList();
-      final next = ordered.isEmpty
-          ? tied.first
-          : tied.reduce((best, it) {
-              final previous = rides(ordered.last);
-              int shared(Itinerary x) => rides(x).intersection(previous).length;
-              return shared(it) > shared(best) ? it : best;
-            });
+      var next = left.first;
+      if (ordered.isNotEmpty) {
+        final previous = rides(ordered.last);
+        var most = 0;
+        // Earliest first, so a tie keeps departure order.
+        for (final it in left) {
+          final shared = rides(it).intersection(previous).length;
+          if (shared > most) {
+            most = shared;
+            next = it;
+          }
+        }
+      }
       ordered.add(next);
       left.remove(next);
     }
@@ -245,18 +333,19 @@ class JourneyGraph {
   }
 }
 
-/// Something drawn on a ride, for spacing the columns: [left] and [right]
-/// of the ride's centre line, [top] to [bottom] down the graph, in pixels.
+/// Something drawn on a ride or an end, for spacing the columns: [left]
+/// and [right] of its centre line, [top] to [bottom] down the graph, in
+/// pixels.
 class GraphBox {
   const GraphBox(
-    this.ride, {
+    this.span, {
     required this.left,
     required this.right,
     required this.top,
     required this.bottom,
   });
 
-  final GraphRide ride;
+  final GraphSpan span;
   final double left;
   final double right;
   final double top;
@@ -290,15 +379,15 @@ List<double> packColumns(
   final byLast = <int, List<GraphBox>>{};
   final byFirst = <int, List<GraphBox>>{};
   for (final box in boxes) {
-    byLast.putIfAbsent(box.ride.lastColumn, () => []).add(box);
-    byFirst.putIfAbsent(box.ride.firstColumn, () => []).add(box);
+    byLast.putIfAbsent(box.span.lastColumn, () => []).add(box);
+    byFirst.putIfAbsent(box.span.firstColumn, () => []).add(box);
   }
   final xs = <double>[0];
   // A box's centre as a * x + c, where x is the column being placed. For a
   // box that ends further on, the part still to come is left out: it is
   // the same for another that ends there too.
   (double, double) centre(GraphBox box, int column) {
-    final first = box.ride.firstColumn, last = box.ride.lastColumn;
+    final first = box.span.firstColumn, last = box.span.lastColumn;
     if (last < column) return (0, (xs[first] + xs[last]) / 2);
     if (first >= column) return (1, 0);
     return (0.5, xs[first] / 2);
@@ -314,16 +403,16 @@ List<double> packColumns(
     final pairs = [
       for (final box in placing) (box, [...settled, ...placing]),
       for (final box in byFirst[column] ?? const <GraphBox>[])
-        if (box.ride.lastColumn > column) (box, byLast[box.ride.lastColumn]!),
+        if (box.span.lastColumn > column) (box, byLast[box.span.lastColumn]!),
     ];
     for (final (box, others) in pairs) {
       for (final other in others) {
-        if (other.ride == box.ride ||
-            other.ride.slot == box.ride.slot ||
+        if (other.span == box.span ||
+            other.span.slot == box.span.slot ||
             !box.overlapsInTime(other)) {
           continue;
         }
-        final (left, right) = other.ride.slot < box.ride.slot
+        final (left, right) = other.span.slot < box.span.slot
             ? (other, box)
             : (box, other);
         final (aLeft, cLeft) = centre(left, column);
@@ -415,6 +504,17 @@ class GraphScale {
           (change.changesStation ? 2 * _kMinChangeHeight : _kMinChangeHeight) +
           (badges.keys.contains(change.from.key) ? badges.overhang : 0);
       need(change.from.leg.endTime, change.to.leg.startTime, room);
+    }
+
+    // A street leg leaves room between its end and the ride for the
+    // station name there, the node at its end, and how long it takes.
+    for (final departure in graph.departures) {
+      if (!departure.hasStreetLeg) continue;
+      need(departure.time, departure.ride.leg.startTime, 3 * _kMinChangeHeight);
+    }
+    for (final arrival in graph.arrivals) {
+      if (!arrival.hasStreetLeg) continue;
+      need(arrival.ride.leg.endTime, arrival.time, 3 * _kMinChangeHeight);
     }
 
     final ys = <double>[];
@@ -566,8 +666,9 @@ int _endOf(Itinerary itinerary, Leg upTo) {
 /// the results of a search from where [upTo] gets off, at its arrival.
 ///
 /// The joined itineraries were never planned as a whole, so they carry no
-/// server id to refresh them by and no fare, which covered only one of the
-/// halves. Their snapshot is the two halves' legs joined, so a joined
+/// server id to share or refresh them by and no fare, which covered only
+/// one of the halves; [JourneyGraphService.planJoined] asks the planner for
+/// each as one journey, by [joinedItineraryId]. Their snapshot is the two halves' legs joined, so a joined
 /// journey can still be saved.
 List<Itinerary> continueAfter(
   Itinerary locked,
@@ -622,4 +723,125 @@ Map<String, dynamic>? _joinedSnapshot(
     'transfers': transfers,
     'legs': legs,
   };
+}
+
+/// The id to ask the planner for [joined] as one journey: its legs, with a
+/// walk put in where [upTo] gets off and the onward part boards straight
+/// away.
+///
+/// Two rides back to back read to the planner as staying seated, and it
+/// merges them into one blank leg. The walk's place and times only say
+/// that there is one: the planner works out the real walk itself. Null when
+/// [upTo] is not on [joined].
+ItineraryId? joinedItineraryId(Itinerary joined, Leg upTo) {
+  final end = _endOf(joined, upTo);
+  if (end < 0) return null;
+  final legs = [for (final leg in joined.legs) LegId.fromLeg(leg)];
+  if (end + 1 < joined.legs.length) {
+    final next = joined.legs[end + 1];
+    if (!next.isStreet) {
+      final off = LegId.fromLeg(upTo);
+      final on = LegId.fromLeg(next);
+      legs.insert(
+        end + 1,
+        LegId(
+          displayName: '',
+          tripId: '',
+          fromId: off.toId,
+          fromLat: off.toLat,
+          fromLon: off.toLon,
+          fromLevel: off.toLevel,
+          toId: on.fromId,
+          toLat: on.fromLat,
+          toLon: on.fromLon,
+          toLevel: on.fromLevel,
+          scheduledStart: off.scheduledEnd,
+          scheduledEnd: on.scheduledStart,
+          mode: 'WALK',
+          scheduled: true,
+        ),
+      );
+    }
+  }
+  return ItineraryId(legs: legs);
+}
+
+/// Whether [planned] is [joined] as the planner sees it: the same rides,
+/// between the same stops, in the same order. The planner may route the
+/// walks differently; that is what it was asked for.
+bool isSameJoinedJourney(Itinerary joined, Itinerary planned) {
+  final before = [
+    for (final leg in joined.legs)
+      if (leg.isRide) GraphRide.keyOf(leg),
+  ];
+  final after = [
+    for (final leg in planned.legs)
+      if (leg.isRide) GraphRide.keyOf(leg),
+  ];
+  return before.isNotEmpty && listEquals(before, after);
+}
+
+/// The stop after where [upTo] gets off, on [trip]: the whole service
+/// [upTo] is a part of, as `/trip` gives it. Null at the end of the line,
+/// or when [upTo] is not on [trip].
+TransitPlace? stopAfter(Leg trip, Leg upTo) {
+  if (trip.tripId != upTo.tripId) return null;
+  final stops = [trip.from, ...trip.intermediateStops, trip.to];
+  final from = stops.indexWhere((stop) => _sameStop(stop, upTo.from));
+  if (from < 0) return null;
+  final off = stops.indexWhere((stop) => _sameStop(stop, upTo.to), from + 1);
+  if (off < 0 || off == stops.length - 1) return null;
+  return stops[off + 1];
+}
+
+bool _sameStop(TransitPlace a, TransitPlace b) =>
+    a.stopId != null && a.stopId!.isNotEmpty && a.stopId == b.stopId;
+
+/// [lock]'s journey staying on its ride past where it gets off, to [next],
+/// and going on with [continuation], a search from [next] at the time the
+/// ride gets there; with the ride as it is now taken.
+///
+/// Staying on is what the search from where the ride gets off cannot find:
+/// it starts after [margin], when the ride has left. A [continuation] that
+/// carries on in the same ride takes it further still. One that changes at
+/// [next] has to leave [margin] for it, as at any change, or it is null.
+(Itinerary, Leg)? stayOn(
+  RideLock lock,
+  Leg trip,
+  TransitPlace next,
+  Itinerary continuation, {
+  required Duration margin,
+}) {
+  final end = _endOf(lock.itinerary, lock.upTo);
+  if (end < 0) return null;
+  final rides = continuation.legs.indexWhere((leg) => leg.isRide);
+  if (rides < 0) return null;
+  final first = continuation.legs[rides];
+  final List<Leg> onward;
+  final Leg ride;
+  if (first.tripId == lock.upTo.tripId) {
+    ride = trip.sliceBetween(lock.upTo.from, first.to);
+    onward = continuation.legs.sublist(rides + 1);
+  } else {
+    final arrives = next.timeAtTerminus;
+    if (arrives == null || first.startTime.isBefore(arrives.add(margin))) {
+      return null;
+    }
+    ride = trip.sliceBetween(lock.upTo.from, next);
+    onward = continuation.legs;
+  }
+  // A slice that did not take is the whole service, from its first stop.
+  if (!_sameStop(ride.from, lock.upTo.from)) return null;
+  final legs = [...lock.itinerary.legs.sublist(0, end), ride, ...onward];
+  final rideCount = legs.where((leg) => !leg.isStreet).length;
+  return (
+    Itinerary(
+      duration: legs.last.endTime.difference(legs.first.startTime).inSeconds,
+      startTime: legs.first.startTime,
+      endTime: legs.last.endTime,
+      transfers: rideCount > 0 ? rideCount - 1 : 0,
+      legs: legs,
+    ),
+    ride,
+  );
 }

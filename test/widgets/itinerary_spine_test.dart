@@ -810,6 +810,7 @@ void main() {
         tester,
         FinishLegCard(
           leg: _ride(),
+          name: 'Flughafen BER',
           arrivalTime: _t0.add(const Duration(minutes: 60)),
           totalDuration: 3600,
           openStopSheet: _noop,

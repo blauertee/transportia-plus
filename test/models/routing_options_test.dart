@@ -461,10 +461,11 @@ void main() {
     });
 
     test('options stored before the link existed stay set apart', () {
-      final stored = RoutingOptions.defaults
-          .copyWith(lastMileModes: const [TransitMode.bike])
-          .toJson()
-        ..remove('lastMileSameAsFirst');
+      final stored =
+          RoutingOptions.defaults
+              .copyWith(lastMileModes: const [TransitMode.bike])
+              .toJson()
+            ..remove('lastMileSameAsFirst');
       final restored = RoutingOptions.fromJson(stored);
       expect(restored.lastMileSameAsFirst, isFalse);
       expect(restored.lastMileModesInUse, [TransitMode.bike]);

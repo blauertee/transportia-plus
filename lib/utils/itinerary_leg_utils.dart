@@ -87,6 +87,41 @@ bool isPlaceholderEndpointName(String? name) {
   return kPlaceholderEndpointNames.contains(trimmed.toUpperCase());
 }
 
+/// What to call the start or the end of a journey, given the planner's
+/// [name] for it: that, unless it is a placeholder, else the name the
+/// journey was [searched] by, else [fallback].
+String endpointLabel(
+  String? name, {
+  String? searched,
+  required String fallback,
+}) {
+  if (!isPlaceholderEndpointName(name)) return name!.trim();
+  if (!isPlaceholderEndpointName(searched)) return searched!.trim();
+  return fallback;
+}
+
+/// What the end of [legs] is called on the journey's last row.
+///
+/// Where the walk from the last stop is too short to show, the journey
+/// visibly ends at that stop, so that is its name; [searched] would name a
+/// place nobody is seen to walk to.
+String destinationLabel(List<Leg> legs, {String? searched}) {
+  if (legs.isEmpty) return searched ?? 'Destination';
+  final last = legs.last;
+  if (_shouldHideEdgeWalk(last, legs.length - 1, legs.length)) {
+    return endpointLabel(
+      last.fromName,
+      searched: searched,
+      fallback: 'Destination',
+    );
+  }
+  return endpointLabel(
+    last.toName,
+    searched: searched,
+    fallback: 'Destination',
+  );
+}
+
 /// The first real place name at the start of [legs] — normally the stop
 /// where the traveller boards, when the journey opens with a walk from an
 /// unnamed point.
