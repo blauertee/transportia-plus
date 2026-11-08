@@ -45,7 +45,8 @@ const double _kArrivalHeight = 32;
 /// The time over each result's first ride.
 const double _kDepartureHeight = 16;
 
-/// The circle where a result sets off on foot, by bike or by car.
+/// The circle where a result sets off or gets in on foot, by bike or by
+/// car.
 const double _kStartNodeSize = 22;
 
 /// Room between a street leg and the time it takes, written beside it.
@@ -68,8 +69,9 @@ const double _kHeaderHeight = 24;
 
 /// Space above the first departure and below the last arrival, for the
 /// labels that hang off either end.
-const double _kTopPad = _kDepartureHeight + _kStartNodeSize / 2 + 14;
-const double _kBottomPad = 44;
+const double _kTopPad =
+    _kDepartureHeight + _kStartNodeSize / 2 + _StationMarker.labelHeight + 14;
+const double _kBottomPad = 44 + _StationMarker.labelHeight;
 
 /// Zoom bounds, in pixels per minute: from a whole day on one screen to a
 /// few minutes filling it.
@@ -375,8 +377,8 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                   _lockBadge(geometry, ride, lock, accent),
               for (final end in [...graph.departures, ...graph.arrivals])
                 if (_streetTime(geometry, end) case final label?) label,
-              for (final departure in graph.departures)
-                if (departure.hasStreetLeg) _startNode(geometry, departure),
+              for (final end in [...graph.departures, ...graph.arrivals])
+                if (end.hasStreetLeg) _endNode(geometry, end),
               for (final departure in graph.departures)
                 _departureLabel(geometry, departure),
               for (final arrival in graph.arrivals)
@@ -752,8 +754,14 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         label(change.to.boarding, change.to, above: true);
       }
     }
+    for (final departure in graph.departures) {
+      label(departure.ride.boarding, departure.ride, above: true);
+    }
     for (final arrival in graph.arrivals) {
-      final at = y(arrival.time) + 2;
+      label(arrival.ride.alighting, arrival.ride, above: false);
+    }
+    for (final arrival in graph.arrivals) {
+      final at = y(arrival.time) + 2 + _arrivalDrop(arrival, badges.keys);
       boxes.add(
         GraphBox(
           arrival,
@@ -765,15 +773,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       );
     }
     for (final departure in graph.departures) {
-      final node = departure.hasStreetLeg ? _kStartNodeSize / 2 : 0;
-      final at = y(departure.time) - 2 - node;
+      final at = y(departure.time) - 2 - _departureLift(departure);
       boxes.add(
         GraphBox(
           departure,
           left: _kArrivalWidth / 2,
           right: _kArrivalWidth / 2,
           top: at - _kDepartureHeight,
-          bottom: y(departure.time) + node,
+          bottom:
+              y(departure.time) +
+              (departure.hasStreetLeg ? _kStartNodeSize / 2 : 0),
         ),
       );
     }
@@ -782,7 +791,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     for (final end in [...graph.departures, ...graph.arrivals]) {
       final text = _streetTimeText(end);
       if (text == null) continue;
-      final mid = (y(end.time) + y(_rideTimeAt(end))) / 2;
+      final mid = _streetTimeY(end, y);
       boxes.add(
         GraphBox(
           end,
@@ -1057,16 +1066,45 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         );
       }
     }
+    // Where the results get on first and off last.
+    for (final departure in graph.departures) {
+      final ride = departure.ride;
+      add(ride.boarding, ride, ride.leg.startTime, above: true);
+    }
+    for (final arrival in graph.arrivals) {
+      final ride = arrival.ride;
+      add(ride.alighting, ride, ride.leg.endTime, above: false);
+    }
     return markers;
   }
+
+  /// How far the departure time sits above the time it marks: clear of the
+  /// start node, or of the station name over the first ride.
+  static double _departureLift(GraphDeparture departure) =>
+      departure.hasStreetLeg
+      ? _kStartNodeSize / 2
+      : _StationMarker.labelHeight + 1;
+
+  /// How far the arrival time sits below the time it marks: clear of the
+  /// station name under the last ride, and its lock badge, when the result
+  /// arrives as the ride gets in.
+  static double _arrivalDrop(GraphArrival arrival, Set<String> badged) =>
+      arrival.hasStreetLeg
+      ? _kStartNodeSize / 2
+      : _StationMarker.labelHeight +
+            1 +
+            (badged.contains(arrival.ride.key) ? _LockBadge.overhang : 0);
 
   /// When the results leave, over where they set off: on the axis's level
   /// for that time.
   Widget _departureLabel(_Geometry g, GraphDeparture departure) {
-    final node = departure.hasStreetLeg ? _kStartNodeSize / 2 : 0;
     return Positioned(
       left: g.x(departure) - _kArrivalWidth / 2,
-      top: g.y(departure.time) - 2 - node - _kDepartureHeight,
+      top:
+          g.y(departure.time) -
+          2 -
+          _departureLift(departure) -
+          _kDepartureHeight,
       width: _kArrivalWidth,
       height: _kDepartureHeight,
       child: GestureDetector(
@@ -1088,34 +1126,40 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
   }
 
-  /// Where a result sets off on its way to the first ride: a circle with
-  /// what it sets off on.
-  Widget _startNode(_Geometry g, GraphDeparture departure) {
+  /// Where a result sets off on its way to the first ride, or gets in on
+  /// its way from the last: a circle with what that way is made by.
+  Widget _endNode(_Geometry g, GraphEnd end) {
     final color = kStreetLegColor;
     return Positioned(
-      left: g.x(departure) - _kStartNodeSize / 2,
-      top: g.y(departure.time) - _kStartNodeSize / 2,
+      left: g.x(end) - _kStartNodeSize / 2,
+      top: g.y(end.time) - _kStartNodeSize / 2,
       width: _kStartNodeSize,
       height: _kStartNodeSize,
       child: GestureDetector(
-        onTap: _tap(departure.itineraries, null),
+        onTap: _tap(end.itineraries, null),
         child: _fade(
-          departure.itineraries.contains(selected),
+          end.itineraries.contains(selected),
           Container(
             decoration: BoxDecoration(
               color: AppColors.white,
               shape: BoxShape.circle,
               border: Border.all(color: color, width: 2),
             ),
-            child: Icon(
-              getLegIcon(departure.streetMode),
-              size: 12,
-              color: color,
-            ),
+            child: Icon(getLegIcon(end.streetMode), size: 12, color: color),
           ),
         ),
       ),
     );
+  }
+
+  /// Where the time a street leg takes is written: halfway between the
+  /// node at [end] and the station name at the ride.
+  static double _streetTimeY(GraphEnd end, double Function(DateTime) y) {
+    const node = _kStartNodeSize / 2;
+    const name = _StationMarker.labelHeight + 1;
+    return end is GraphDeparture
+        ? (y(end.time) + node + y(_rideTimeAt(end)) - name) / 2
+        : (y(_rideTimeAt(end)) + name + y(end.time) - node) / 2;
   }
 
   /// When the street leg at [end] meets its ride.
@@ -1136,7 +1180,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     final text = _streetTimeText(end);
     if (text == null) return null;
     final x = (g.x(end) + g.x(end.ride)) / 2;
-    final y = (g.y(end.time) + g.y(_rideTimeAt(end))) / 2;
+    final y = _streetTimeY(end, g.y);
     return Positioned(
       left: x + _kStreetTimeGap,
       top: y - 7,
@@ -1152,13 +1196,15 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
   Widget _arrivalLabel(_Geometry g, GraphArrival arrival) {
     return Positioned(
       left: g.x(arrival) - _kArrivalWidth / 2,
-      top: g.y(arrival.time) + 2,
+      top: g.y(arrival.time) + 2 + _arrivalDrop(arrival, _badges.keys),
       width: _kArrivalWidth,
       child: _fade(
         arrival.itineraries.contains(selected),
         Column(
           children: [
-            Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
+            // Where the result ends in a node, the node marks the place.
+            if (!arrival.hasStreetLeg)
+              Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
             Text(
               formatTime(arrival.time),
               style: TextStyle(

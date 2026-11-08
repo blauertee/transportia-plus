@@ -506,6 +506,17 @@ class GraphScale {
       need(change.from.leg.endTime, change.to.leg.startTime, room);
     }
 
+    // A street leg leaves room between its end and the ride for the
+    // station name there, the node at its end, and how long it takes.
+    for (final departure in graph.departures) {
+      if (!departure.hasStreetLeg) continue;
+      need(departure.time, departure.ride.leg.startTime, 3 * _kMinChangeHeight);
+    }
+    for (final arrival in graph.arrivals) {
+      if (!arrival.hasStreetLeg) continue;
+      need(arrival.ride.leg.endTime, arrival.time, 3 * _kMinChangeHeight);
+    }
+
     final ys = <double>[];
     final stretched = <double>[];
     for (var i = 0; i < graph.events.length; i++) {
