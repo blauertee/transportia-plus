@@ -213,21 +213,50 @@ class JourneyGraphService {
   /// The journeys changing where the locked ride gets off, and those
   /// staying on it, as one list by arrival; a journey both searches found
   /// is kept once.
+  ///
+  /// Staying on is only worth showing when it gets somewhere the change
+  /// does not: a journey staying on that takes the same vehicles as one
+  /// changing, and arrives no earlier, boards the next one a stop later
+  /// for nothing, and is left out.
   static List<Itinerary> mergeOnward(
     List<Itinerary> changing,
     List<Itinerary> staying,
   ) {
     if (staying.isEmpty) return changing;
-    String ridesOf(Itinerary it) => [
-      for (final leg in it.legs)
-        if (leg.isRide) GraphRide.keyOf(leg),
-    ].join(' ');
-    final seen = {for (final it in changing) ridesOf(it)};
-    return [
-      ...changing,
-      for (final it in staying)
-        if (seen.add(ridesOf(it))) it,
-    ]..sort((a, b) => a.endTime.compareTo(b.endTime));
+    final firstBy = <String, DateTime>{};
+    for (final it in changing) {
+      final vehicles = _vehiclesOf(it);
+      final arrives = firstBy[vehicles];
+      if (arrives == null || it.endTime.isBefore(arrives)) {
+        firstBy[vehicles] = it.endTime;
+      }
+    }
+    final onward = [...changing];
+    for (final it in [
+      ...staying,
+    ]..sort((a, b) => a.endTime.compareTo(b.endTime))) {
+      final vehicles = _vehiclesOf(it);
+      final arrives = firstBy[vehicles];
+      if (arrives != null && !it.endTime.isBefore(arrives)) continue;
+      firstBy[vehicles] = it.endTime;
+      onward.add(it);
+    }
+    return onward..sort((a, b) => a.endTime.compareTo(b.endTime));
+  }
+
+  /// The vehicles [journey] takes, in order, wherever it boards and leaves
+  /// them: their trips, or the ride itself for one with none.
+  static String _vehiclesOf(Itinerary journey) {
+    final vehicles = <String>[];
+    for (final leg in journey.legs) {
+      if (!leg.isRide) continue;
+      final trip = leg.tripId;
+      final vehicle = trip == null || trip.isEmpty
+          ? GraphRide.keyOf(leg)
+          : trip;
+      if (vehicles.isEmpty || vehicles.last != vehicle) vehicles.add(vehicle);
+    }
+    return vehicles.join(' ');
   }
 
   /// [joined], each asked of the planner as one journey, so it comes back
