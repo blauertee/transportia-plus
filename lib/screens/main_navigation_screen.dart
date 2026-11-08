@@ -126,6 +126,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 },
                 onTabChangeRequested: _onNavIndexChanged,
                 onTimetableRequested: _handleTimetableRequested,
+                isActive: _currentIndex == _kMapTabIndex,
               ),
               TimetablesScreen(
                 initialStop: _pendingTimetableStop,
