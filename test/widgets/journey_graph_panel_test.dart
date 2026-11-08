@@ -240,6 +240,29 @@ void main() {
     expect(rideBar('ICE 1507'), findsOneWidget);
   });
 
+  testWidgets('keeps the time axis on screen when scrolled across', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+    final axis = find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint &&
+          widget.painter.runtimeType.toString() == '_AxisPainter',
+    );
+    final left = tester.getTopLeft(find.byType(JourneyGraphView)).dx;
+    expect(tester.getTopLeft(axis).dx, left);
+
+    // Within the results, so no page is asked for.
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(JourneyGraphView)),
+    );
+    await gesture.moveBy(const Offset(-150, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(axis).dx, left);
+  });
+
   group('pulled past an edge', () {
     testWidgets('asks for later results past the right edge', (tester) async {
       await pumpPanel(tester);

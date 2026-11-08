@@ -4,6 +4,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/cupertino.dart' show CupertinoActivityIndicator;
+import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -14,6 +15,7 @@ import '../../utils/duration_formatter.dart';
 import '../../utils/journey_colors.dart';
 import '../../utils/hyphenation.dart';
 import '../../utils/journey_graph.dart';
+import '../../utils/leg_helper.dart';
 import '../../utils/time_utils.dart';
 
 /// Room left of the first column for the hour labels.
@@ -40,6 +42,22 @@ const double _kRightPad = 8;
 const double _kArrivalWidth = 40;
 const double _kArrivalHeight = 32;
 
+/// The time over each result's first ride.
+const double _kDepartureHeight = 16;
+
+/// The circle where a result sets off or gets in on foot, by bike or by
+/// car.
+const double _kStartNodeSize = 22;
+
+/// Room between a street leg and the time it takes, written beside it.
+const double _kStreetTimeGap = 6;
+
+TextStyle get _streetTimeStyle => TextStyle(
+  fontSize: 10,
+  fontWeight: FontWeight.w600,
+  color: AppColors.black.withValues(alpha: 0.6),
+);
+
 TextStyle get _durationStyle => TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -51,8 +69,9 @@ const double _kHeaderHeight = 24;
 
 /// Space above the first departure and below the last arrival, for the
 /// labels that hang off either end.
-const double _kTopPad = 14;
-const double _kBottomPad = 44;
+const double _kTopPad =
+    _kDepartureHeight + _kStartNodeSize / 2 + _StationMarker.labelHeight + 14;
+const double _kBottomPad = 44 + _StationMarker.labelHeight;
 
 /// Zoom bounds, in pixels per minute: from a whole day on one screen to a
 /// few minutes filling it.
@@ -345,7 +364,6 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                 child: CustomPaint(
                   painter: _GraphPainter(
                     geometry,
-                    DefaultTextStyle.of(context).style,
                     now: widget.now ?? DateTime.now(),
                     accent: accent,
                     selected: selected,
@@ -357,6 +375,12 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
                   _lockBadge(geometry, ride, lock, accent),
+              for (final end in [...graph.departures, ...graph.arrivals])
+                if (_streetTime(geometry, end) case final label?) label,
+              for (final end in [...graph.departures, ...graph.arrivals])
+                if (end.hasStreetLeg) _endNode(geometry, end),
+              for (final departure in graph.departures)
+                _departureLabel(geometry, departure),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -401,6 +425,7 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
                 child: body,
               ),
             ),
+            _axis(geometry, accent),
             _edgeHint(left: true),
             _edgeHint(left: false),
             if (widget.showCopyData) _copyButton(),
@@ -409,6 +434,29 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       },
     );
   }
+
+  /// The time axis, pinned to the left edge so the time stays readable
+  /// however far across the graph is scrolled. It follows the graph up and
+  /// down, and covers the columns that scroll under it.
+  Widget _axis(_Geometry g, Color accent) => Positioned(
+    left: 0,
+    top: _kHeaderHeight,
+    bottom: 0,
+    width: _kAxisWidth,
+    child: IgnorePointer(
+      child: ClipRect(
+        child: CustomPaint(
+          painter: _AxisPainter(
+            g,
+            DefaultTextStyle.of(context).style,
+            scroll: _scroll,
+            now: widget.now ?? DateTime.now(),
+            accent: accent,
+          ),
+        ),
+      ),
+    ),
+  );
 
   /// Follows a pull past either edge, and asks for a page once per drag
   /// when it goes far enough.
@@ -423,7 +471,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         : metrics.pixels > metrics.maxScrollExtent
         ? metrics.pixels - metrics.maxScrollExtent
         : 0.0;
-    _pull.value = past;
+    // A pull can be reported while the graph is being laid out, when the
+    // scroll settles against a changed width; the hint waits for the frame.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pull.value = past;
+      });
+    } else {
+      _pull.value = past;
+    }
     if (notification is ScrollStartNotification) _pulled = false;
     final dragging =
         notification is ScrollUpdateNotification &&
@@ -692,20 +749,61 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     }
 
     for (final change in graph.changes) {
-      label(change.from.alighting, change.from, above: false);
+      if (!_namedAtBoarding(change)) {
+        label(change.from.alighting, change.from, above: false);
+      }
       if (change.changesStation) {
         label(change.to.boarding, change.to, above: true);
       }
     }
+    for (final departure in graph.departures) {
+      label(departure.ride.boarding, departure.ride, above: true);
+    }
     for (final arrival in graph.arrivals) {
-      final at = y(arrival.ride.leg.endTime) + 2;
+      label(arrival.ride.alighting, arrival.ride, above: false);
+    }
+    for (final arrival in graph.arrivals) {
+      final at = y(arrival.time) + 2 + _arrivalDrop(arrival, badges.keys);
       boxes.add(
         GraphBox(
-          arrival.ride,
+          arrival,
           left: _kArrivalWidth / 2,
           right: _kArrivalWidth / 2,
           top: at,
           bottom: at + _kArrivalHeight,
+        ),
+      );
+    }
+    for (final departure in graph.departures) {
+      final at = y(departure.time) - 2 - _departureLift(departure);
+      boxes.add(
+        GraphBox(
+          departure,
+          left: _kArrivalWidth / 2,
+          right: _kArrivalWidth / 2,
+          top: at - _kDepartureHeight,
+          bottom:
+              y(departure.time) +
+              (departure.hasStreetLeg ? _kStartNodeSize / 2 : 0),
+        ),
+      );
+    }
+    // The time a street leg takes, beside it halfway: right of the end,
+    // and as far again as the ride may lie to that side.
+    for (final end in [...graph.departures, ...graph.arrivals]) {
+      final text = _streetTimeText(end);
+      if (text == null) continue;
+      final mid = _streetTimeY(end, y);
+      boxes.add(
+        GraphBox(
+          end,
+          left: 0,
+          right:
+              _kBarWidth / 2 +
+              _kStreetTimeGap +
+              _textWidth(context, text, _streetTimeStyle),
+          top: mid - 7,
+          bottom: mid + 7,
         ),
       );
     }
@@ -726,16 +824,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
 
     // Shifted so whatever reaches furthest left clears the axis.
-    double centreOf(GraphRide ride) =>
-        (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
+    double centreOf(GraphSpan span) =>
+        (xs[span.firstColumn] + xs[span.lastColumn]) / 2;
     var leftmost = 0.0, rightmost = 0.0;
     for (var i = 0; i < xs.length; i++) {
       leftmost = math.min(leftmost, xs[i] - durations[i] / 2);
       rightmost = math.max(rightmost, xs[i] + durations[i] / 2);
     }
     for (final box in boxes) {
-      leftmost = math.min(leftmost, centreOf(box.ride) - box.left);
-      rightmost = math.max(rightmost, centreOf(box.ride) + box.right);
+      leftmost = math.min(leftmost, centreOf(box.span) - box.left);
+      rightmost = math.max(rightmost, centreOf(box.span) + box.right);
     }
     final shift = _kAxisWidth + 4 - leftmost;
     _spacedFor = key;
@@ -955,12 +1053,14 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     }
 
     for (final change in graph.changes) {
-      add(
-        change.from.alighting,
-        change.from,
-        change.from.leg.endTime,
-        above: false,
-      );
+      if (!_namedAtBoarding(change)) {
+        add(
+          change.from.alighting,
+          change.from,
+          change.from.leg.endTime,
+          above: false,
+        );
+      }
       if (change.changesStation) {
         add(
           change.to.boarding,
@@ -970,19 +1070,152 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
         );
       }
     }
+    // Where the results get on first and off last.
+    for (final departure in graph.departures) {
+      final ride = departure.ride;
+      add(ride.boarding, ride, ride.leg.startTime, above: true);
+    }
+    for (final arrival in graph.arrivals) {
+      final ride = arrival.ride;
+      add(ride.alighting, ride, ride.leg.endTime, above: false);
+    }
     return markers;
+  }
+
+  /// Whether [change] stays at a station already named over the ride it
+  /// changes onto, because some result sets off on that ride: the name
+  /// under the ride it changes from would say the same again.
+  bool _namedAtBoarding(GraphChange change) =>
+      !change.changesStation &&
+      graph.departures.any((departure) => departure.ride == change.to);
+
+  /// How far the departure time sits above the time it marks: clear of the
+  /// start node, or of the station name over the first ride.
+  static double _departureLift(GraphDeparture departure) =>
+      departure.hasStreetLeg
+      ? _kStartNodeSize / 2
+      : _StationMarker.labelHeight + 1;
+
+  /// How far the arrival time sits below the time it marks: clear of the
+  /// station name under the last ride, and its lock badge, when the result
+  /// arrives as the ride gets in.
+  static double _arrivalDrop(GraphArrival arrival, Set<String> badged) =>
+      arrival.hasStreetLeg
+      ? _kStartNodeSize / 2
+      : _StationMarker.labelHeight +
+            1 +
+            (badged.contains(arrival.ride.key) ? _LockBadge.overhang : 0);
+
+  /// When the results leave, over where they set off: on the axis's level
+  /// for that time.
+  Widget _departureLabel(_Geometry g, GraphDeparture departure) {
+    return Positioned(
+      left: g.x(departure) - _kArrivalWidth / 2,
+      top:
+          g.y(departure.time) -
+          2 -
+          _departureLift(departure) -
+          _kDepartureHeight,
+      width: _kArrivalWidth,
+      height: _kDepartureHeight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _tap(departure.itineraries, null),
+        child: _fade(
+          departure.itineraries.contains(selected),
+          Text(
+            formatTime(departure.time),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Where a result sets off on its way to the first ride, or gets in on
+  /// its way from the last: a circle with what that way is made by.
+  Widget _endNode(_Geometry g, GraphEnd end) {
+    final color = kStreetLegColor;
+    return Positioned(
+      left: g.x(end) - _kStartNodeSize / 2,
+      top: g.y(end.time) - _kStartNodeSize / 2,
+      width: _kStartNodeSize,
+      height: _kStartNodeSize,
+      child: GestureDetector(
+        onTap: _tap(end.itineraries, null),
+        child: _fade(
+          end.itineraries.contains(selected),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Icon(getLegIcon(end.streetMode), size: 12, color: color),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Where the time a street leg takes is written: halfway between the
+  /// node at [end] and the station name at the ride.
+  static double _streetTimeY(GraphEnd end, double Function(DateTime) y) {
+    const node = _kStartNodeSize / 2;
+    const name = _StationMarker.labelHeight + 1;
+    return end is GraphDeparture
+        ? (y(end.time) + node + y(_rideTimeAt(end)) - name) / 2
+        : (y(_rideTimeAt(end)) + name + y(end.time) - node) / 2;
+  }
+
+  /// When the street leg at [end] meets its ride.
+  static DateTime _rideTimeAt(GraphEnd end) =>
+      end is GraphDeparture ? end.ride.leg.startTime : end.ride.leg.endTime;
+
+  /// How long the street leg at [end] takes, in whole minutes; null with
+  /// no street leg, or one too short to say.
+  static String? _streetTimeText(GraphEnd end) {
+    if (!end.hasStreetLeg) return null;
+    final seconds = end.streetTime.inSeconds;
+    if (seconds < 60) return null;
+    return formatDuration(seconds);
+  }
+
+  /// The time the street leg at [end] takes, beside it halfway along.
+  Widget? _streetTime(_Geometry g, GraphEnd end) {
+    final text = _streetTimeText(end);
+    if (text == null) return null;
+    final x = (g.x(end) + g.x(end.ride)) / 2;
+    final y = _streetTimeY(end, g.y);
+    return Positioned(
+      left: x + _kStreetTimeGap,
+      top: y - 7,
+      child: IgnorePointer(
+        child: _fade(
+          end.itineraries.contains(selected),
+          Text(text, style: _streetTimeStyle),
+        ),
+      ),
+    );
   }
 
   Widget _arrivalLabel(_Geometry g, GraphArrival arrival) {
     return Positioned(
-      left: g.x(arrival.ride) - _kArrivalWidth / 2,
-      top: g.y(arrival.ride.leg.endTime) + 2,
+      left: g.x(arrival) - _kArrivalWidth / 2,
+      top: g.y(arrival.time) + 2 + _arrivalDrop(arrival, _badges.keys),
       width: _kArrivalWidth,
       child: _fade(
         arrival.itineraries.contains(selected),
         Column(
           children: [
-            Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
+            // Where the result ends in a node, the node marks the place.
+            if (!arrival.hasStreetLeg)
+              Icon(LucideIcons.chevronDown, size: 14, color: AppColors.black),
             Text(
               formatTime(arrival.time),
               style: TextStyle(
@@ -1008,9 +1241,10 @@ class _Geometry {
   final List<double> columns;
   final GraphScale scale;
 
-  /// The centre of [ride]'s bar: across every result that takes it.
-  double x(GraphRide ride) =>
-      (columns[ride.firstColumn] + columns[ride.lastColumn]) / 2;
+  /// The centre of [span]: a ride's bar across every result that takes it,
+  /// an end across the results that end there.
+  double x(GraphSpan span) =>
+      (columns[span.firstColumn] + columns[span.lastColumn]) / 2;
   double y(DateTime time) => _kTopPad + scale.yOf(time);
 }
 
@@ -1337,8 +1571,7 @@ String stationLabel(String name) {
 
 class _GraphPainter extends CustomPainter {
   _GraphPainter(
-    this.g,
-    this.textStyle, {
+    this.g, {
     required this.now,
     required this.accent,
     required this.selected,
@@ -1349,9 +1582,6 @@ class _GraphPainter extends CustomPainter {
   final DateTime now;
   final Color accent;
   final int selected;
-
-  /// The ambient text style, for its font: a painter inherits none.
-  final TextStyle textStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1376,81 +1606,59 @@ class _GraphPainter extends CustomPainter {
         ..cubicTo(from.dx, from.dy + bend, to.dx, to.dy - bend, to.dx, to.dy);
       canvas.drawPath(change.changesStation ? _dashed(path) : path, paint);
     }
+    for (final end in [...g.graph.departures, ...g.graph.arrivals]) {
+      _paintStreetLeg(canvas, end);
+    }
   }
 
-  /// An accent rule at the current time, with a dot on the axis, once the
-  /// first result has left and until the last has arrived.
+  /// The way to the first ride or from the last, as a dashed spline from
+  /// the ride to the time the result leaves or arrives.
+  void _paintStreetLeg(Canvas canvas, GraphEnd end) {
+    if (!end.hasStreetLeg) return;
+    final at = Offset(g.x(end), g.y(end.time));
+    final ride = Offset(
+      g.x(end.ride),
+      g.y(
+        end is GraphDeparture ? end.ride.leg.startTime : end.ride.leg.endTime,
+      ),
+    );
+    final bend = (ride.dy - at.dy) / 2;
+    final path = Path()
+      ..moveTo(at.dx, at.dy)
+      ..cubicTo(at.dx, at.dy + bend, ride.dx, ride.dy - bend, ride.dx, ride.dy);
+    final onSelected = end.itineraries.contains(selected);
+    canvas.drawPath(
+      _dashed(path, dash: 6, gap: 4),
+      Paint()
+        ..color = onSelected
+            ? kStreetLegColor
+            : kStreetLegColor.withValues(alpha: _kUnselectedOpacity)
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  /// An accent rule at the current time, once the first result has left
+  /// and until the last has arrived; its dot is on the axis.
   void _paintNow(Canvas canvas, Size size) {
-    if (now.isBefore(g.graph.start) || now.isAfter(g.graph.end)) return;
+    if (!_isUnderway(g, now)) return;
     final y = g.y(now);
     final paint = Paint()
       ..color = accent
       ..strokeWidth = 1.5;
     canvas.drawLine(Offset(_kAxisWidth - 2, y), Offset(size.width, y), paint);
-    canvas.drawCircle(Offset(_kAxisWidth - 2, y), 4, paint);
   }
 
-  /// Grid lines at the finest step that leaves room for their labels, and
-  /// a break mark wherever the scale was stretched.
+  /// Grid lines at the finest step that leaves room for their labels.
   void _paintHours(Canvas canvas, Size size) {
     final line = Paint()
       ..color = AppColors.hairline
       ..strokeWidth = 1;
-    final step = _kLabelMinutes.firstWhere(
-      (minutes) => minutes * g.scale.pxPerMinute >= _kMinLabelGap,
-      orElse: () => _kLabelMinutes.last,
-    );
-    final start = g.graph.start.toLocal();
-    final midnight = DateTime(start.year, start.month, start.day);
-    var tick = midnight.add(
-      Duration(
-        minutes: (start.difference(midnight).inMinutes ~/ step + 1) * step,
-      ),
-    );
-    var lastLabel = double.negativeInfinity;
-    while (tick.isBefore(g.graph.end)) {
+    for (final tick in _ticks(g)) {
       final y = g.y(tick);
       canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(size.width, y), line);
-      // A stretch can push two ticks together; skip a label that would
-      // overlap the one above.
-      if (y - lastLabel >= _kMinLabelGap / 2) {
-        final label = TextPainter(
-          text: TextSpan(
-            text: formatTime(tick),
-            style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
-        lastLabel = y;
-      }
-      tick = tick.add(Duration(minutes: step));
     }
-
-    // The axis is solid where time is to scale and dotted where it was
-    // stretched to fit labels.
-    final axis = Paint()
-      ..color = AppColors.black.withValues(alpha: 0.3)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-    const x = _kAxisWidth - 2;
-    var y = _kTopPad;
-    final bottom = _kTopPad + g.scale.height;
-    for (final (from, to) in g.scale.stretchedSpans) {
-      canvas.drawLine(Offset(x, y), Offset(x, _kTopPad + from), axis);
-      canvas.drawPath(
-        _dashed(
-          Path()
-            ..moveTo(x, _kTopPad + from)
-            ..lineTo(x, _kTopPad + to),
-          dash: 1.5,
-          gap: 3,
-        ),
-        axis,
-      );
-      y = _kTopPad + to;
-    }
-    canvas.drawLine(Offset(x, y), Offset(x, bottom), axis);
   }
 
   static Path _dashed(Path source, {double dash = 4, double gap = 4}) {
@@ -1471,4 +1679,120 @@ class _GraphPainter extends CustomPainter {
       old.now != now ||
       old.accent != accent ||
       old.selected != selected;
+}
+
+bool _isUnderway(_Geometry g, DateTime now) =>
+    !now.isBefore(g.graph.start) && !now.isAfter(g.graph.end);
+
+/// The times the grid marks: the finest step in [_kLabelMinutes] that
+/// leaves room for a label at the current zoom.
+Iterable<DateTime> _ticks(_Geometry g) sync* {
+  final step = _kLabelMinutes.firstWhere(
+    (minutes) => minutes * g.scale.pxPerMinute >= _kMinLabelGap,
+    orElse: () => _kLabelMinutes.last,
+  );
+  final start = g.graph.start.toLocal();
+  final midnight = DateTime(start.year, start.month, start.day);
+  var tick = midnight.add(
+    Duration(
+      minutes: (start.difference(midnight).inMinutes ~/ step + 1) * step,
+    ),
+  );
+  while (tick.isBefore(g.graph.end)) {
+    yield tick;
+    tick = tick.add(Duration(minutes: step));
+  }
+}
+
+/// The time labels, the axis rule and the "now" dot, drawn in the pinned
+/// strip left of the columns and shifted with the vertical [scroll].
+class _AxisPainter extends CustomPainter {
+  _AxisPainter(
+    this.g,
+    this.textStyle, {
+    required this.scroll,
+    required this.now,
+    required this.accent,
+  }) : super(repaint: scroll);
+
+  final _Geometry g;
+
+  /// The ambient text style, for its font: a painter inherits none.
+  final TextStyle textStyle;
+  final ScrollController scroll;
+  final DateTime now;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = AppColors.white);
+    canvas.translate(0, scroll.hasClients ? -scroll.offset : 0);
+    _paintLabels(canvas);
+    _paintRule(canvas);
+    if (_isUnderway(g, now)) {
+      canvas.drawCircle(
+        Offset(_kAxisWidth - 2, g.y(now)),
+        4,
+        Paint()..color = accent,
+      );
+    }
+  }
+
+  void _paintLabels(Canvas canvas) {
+    final line = Paint()
+      ..color = AppColors.hairline
+      ..strokeWidth = 1;
+    var lastLabel = double.negativeInfinity;
+    for (final tick in _ticks(g)) {
+      final y = g.y(tick);
+      canvas.drawLine(Offset(_kAxisWidth - 4, y), Offset(_kAxisWidth, y), line);
+      // A stretch can push two ticks together; skip a label that would
+      // overlap the one above.
+      if (y - lastLabel < _kMinLabelGap / 2) continue;
+      final label = TextPainter(
+        text: TextSpan(
+          text: formatTime(tick),
+          style: textStyle.copyWith(fontSize: 10, color: AppColors.black),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, Offset(_kAxisWidth - 8 - label.width, y - 6));
+      lastLabel = y;
+    }
+  }
+
+  /// Solid where time is to scale and dotted where it was stretched to fit
+  /// labels.
+  void _paintRule(Canvas canvas) {
+    final axis = Paint()
+      ..color = AppColors.black.withValues(alpha: 0.3)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    const x = _kAxisWidth - 2;
+    var y = _kTopPad;
+    final bottom = _kTopPad + g.scale.height;
+    for (final (from, to) in g.scale.stretchedSpans) {
+      canvas.drawLine(Offset(x, y), Offset(x, _kTopPad + from), axis);
+      canvas.drawPath(
+        _GraphPainter._dashed(
+          Path()
+            ..moveTo(x, _kTopPad + from)
+            ..lineTo(x, _kTopPad + to),
+          dash: 1.5,
+          gap: 3,
+        ),
+        axis,
+      );
+      y = _kTopPad + to;
+    }
+    canvas.drawLine(Offset(x, y), Offset(x, bottom), axis);
+  }
+
+  @override
+  bool shouldRepaint(_AxisPainter old) =>
+      old.g.graph != g.graph ||
+      old.g.scale != g.scale ||
+      old.now != now ||
+      old.accent != accent ||
+      old.scroll != scroll;
 }

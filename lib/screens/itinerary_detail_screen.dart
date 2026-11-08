@@ -730,6 +730,10 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       if (_itinerary.legs.isNotEmpty)
         () => FinishLegCard(
           leg: _itinerary.legs.last,
+          name: destinationLabel(
+            _itinerary.legs,
+            searched: widget.toName ?? widget.savedTrip?.toName,
+          ),
           arrivalTime: _itinerary.endTime,
           totalDuration: _itinerary.duration,
           openStopSheet: _openStopSheet,
@@ -811,6 +815,14 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         : null;
     return LegDetailsWidget(
       leg: entry.leg,
+      // The planner calls a start that was a coordinate "START".
+      placeName: entry.originalIndex == 0
+          ? endpointLabel(
+              entry.leg.fromName,
+              searched: widget.fromName ?? widget.savedTrip?.fromName,
+              fallback: 'Start',
+            )
+          : null,
       previousLeg: previous,
       openStopSheet: _openStopSheet,
       onShowOnMap: () => _showLegOnMap(legIndex),
@@ -1323,6 +1335,10 @@ class LegDetailsWidget extends StatefulWidget {
   final Leg leg;
   final OpenStopSheet openStopSheet;
 
+  /// What the place the leg leaves from is called, where that is not the
+  /// planner's name for it.
+  final String? placeName;
+
   /// Used by street legs, whose row cannot show which way they actually go.
   final VoidCallback? onShowOnMap;
 
@@ -1346,6 +1362,7 @@ class LegDetailsWidget extends StatefulWidget {
     super.key,
     required this.leg,
     required this.openStopSheet,
+    this.placeName,
     this.onShowOnMap,
     this.previousLeg,
     this.progress = JourneyProgress.never,
@@ -1496,7 +1513,7 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
             referenceTime: widget.leg.startTime,
           ),
           child: Text(
-            widget.leg.fromName,
+            widget.placeName ?? widget.leg.fromName,
             style: kSpineNameStyle.copyWith(color: AppColors.black),
             overflow: TextOverflow.ellipsis,
             maxLines: 2,
@@ -2037,6 +2054,9 @@ class FindOnwardButton extends StatelessWidget {
 
 class FinishLegCard extends StatelessWidget {
   final Leg leg;
+
+  /// What the end is called: the planner's name for a coordinate is "END".
+  final String name;
   final DateTime arrivalTime;
   final int totalDuration;
   final OpenStopSheet openStopSheet;
@@ -2047,6 +2067,7 @@ class FinishLegCard extends StatelessWidget {
   const FinishLegCard({
     super.key,
     required this.leg,
+    required this.name,
     required this.arrivalTime,
     required this.totalDuration,
     required this.openStopSheet,
@@ -2094,7 +2115,7 @@ class FinishLegCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              leg.toName,
+              name,
               style: kSpineNameStyle.copyWith(color: AppColors.black),
               overflow: TextOverflow.ellipsis,
               maxLines: 2,

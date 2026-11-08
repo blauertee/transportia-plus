@@ -5,6 +5,8 @@ import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 
 import '../environment.dart';
+import '../models/motis_request_record.dart';
+import 'motis_request_log.dart';
 import 'transitous_api_exception.dart';
 import 'transitous_endpoint.dart';
 
@@ -39,11 +41,14 @@ class TransitousClient {
     String? host,
   }) {
     final uri = uriFor(endpoint, query, host: host);
+    final headers = Environment.transitousHeaders();
     return _send(
       endpoint,
       uri,
       parse,
-      () => _http.get(uri, headers: Environment.transitousHeaders()),
+      () => _http.get(uri, headers: headers),
+      method: 'GET',
+      headers: headers,
     );
   }
 
@@ -62,11 +67,15 @@ class TransitousClient {
       ...Environment.transitousHeaders(),
       'content-type': 'application/json',
     };
+    final encoded = json.encode(body);
     return _send(
       endpoint,
       uri,
       parse,
-      () => _http.post(uri, headers: headers, body: json.encode(body)),
+      () => _http.post(uri, headers: headers, body: encoded),
+      method: 'POST',
+      headers: headers,
+      body: encoded,
     );
   }
 
@@ -88,11 +97,60 @@ class TransitousClient {
     );
   }
 
+  /// Sends the request, recording it in the [MotisRequestLog] while that
+  /// is on: as pending at once, then with what came back.
   Future<T> _send<T>(
     TransitousEndpoint endpoint,
     Uri uri,
     ResponseParser<T> parse,
+    Future<http.Response> Function() send, {
+    required String method,
+    required Map<String, String> headers,
+    String? body,
+  }) async {
+    final pending = MotisRequestRecord(
+      endpoint: endpoint,
+      method: method,
+      uri: uri,
+      headers: headers,
+      body: body,
+      sentAt: DateTime.now(),
+    );
+    final logged = MotisRequestLog.add(pending);
+    final stopwatch = Stopwatch()..start();
+    int? statusCode;
+    try {
+      final result = await _exchange(endpoint, uri, parse, send, (status) {
+        statusCode = status;
+      });
+      if (logged) {
+        MotisRequestLog.replace(
+          pending,
+          pending.finished(duration: stopwatch.elapsed, statusCode: statusCode),
+        );
+      }
+      return result;
+    } on TransitousApiException catch (e) {
+      if (logged) {
+        MotisRequestLog.replace(
+          pending,
+          pending.finished(
+            duration: stopwatch.elapsed,
+            statusCode: e.statusCode,
+            error: e.message,
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<T> _exchange<T>(
+    TransitousEndpoint endpoint,
+    Uri uri,
+    ResponseParser<T> parse,
     Future<http.Response> Function() send,
+    void Function(int statusCode) onStatus,
   ) async {
     final http.Response response;
     try {
@@ -120,6 +178,7 @@ class TransitousClient {
       );
     }
 
+    onStatus(response.statusCode);
     if (response.statusCode != 200) {
       final message = _errorMessage(response);
       developer.log(

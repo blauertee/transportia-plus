@@ -61,6 +61,33 @@ void main() {
     );
   });
 
+  group('JourneyGraph.build, results that share rides after the start', () {
+    // Pankow → Potsdam: at 10:00 on foot to the S2, at 10:01 by U2, at 10:05
+    // by tram 50 to the same S2, and on the same rides from there.
+    final graph = JourneyGraph.build(_load('plan_shared_after_first_mile'));
+
+    test('puts results that share rides side by side', () {
+      final s2 = graph.rides.where((ride) => ride.leg.displayName == 'S2');
+      final shared = s2.firstWhere((ride) => ride.itineraries.length > 1);
+
+      expect(shared.itineraries, [0, 1]);
+      expect(
+        graph.itineraries[1].legs.any((leg) => leg.displayName == '50'),
+        isTrue,
+      );
+    });
+
+    test('keeps departure order where nothing is shared', () {
+      final u2 = [
+        for (final (i, it) in graph.itineraries.indexed)
+          if (it.legs.any((leg) => leg.displayName == 'U2')) i,
+      ];
+      final starts = [for (final i in u2) graph.itineraries[i].startTime];
+
+      expect(starts, [...starts]..sort());
+    });
+  });
+
   group('JourneyGraph.build, results that share rides apart', () {
     // Köln → Amsterdam: four results by coach over Rotterdam, all on the
     // same coach. The first and last take the Intercity on to Amsterdam
@@ -96,6 +123,67 @@ void main() {
 
       expect(onto.map((change) => change.to), [first, last]);
       expect(onto.map((change) => change.from).toSet(), hasLength(1));
+    });
+  });
+
+  group('JourneyGraph ends', () {
+    final graph = JourneyGraph.build(results);
+
+    test('has a departure and an arrival for every result', () {
+      final leaving = graph.departures.expand((end) => end.itineraries);
+      final arriving = graph.arrivals.expand((end) => end.itineraries);
+
+      expect(leaving.toList()..sort(), [
+        for (var i = 0; i < graph.columnCount; i++) i,
+      ]);
+      expect(arriving.toList()..sort(), [
+        for (var i = 0; i < graph.columnCount; i++) i,
+      ]);
+    });
+
+    test('leaves and arrives when the result does, walks included', () {
+      for (final end in graph.departures) {
+        final itinerary = graph.itineraries[end.itineraries.first];
+        expect(end.time, itinerary.startTime);
+        expect(end.ride.leg, itinerary.legs.firstWhere((leg) => leg.isRide));
+        // Every result walks to S Wildau first.
+        expect(end.hasStreetLeg, isTrue);
+      }
+      for (final end in graph.arrivals) {
+        expect(end.time, graph.itineraries[end.itineraries.first].endTime);
+      }
+    });
+
+    test('knows how the way to the first ride goes, and how long', () {
+      for (final end in graph.departures) {
+        final itinerary = graph.itineraries[end.itineraries.first];
+        expect(end.streetMode, 'WALK');
+        expect(
+          end.streetTime.inSeconds,
+          itinerary.firstMileLegs.fold<int>(
+            0,
+            (sum, leg) => sum + leg.duration,
+          ),
+        );
+      }
+    });
+
+    test('puts every end on the scale', () {
+      for (final end in [...graph.departures, ...graph.arrivals]) {
+        expect(graph.events, contains(end.time));
+      }
+      expect(
+        graph.start,
+        graph.departures
+            .map((end) => end.time)
+            .reduce((a, b) => a.isBefore(b) ? a : b),
+      );
+    });
+
+    test('is centred across the results it is the end of', () {
+      for (final end in graph.arrivals) {
+        expect(end.slot, (end.firstColumn + end.lastColumn) / 2);
+      }
     });
   });
 
@@ -148,6 +236,67 @@ void main() {
     });
   });
 
+  group('joinedItineraryId', () {
+    final joined = continueAfter(viaIngolstadt, ice1009, onward).first;
+    final cut = joined.legs.indexWhere((leg) => leg.displayName == 'ICE 1009');
+
+    test('puts a walk between the locked ride and the next one', () {
+      // The search on from Ingolstadt boards straight away.
+      expect(joined.legs[cut + 1].isStreet, isFalse);
+
+      final legs = joinedItineraryId(joined, ice1009)!.legs;
+
+      expect(legs, hasLength(joined.legs.length + 1));
+      final walk = legs[cut + 1];
+      expect(walk.mode, 'WALK');
+      expect(walk.tripId, isEmpty);
+      expect(walk.fromId, ice1009.to.stopId);
+      expect(walk.toId, joined.legs[cut + 1].from.stopId);
+      expect(legs[cut + 2].tripId, joined.legs[cut + 1].tripId);
+    });
+
+    test('puts no walk in where one is already there', () {
+      final before = viaIngolstadt.legs.indexOf(ice1009);
+      expect(viaIngolstadt.legs[before + 1].isStreet, isTrue);
+
+      final legs = joinedItineraryId(viaIngolstadt, ice1009)!.legs;
+
+      expect(legs, hasLength(viaIngolstadt.legs.length));
+    });
+
+    test('puts no walk after a locked ride that is the last leg', () {
+      final last = Itinerary(
+        duration: 0,
+        startTime: joined.startTime,
+        endTime: ice1009.endTime,
+        transfers: 0,
+        legs: joined.legs.sublist(0, cut + 1),
+      );
+
+      expect(joinedItineraryId(last, ice1009)!.legs, hasLength(cut + 1));
+    });
+
+    test('is null for a journey that does not take the ride', () {
+      final other = results.firstWhere((it) => it != viaIngolstadt);
+
+      expect(joinedItineraryId(other, ice1009), isNull);
+    });
+  });
+
+  group('isSameJoinedJourney', () {
+    final joined = continueAfter(viaIngolstadt, ice1009, onward);
+
+    test('holds for the same rides, whatever the walks', () {
+      final planned = Itinerary.fromJson(joined.first.sourceJson!);
+
+      expect(isSameJoinedJourney(joined.first, planned), isTrue);
+    });
+
+    test('fails for other rides', () {
+      expect(isSameJoinedJourney(joined.first, joined.last), isFalse);
+    });
+  });
+
   group('RideLock', () {
     final lock = RideLock(viaIngolstadt, ice1009);
 
@@ -169,12 +318,23 @@ void main() {
   group('GraphScale', () {
     final graph = JourneyGraph.build(results);
 
-    test('is linear where every ride has room for its name', () {
-      final scale = GraphScale(graph, 10);
+    test('is linear where every ride and street leg has room for its text', () {
+      // Zoomed in far enough for the shortest walk to the first ride or from
+      // the last to hold its station name, its node and its time.
+      final scale = GraphScale(graph, 30);
 
       expect(scale.stretchedSpans, isEmpty);
       final minutes = graph.end.difference(graph.start).inMinutes;
-      expect(scale.height, closeTo(minutes * 10, 1));
+      expect(scale.height, closeTo(minutes * 30, 1));
+    });
+
+    test('makes room on a short street leg for its text', () {
+      final scale = GraphScale(graph, 10);
+
+      for (final end in graph.arrivals.where((end) => end.hasStreetLeg)) {
+        final height = scale.yOf(end.time) - scale.yOf(end.ride.leg.endTime);
+        expect(height, greaterThanOrEqualTo(48 - 1e-9));
+      }
     });
 
     test('stretches short stretches when zoomed out', () {
@@ -332,7 +492,7 @@ void main() {
         margin: 8,
       );
 
-      double centre(GraphRide ride) =>
+      double centre(GraphSpan ride) =>
           (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
       expect(centre(train) - centre(coach), 15 + 60 + 8);
     });
@@ -350,12 +510,12 @@ void main() {
         margin: 8,
       );
 
-      double centre(GraphRide ride) =>
+      double centre(GraphSpan ride) =>
           (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
       for (final a in bars) {
         for (final b in bars) {
-          if (a.ride.slot >= b.ride.slot || !a.overlapsInTime(b)) continue;
-          expect(centre(b.ride) - centre(a.ride), greaterThanOrEqualTo(38));
+          if (a.span.slot >= b.span.slot || !a.overlapsInTime(b)) continue;
+          expect(centre(b.span) - centre(a.span), greaterThanOrEqualTo(38));
         }
       }
     });
