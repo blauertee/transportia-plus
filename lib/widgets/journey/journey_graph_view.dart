@@ -749,7 +749,9 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     }
 
     for (final change in graph.changes) {
-      label(change.from.alighting, change.from, above: false);
+      if (!_namedAtBoarding(change)) {
+        label(change.from.alighting, change.from, above: false);
+      }
       if (change.changesStation) {
         label(change.to.boarding, change.to, above: true);
       }
@@ -1051,12 +1053,14 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     }
 
     for (final change in graph.changes) {
-      add(
-        change.from.alighting,
-        change.from,
-        change.from.leg.endTime,
-        above: false,
-      );
+      if (!_namedAtBoarding(change)) {
+        add(
+          change.from.alighting,
+          change.from,
+          change.from.leg.endTime,
+          above: false,
+        );
+      }
       if (change.changesStation) {
         add(
           change.to.boarding,
@@ -1077,6 +1081,13 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     }
     return markers;
   }
+
+  /// Whether [change] stays at a station already named over the ride it
+  /// changes onto, because some result sets off on that ride: the name
+  /// under the ride it changes from would say the same again.
+  bool _namedAtBoarding(GraphChange change) =>
+      !change.changesStation &&
+      graph.departures.any((departure) => departure.ride == change.to);
 
   /// How far the departure time sits above the time it marks: clear of the
   /// start node, or of the station name over the first ride.
