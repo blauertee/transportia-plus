@@ -99,6 +99,53 @@ void main() {
     });
   });
 
+  group('JourneyGraph ends', () {
+    final graph = JourneyGraph.build(results);
+
+    test('has a departure and an arrival for every result', () {
+      final leaving = graph.departures.expand((end) => end.itineraries);
+      final arriving = graph.arrivals.expand((end) => end.itineraries);
+
+      expect(leaving.toList()..sort(), [
+        for (var i = 0; i < graph.columnCount; i++) i,
+      ]);
+      expect(arriving.toList()..sort(), [
+        for (var i = 0; i < graph.columnCount; i++) i,
+      ]);
+    });
+
+    test('leaves and arrives when the result does, walks included', () {
+      for (final end in graph.departures) {
+        final itinerary = graph.itineraries[end.itineraries.first];
+        expect(end.time, itinerary.startTime);
+        expect(end.ride.leg, itinerary.legs.firstWhere((leg) => leg.isRide));
+        // Every result walks to S Wildau first.
+        expect(end.hasStreetLeg, isTrue);
+      }
+      for (final end in graph.arrivals) {
+        expect(end.time, graph.itineraries[end.itineraries.first].endTime);
+      }
+    });
+
+    test('puts every end on the scale', () {
+      for (final end in [...graph.departures, ...graph.arrivals]) {
+        expect(graph.events, contains(end.time));
+      }
+      expect(
+        graph.start,
+        graph.departures
+            .map((end) => end.time)
+            .reduce((a, b) => a.isBefore(b) ? a : b),
+      );
+    });
+
+    test('is centred across the results it is the end of', () {
+      for (final end in graph.arrivals) {
+        expect(end.slot, (end.firstColumn + end.lastColumn) / 2);
+      }
+    });
+  });
+
   group('continueAfter', () {
     final joined = continueAfter(viaIngolstadt, ice1009, onward);
 
@@ -393,7 +440,7 @@ void main() {
         margin: 8,
       );
 
-      double centre(GraphRide ride) =>
+      double centre(GraphSpan ride) =>
           (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
       expect(centre(train) - centre(coach), 15 + 60 + 8);
     });
@@ -411,12 +458,12 @@ void main() {
         margin: 8,
       );
 
-      double centre(GraphRide ride) =>
+      double centre(GraphSpan ride) =>
           (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
       for (final a in bars) {
         for (final b in bars) {
-          if (a.ride.slot >= b.ride.slot || !a.overlapsInTime(b)) continue;
-          expect(centre(b.ride) - centre(a.ride), greaterThanOrEqualTo(38));
+          if (a.span.slot >= b.span.slot || !a.overlapsInTime(b)) continue;
+          expect(centre(b.span) - centre(a.span), greaterThanOrEqualTo(38));
         }
       }
     });

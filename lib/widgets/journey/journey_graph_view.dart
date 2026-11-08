@@ -40,6 +40,9 @@ const double _kRightPad = 8;
 const double _kArrivalWidth = 40;
 const double _kArrivalHeight = 32;
 
+/// The time over each result's first ride.
+const double _kDepartureHeight = 16;
+
 TextStyle get _durationStyle => TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -51,7 +54,7 @@ const double _kHeaderHeight = 24;
 
 /// Space above the first departure and below the last arrival, for the
 /// labels that hang off either end.
-const double _kTopPad = 14;
+const double _kTopPad = _kDepartureHeight + 14;
 const double _kBottomPad = 44;
 
 /// Zoom bounds, in pixels per minute: from a whole day on one screen to a
@@ -356,6 +359,8 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
               for (final ride in graph.rides)
                 if (_lockOf(ride, implicit) case final lock?)
                   _lockBadge(geometry, ride, lock, accent),
+              for (final departure in graph.departures)
+                _departureLabel(geometry, departure),
               for (final arrival in graph.arrivals)
                 _arrivalLabel(geometry, arrival),
             ],
@@ -721,14 +726,26 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
       }
     }
     for (final arrival in graph.arrivals) {
-      final at = y(arrival.ride.leg.endTime) + 2;
+      final at = y(arrival.time) + 2;
       boxes.add(
         GraphBox(
-          arrival.ride,
+          arrival,
           left: _kArrivalWidth / 2,
           right: _kArrivalWidth / 2,
           top: at,
           bottom: at + _kArrivalHeight,
+        ),
+      );
+    }
+    for (final departure in graph.departures) {
+      final at = y(departure.time) - 2;
+      boxes.add(
+        GraphBox(
+          departure,
+          left: _kArrivalWidth / 2,
+          right: _kArrivalWidth / 2,
+          top: at - _kDepartureHeight,
+          bottom: at,
         ),
       );
     }
@@ -749,16 +766,16 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     );
 
     // Shifted so whatever reaches furthest left clears the axis.
-    double centreOf(GraphRide ride) =>
-        (xs[ride.firstColumn] + xs[ride.lastColumn]) / 2;
+    double centreOf(GraphSpan span) =>
+        (xs[span.firstColumn] + xs[span.lastColumn]) / 2;
     var leftmost = 0.0, rightmost = 0.0;
     for (var i = 0; i < xs.length; i++) {
       leftmost = math.min(leftmost, xs[i] - durations[i] / 2);
       rightmost = math.max(rightmost, xs[i] + durations[i] / 2);
     }
     for (final box in boxes) {
-      leftmost = math.min(leftmost, centreOf(box.ride) - box.left);
-      rightmost = math.max(rightmost, centreOf(box.ride) + box.right);
+      leftmost = math.min(leftmost, centreOf(box.span) - box.left);
+      rightmost = math.max(rightmost, centreOf(box.span) + box.right);
     }
     final shift = _kAxisWidth + 4 - leftmost;
     _spacedFor = key;
@@ -996,10 +1013,37 @@ class _JourneyGraphViewState extends State<JourneyGraphView> {
     return markers;
   }
 
+  /// When the results leave, over where they set off: on the axis's level
+  /// for that time.
+  Widget _departureLabel(_Geometry g, GraphDeparture departure) {
+    return Positioned(
+      left: g.x(departure) - _kArrivalWidth / 2,
+      top: g.y(departure.time) - 2 - _kDepartureHeight,
+      width: _kArrivalWidth,
+      height: _kDepartureHeight,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _tap(departure.itineraries, null),
+        child: _fade(
+          departure.itineraries.contains(selected),
+          Text(
+            formatTime(departure.time),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _arrivalLabel(_Geometry g, GraphArrival arrival) {
     return Positioned(
-      left: g.x(arrival.ride) - _kArrivalWidth / 2,
-      top: g.y(arrival.ride.leg.endTime) + 2,
+      left: g.x(arrival) - _kArrivalWidth / 2,
+      top: g.y(arrival.time) + 2,
       width: _kArrivalWidth,
       child: _fade(
         arrival.itineraries.contains(selected),
@@ -1031,9 +1075,10 @@ class _Geometry {
   final List<double> columns;
   final GraphScale scale;
 
-  /// The centre of [ride]'s bar: across every result that takes it.
-  double x(GraphRide ride) =>
-      (columns[ride.firstColumn] + columns[ride.lastColumn]) / 2;
+  /// The centre of [span]: a ride's bar across every result that takes it,
+  /// an end across the results that end there.
+  double x(GraphSpan span) =>
+      (columns[span.firstColumn] + columns[span.lastColumn]) / 2;
   double y(DateTime time) => _kTopPad + scale.yOf(time);
 }
 
@@ -1395,6 +1440,37 @@ class _GraphPainter extends CustomPainter {
         ..cubicTo(from.dx, from.dy + bend, to.dx, to.dy - bend, to.dx, to.dy);
       canvas.drawPath(change.changesStation ? _dashed(path) : path, paint);
     }
+    for (final end in [...g.graph.departures, ...g.graph.arrivals]) {
+      _paintStreetLeg(canvas, end);
+    }
+  }
+
+  /// The way to the first ride or from the last, as a dotted spline from
+  /// the ride to the time the result leaves or arrives.
+  void _paintStreetLeg(Canvas canvas, GraphEnd end) {
+    if (!end.hasStreetLeg) return;
+    final at = Offset(g.x(end), g.y(end.time));
+    final ride = Offset(
+      g.x(end.ride),
+      g.y(
+        end is GraphDeparture ? end.ride.leg.startTime : end.ride.leg.endTime,
+      ),
+    );
+    final bend = (ride.dy - at.dy) / 2;
+    final path = Path()
+      ..moveTo(at.dx, at.dy)
+      ..cubicTo(at.dx, at.dy + bend, ride.dx, ride.dy - bend, ride.dx, ride.dy);
+    final onSelected = end.itineraries.contains(selected);
+    canvas.drawPath(
+      _dashed(path, dash: 0.1, gap: 5),
+      Paint()
+        ..color = onSelected
+            ? kStreetLegColor
+            : kStreetLegColor.withValues(alpha: _kUnselectedOpacity)
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
   }
 
   /// An accent rule at the current time, once the first result has left

@@ -54,11 +54,21 @@ class GraphStation {
   }
 }
 
+/// Something drawn across one or more neighbouring result columns, centred
+/// across them: what the columns are spaced around.
+abstract interface class GraphSpan {
+  int get firstColumn;
+  int get lastColumn;
+
+  /// Horizontal position in result columns.
+  double get slot;
+}
+
 /// One ride, drawn once across the results side by side that take it.
 ///
 /// Results that take it with others in between get a bar each: a bar
 /// across them would run through the columns between, over their own rides.
-class GraphRide {
+class GraphRide implements GraphSpan {
   GraphRide._(this.key, this.leg);
 
   /// Same trip between the same stops: the same ride, whichever bar it is
@@ -72,10 +82,13 @@ class GraphRide {
 
   /// Horizontal position in result columns. Fractional when shared: the
   /// ride sits centred under (or over) every result that takes it.
+  @override
   double slot = 0;
 
   /// The first and last of [itineraries], the columns it is centred across.
+  @override
   int get firstColumn => itineraries.reduce(math.min);
+  @override
   int get lastColumn => itineraries.reduce(math.max);
 
   GraphStation get boarding => GraphStation.of(leg, arriving: false);
@@ -102,16 +115,50 @@ class GraphChange {
       from.alighting.name != to.boarding.name;
 }
 
-/// Where a result ends: under its last ride, at the time it reaches the
-/// destination.
-class GraphArrival {
-  GraphArrival._(this.ride, this.time);
+/// One end of a result: where it leaves from or gets to, and the way on
+/// foot (or by bike, or car) between there and its first or last ride.
+///
+/// Drawn in the columns of the results it is the end of, at the time they
+/// leave or arrive, so that time reads off the axis, and joined to the ride
+/// by a street spline when the way there takes any time at all.
+sealed class GraphEnd implements GraphSpan {
+  GraphEnd._(this.ride, this.time);
 
+  /// The first ride of the results leaving here, or the last of those
+  /// arriving.
   final GraphRide ride;
   final DateTime time;
 
-  /// Indexes into [JourneyGraph.itineraries] of the results ending here.
+  /// Indexes into [JourneyGraph.itineraries] of the results that end here.
   final List<int> itineraries = [];
+
+  @override
+  int get firstColumn => itineraries.reduce(math.min);
+  @override
+  int get lastColumn => itineraries.reduce(math.max);
+  @override
+  double get slot => (firstColumn + lastColumn) / 2;
+
+  /// Whether there is a way between this end and [ride] that takes time:
+  /// a walk to the first station, or from the last.
+  bool get hasStreetLeg;
+}
+
+/// Where a result starts: above its first ride, at the time it leaves.
+final class GraphDeparture extends GraphEnd {
+  GraphDeparture._(super.ride, super.time) : super._();
+
+  @override
+  bool get hasStreetLeg => time.isBefore(ride.leg.startTime);
+}
+
+/// Where a result ends: under its last ride, at the time it reaches the
+/// destination.
+final class GraphArrival extends GraphEnd {
+  GraphArrival._(super.ride, super.time) : super._();
+
+  @override
+  bool get hasStreetLeg => time.isAfter(ride.leg.endTime);
 }
 
 /// The results of one search as a single graph: every ride once, laid out
@@ -121,6 +168,7 @@ class JourneyGraph {
     this.itineraries,
     this.rides,
     this.changes,
+    this.departures,
     this.arrivals,
     this.events,
   );
@@ -129,6 +177,7 @@ class JourneyGraph {
   final List<Itinerary> itineraries;
   final List<GraphRide> rides;
   final List<GraphChange> changes;
+  final List<GraphDeparture> departures;
   final List<GraphArrival> arrivals;
 
   /// Every departure and arrival, in order: where the scale may bend.
@@ -153,9 +202,11 @@ class JourneyGraph {
     final byKey = <String, GraphRide>{};
     final rides = <GraphRide>[];
     final changes = <(GraphRide, GraphRide), GraphChange>{};
+    final departures = <(GraphRide, DateTime), GraphDeparture>{};
     final arrivals = <(GraphRide, DateTime), GraphArrival>{};
     for (var i = 0; i < itineraries.length; i++) {
       GraphRide? previous;
+      GraphRide? first;
       for (final leg in itineraries[i].legs.where((leg) => leg.isRide)) {
         final key = GraphRide.keyOf(leg);
         var ride = byKey[key];
@@ -164,6 +215,7 @@ class JourneyGraph {
           rides.add(ride);
         }
         ride.itineraries.add(i);
+        first ??= ride;
         if (previous != null) {
           changes.putIfAbsent((
             previous,
@@ -172,6 +224,11 @@ class JourneyGraph {
         }
         previous = ride;
       }
+      final start = itineraries[i].startTime;
+      departures
+          .putIfAbsent((first!, start), () => GraphDeparture._(first!, start))
+          .itineraries
+          .add(i);
       final last = previous!;
       final arrival = itineraries[i].endTime;
       arrivals
@@ -186,6 +243,7 @@ class JourneyGraph {
 
     final events = <DateTime>{
       for (final ride in rides) ...[ride.leg.startTime, ride.leg.endTime],
+      for (final departure in departures.values) departure.time,
       for (final arrival in arrivals.values) arrival.time,
     }.toList()..sort();
 
@@ -193,6 +251,7 @@ class JourneyGraph {
       itineraries,
       rides,
       changes.values.toList(),
+      departures.values.toList(),
       arrivals.values.toList(),
       events,
     );
@@ -248,18 +307,19 @@ class JourneyGraph {
   }
 }
 
-/// Something drawn on a ride, for spacing the columns: [left] and [right]
-/// of the ride's centre line, [top] to [bottom] down the graph, in pixels.
+/// Something drawn on a ride or an end, for spacing the columns: [left]
+/// and [right] of its centre line, [top] to [bottom] down the graph, in
+/// pixels.
 class GraphBox {
   const GraphBox(
-    this.ride, {
+    this.span, {
     required this.left,
     required this.right,
     required this.top,
     required this.bottom,
   });
 
-  final GraphRide ride;
+  final GraphSpan span;
   final double left;
   final double right;
   final double top;
@@ -293,15 +353,15 @@ List<double> packColumns(
   final byLast = <int, List<GraphBox>>{};
   final byFirst = <int, List<GraphBox>>{};
   for (final box in boxes) {
-    byLast.putIfAbsent(box.ride.lastColumn, () => []).add(box);
-    byFirst.putIfAbsent(box.ride.firstColumn, () => []).add(box);
+    byLast.putIfAbsent(box.span.lastColumn, () => []).add(box);
+    byFirst.putIfAbsent(box.span.firstColumn, () => []).add(box);
   }
   final xs = <double>[0];
   // A box's centre as a * x + c, where x is the column being placed. For a
   // box that ends further on, the part still to come is left out: it is
   // the same for another that ends there too.
   (double, double) centre(GraphBox box, int column) {
-    final first = box.ride.firstColumn, last = box.ride.lastColumn;
+    final first = box.span.firstColumn, last = box.span.lastColumn;
     if (last < column) return (0, (xs[first] + xs[last]) / 2);
     if (first >= column) return (1, 0);
     return (0.5, xs[first] / 2);
@@ -317,16 +377,16 @@ List<double> packColumns(
     final pairs = [
       for (final box in placing) (box, [...settled, ...placing]),
       for (final box in byFirst[column] ?? const <GraphBox>[])
-        if (box.ride.lastColumn > column) (box, byLast[box.ride.lastColumn]!),
+        if (box.span.lastColumn > column) (box, byLast[box.span.lastColumn]!),
     ];
     for (final (box, others) in pairs) {
       for (final other in others) {
-        if (other.ride == box.ride ||
-            other.ride.slot == box.ride.slot ||
+        if (other.span == box.span ||
+            other.span.slot == box.span.slot ||
             !box.overlapsInTime(other)) {
           continue;
         }
-        final (left, right) = other.ride.slot < box.ride.slot
+        final (left, right) = other.span.slot < box.span.slot
             ? (other, box)
             : (box, other);
         final (aLeft, cLeft) = centre(left, column);
