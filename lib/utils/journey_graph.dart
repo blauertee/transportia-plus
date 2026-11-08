@@ -743,3 +743,68 @@ bool isSameJoinedJourney(Itinerary joined, Itinerary planned) {
   ];
   return before.isNotEmpty && listEquals(before, after);
 }
+
+/// The stop after where [upTo] gets off, on [trip]: the whole service
+/// [upTo] is a part of, as `/trip` gives it. Null at the end of the line,
+/// or when [upTo] is not on [trip].
+TransitPlace? stopAfter(Leg trip, Leg upTo) {
+  if (trip.tripId != upTo.tripId) return null;
+  final stops = [trip.from, ...trip.intermediateStops, trip.to];
+  final from = stops.indexWhere((stop) => _sameStop(stop, upTo.from));
+  if (from < 0) return null;
+  final off = stops.indexWhere((stop) => _sameStop(stop, upTo.to), from + 1);
+  if (off < 0 || off == stops.length - 1) return null;
+  return stops[off + 1];
+}
+
+bool _sameStop(TransitPlace a, TransitPlace b) =>
+    a.stopId != null && a.stopId!.isNotEmpty && a.stopId == b.stopId;
+
+/// [lock]'s journey staying on its ride past where it gets off, to [next],
+/// and going on with [continuation], a search from [next] at the time the
+/// ride gets there; with the ride as it is now taken.
+///
+/// Staying on is what the search from where the ride gets off cannot find:
+/// it starts after [margin], when the ride has left. A [continuation] that
+/// carries on in the same ride takes it further still. One that changes at
+/// [next] has to leave [margin] for it, as at any change, or it is null.
+(Itinerary, Leg)? stayOn(
+  RideLock lock,
+  Leg trip,
+  TransitPlace next,
+  Itinerary continuation, {
+  required Duration margin,
+}) {
+  final end = _endOf(lock.itinerary, lock.upTo);
+  if (end < 0) return null;
+  final rides = continuation.legs.indexWhere((leg) => leg.isRide);
+  if (rides < 0) return null;
+  final first = continuation.legs[rides];
+  final List<Leg> onward;
+  final Leg ride;
+  if (first.tripId == lock.upTo.tripId) {
+    ride = trip.sliceBetween(lock.upTo.from, first.to);
+    onward = continuation.legs.sublist(rides + 1);
+  } else {
+    final arrives = next.timeAtTerminus;
+    if (arrives == null || first.startTime.isBefore(arrives.add(margin))) {
+      return null;
+    }
+    ride = trip.sliceBetween(lock.upTo.from, next);
+    onward = continuation.legs;
+  }
+  // A slice that did not take is the whole service, from its first stop.
+  if (!_sameStop(ride.from, lock.upTo.from)) return null;
+  final legs = [...lock.itinerary.legs.sublist(0, end), ride, ...onward];
+  final rideCount = legs.where((leg) => !leg.isStreet).length;
+  return (
+    Itinerary(
+      duration: legs.last.endTime.difference(legs.first.startTime).inSeconds,
+      startTime: legs.first.startTime,
+      endTime: legs.last.endTime,
+      transfers: rideCount > 0 ? rideCount - 1 : 0,
+      legs: legs,
+    ),
+    ride,
+  );
+}
