@@ -86,8 +86,11 @@ Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
   return darken ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 }
 
-/// The weakest contrast the text on a line's badge may have against it.
-const double _kMinLineTextContrast = 3.0;
+/// Below this contrast the feed's text colour on its own line colour is
+/// swapped for black or white. Deliberately lax: operators pair white with
+/// mid oranges and reds (about 2.9:1) and those badges read fine; only a
+/// pairing that really fails, white on a yellow, is overridden.
+const double _kMinLineTextContrast = 2.0;
 
 /// A transit line's colour: the feed's `routeColor`, as the operator gave it.
 ///

@@ -202,6 +202,13 @@ void main() {
       );
     });
 
+    test('keeps white on a mid orange, as operators pair them', () {
+      expect(
+        onLineColor(const Color(0xFFFF6A00), '#FFFFFF'),
+        const Color(0xFFFFFFFF),
+      );
+    });
+
     test('picks the better of black and white without a feed colour', () {
       expect(
         onLineColor(const Color(0xFF101830), null),
