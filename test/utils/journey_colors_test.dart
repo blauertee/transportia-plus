@@ -176,22 +176,9 @@ void main() {
   });
 
   group('lineColor', () {
-    test('lifts a navy line on a dark background, keeping its hue', () {
-      final lifted = lineColor('#0A1F5C', background: _dark)!;
-      expect(contrastRatio(lifted, _dark), greaterThanOrEqualTo(3.0));
-      expect(
-        HSLColor.fromColor(lifted).hue,
-        closeTo(HSLColor.fromColor(const Color(0xFF0A1F5C)).hue, 2),
-      );
-    });
-
-    test('darkens a pale yellow line on white', () {
-      final fixed = lineColor('#FFF59D', background: _white)!;
-      expect(contrastRatio(fixed, _white), greaterThanOrEqualTo(3.0));
-    });
-
-    test('leaves a colour that already reads untouched', () {
-      expect(lineColor('#E6007E', background: _dark), const Color(0xFFE6007E));
+    test('is the feed colour, unadjusted', () {
+      expect(lineColor('#0A1F5C'), const Color(0xFF0A1F5C));
+      expect(lineColor(' #FFF59D '), const Color(0xFFFFF59D));
     });
 
     test('is null without a usable colour', () {

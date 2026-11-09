@@ -82,7 +82,9 @@ Color legSpineColor({
 }) {
   // A change between two services is not itself a service.
   if (isTransfer || isStreetLeg(leg.mode)) return kStreetLegColor;
-  return lineColor(leg.routeColor, background: background) ?? accent;
+  final routeColor = lineColor(leg.routeColor);
+  if (routeColor == null) return accent;
+  return ensureContrast(routeColor, background);
 }
 
 /// Modes the traveller covers under their own power or in their own vehicle.

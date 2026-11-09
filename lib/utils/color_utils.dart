@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
 
 Color? parseHexColor(String? hex) {
@@ -58,9 +57,6 @@ const int _kMaxContrastSteps = 50;
 
 /// Pushes [color] away from [background] until it clears [minRatio].
 ///
-/// [saturationGain] is how much saturation a darkening colour gains per unit
-/// of lightness lost; the hue is never touched.
-///
 /// Hue and saturation are kept, so the line still reads as the operator's —
 /// only lightness moves. Feeds ship pale yellows that vanish on white and
 /// near-blacks that vanish on the dark theme, and a 2px line has less room to
@@ -68,12 +64,7 @@ const int _kMaxContrastSteps = 50;
 /// non-text graphics, which is what this is.
 ///
 /// Returns [color] untouched when it already passes.
-Color ensureContrast(
-  Color color,
-  Color background, {
-  double minRatio = 3.0,
-  double saturationGain = 0.0,
-}) {
+Color ensureContrast(Color color, Color background, {double minRatio = 3.0}) {
   if (contrastRatio(color, background) >= minRatio) return color;
 
   // On a light background darken, on a dark one lighten — moving the other
@@ -85,16 +76,7 @@ Color ensureContrast(
     final shift = step * _kContrastStep;
     final lightness = (darken ? hsl.lightness - shift : hsl.lightness + shift)
         .clamp(0.0, 1.0);
-    // Darkening a colour alone turns it muddy (a pale yellow goes olive), so
-    // darkening may also add saturation, in proportion to how far it has
-    // been darkened. Lightening never does: it would glow.
-    final saturation = darken
-        ? (hsl.saturation + saturationGain * shift).clamp(0.0, 1.0)
-        : hsl.saturation;
-    final candidate = hsl
-        .withLightness(lightness)
-        .withSaturation(saturation)
-        .toColor();
+    final candidate = hsl.withLightness(lightness).toColor();
     if (contrastRatio(candidate, background) >= minRatio) return candidate;
     if (lightness == 0.0 || lightness == 1.0) break;
   }
@@ -104,61 +86,29 @@ Color ensureContrast(
   return darken ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 }
 
-/// The weakest contrast a line colour, or the text on it, may have against
-/// what it sits on. Raising it on light surfaces only muddied pale colours
-/// (a yellow goes brown), so both themes share it.
-const double _kMinLineContrast = 3.0;
+/// The weakest contrast the text on a line's badge may have against it.
+const double _kMinLineTextContrast = 3.0;
 
-/// Saturation a line colour gains per unit of lightness it loses when it is
-/// darkened for a light background, so a darkened yellow stays golden rather
-/// than olive.
-const double _kDarkenedLineSaturationGain = 1.0;
-
-/// What the dark map is painted with, for judging a line drawn on it.
-const Color _kDarkMapBackground = Color(0xFF1A1A1A);
-
-/// A transit line's colour as it is to be drawn *on [background]*.
+/// A transit line's colour: the feed's `routeColor`, as the operator gave it.
 ///
-/// The one way the app turns a feed's `routeColor` into a colour: badges,
-/// the journey spine and the map all come through here, so no line can
-/// vanish into the surface it is on. Hue and saturation are kept and only
-/// lightness moves, and a colour that already reads is returned untouched.
-/// [background] defaults to the current theme's.
-Color? lineColor(String? hex, {Color? background}) {
-  final parsed = parseHexColor(hex?.trim());
-  if (parsed == null) return null;
-  final surface = background ?? AppColors.white;
-  return ensureContrast(
-    parsed,
-    surface,
-    minRatio: _kMinLineContrast,
-    saturationGain: _kDarkenedLineSaturationGain,
-  );
-}
+/// The one way the app reads a line colour, for badges and the lines on the
+/// map alike. Deliberately not adjusted to the background: a badge stays
+/// legible through [onLineColor], and shifting the operator's colour made it
+/// look worse than a pale badge did.
+Color? lineColor(String? hex) => parseHexColor(hex?.trim());
 
 /// [lineColor], or the accent when the feed gave no colour.
 Color lineColorOrAccent(BuildContext context, String? hex) =>
     lineColor(hex) ?? AppColors.accentOf(context);
 
-/// [lineColor] for a line drawn on the map, whose background follows the map
-/// style rather than the app theme.
-Color? mapLineColor(String? hex) {
-  final darkMap = ThemeProvider.instance?.isMapDark ?? false;
-  return lineColor(
-    hex,
-    background: darkMap ? _kDarkMapBackground : AppColors.solidWhite,
-  );
-}
-
-/// The text colour for a badge filled with [fill] (a [lineColor]).
+/// The text colour for a badge filled with [fill].
 ///
-/// The feed's own text colour when it still reads on [fill] — [lineColor]
-/// may have moved the fill away from what the feed paired it with — and
-/// otherwise black or white, whichever reads better. [fallback] stands in
-/// when the feed gave none.
+/// The feed's own text colour when it reads on [fill], otherwise black or
+/// white, whichever reads better. [fallback] stands in when the feed gave
+/// none.
 Color onLineColor(Color fill, String? textHex, {Color? fallback}) {
   final feed = parseHexColor(textHex?.trim()) ?? fallback;
-  if (feed != null && contrastRatio(feed, fill) >= _kMinLineContrast) {
+  if (feed != null && contrastRatio(feed, fill) >= _kMinLineTextContrast) {
     return feed;
   }
   const black = AppColors.solidBlack;

@@ -732,7 +732,7 @@ class _ItineraryMapScreenState extends State<ItineraryMapScreen> {
     if (leg.mode == 'WALK') {
       return _walkLegColor;
     }
-    final parsed = mapLineColor(leg.routeColor);
+    final parsed = lineColor(leg.routeColor);
     return parsed ?? _currentAccentColor();
   }
 
