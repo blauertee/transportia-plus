@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/motis_request_log.dart';
 import '../constants/prefs_keys.dart';
-import '../theme/dark_palette.dart';
+import '../theme/dark_accent.dart';
 
 enum AppThemeMode { light, dark, system }
 
@@ -46,9 +46,12 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const bool defaultShowNearbyDepartures = true;
 
   static const Color lightBackground = Color(0xFFFFFFFF);
-  static const Color darkBackground = Color(0xFF161616);
+
+  /// A lifted charcoal rather than near-black, as Android's own dark
+  /// settings use: near-black made every colour on it glow.
+  static const Color darkBackground = Color(0xFF202124);
   static const Color lightText = Color(0xFF000000);
-  static const Color darkText = Color(0xFFFFFFFF);
+  static const Color darkText = Color(0xFFE8EAED);
 
   static ThemeProvider? _instance;
 
@@ -76,7 +79,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// The accent as drawn: toned down on the dark theme, as picked otherwise.
   Color get accentColor =>
-      isDark ? DarkPalette.current.accentFor(_accentColor) : _accentColor;
+      isDark ? darkThemeAccent(_accentColor) : _accentColor;
 
   /// The swatch the rider picked, before the dark theme adapts it.
   Color get pickedAccentColor => _accentColor;
@@ -121,10 +124,9 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get isDark => _effectiveAppThemeMode == AppThemeMode.dark;
 
-  Color get backgroundColor =>
-      isDark ? DarkPalette.current.background : lightBackground;
+  Color get backgroundColor => isDark ? darkBackground : lightBackground;
 
-  Color get textColor => isDark ? DarkPalette.current.text : lightText;
+  Color get textColor => isDark ? darkText : lightText;
 
   ThemeProvider() {
     _instance = this;
