@@ -239,10 +239,11 @@ class _DepartureTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final place = stopTime.place;
-    final badgeColor = parseHexColorOrAccent(context, stopTime.routeColor);
-    final badgeTextColor = parseHexColorOr(
+    final badgeColor = lineColorOrAccent(context, stopTime.routeColor);
+    final badgeTextColor = onLineColor(
+      badgeColor,
       stopTime.routeTextColor,
-      AppColors.solidWhite,
+      fallback: AppColors.solidWhite,
     );
     final departure = ReportedTime.from(
       place.departure,

@@ -4,6 +4,7 @@ import 'package:shared_preferences_platform_interface/in_memory_shared_preferenc
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/providers/theme_provider.dart';
+import 'package:transportia/utils/color_utils.dart';
 import 'package:transportia/utils/journey_colors.dart';
 
 const Color _white = Color(0xFFFFFFFF);
@@ -172,5 +173,47 @@ void main() {
         );
       },
     );
+  });
+
+  group('lineColor', () {
+    test('is the feed colour, unadjusted', () {
+      expect(lineColor('#0A1F5C'), const Color(0xFF0A1F5C));
+      expect(lineColor(' #FFF59D '), const Color(0xFFFFF59D));
+    });
+
+    test('is null without a usable colour', () {
+      expect(lineColor(null), isNull);
+      expect(lineColor('nope'), isNull);
+    });
+  });
+
+  group('onLineColor', () {
+    test('keeps the feed text colour while it reads', () {
+      expect(
+        onLineColor(const Color(0xFF0057B8), '#FFFFFF'),
+        const Color(0xFFFFFFFF),
+      );
+    });
+
+    test('swaps white text for black once the fill went light', () {
+      expect(
+        onLineColor(const Color(0xFFF5E050), '#FFFFFF'),
+        const Color(0xFF000000),
+      );
+    });
+
+    test('keeps white on a mid orange, as operators pair them', () {
+      expect(
+        onLineColor(const Color(0xFFFF6A00), '#FFFFFF'),
+        const Color(0xFFFFFFFF),
+      );
+    });
+
+    test('picks the better of black and white without a feed colour', () {
+      expect(
+        onLineColor(const Color(0xFF101830), null),
+        const Color(0xFFFFFFFF),
+      );
+    });
   });
 }

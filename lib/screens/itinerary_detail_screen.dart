@@ -1280,13 +1280,13 @@ class _TicketFaresState extends State<TicketFares> {
   }
 
   Widget _buildRouteBadge(RouteBadge badge) {
-    final routeColor = parseHexColor(badge.routeColor);
+    final routeColor = lineColor(badge.routeColor);
     return RouteBadgePill(
       label: badge.name,
       background: routeColor ?? AppColors.accentOf(context),
-      foreground:
-          parseHexColor(badge.routeTextColor) ??
-          (routeColor == null ? AppColors.solidWhite : AppColors.black),
+      foreground: routeColor == null
+          ? AppColors.solidWhite
+          : onLineColor(routeColor, badge.routeTextColor),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       fontWeight: FontWeight.w700,
     );
@@ -1797,14 +1797,12 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
 
   Widget _buildTitleWidget() {
     if (widget.leg.displayName != null) {
-      final routeColor = parseHexColor(widget.leg.routeColor);
+      final routeColor = lineColor(widget.leg.routeColor);
       final isWalkLeg = widget.leg.mode == 'WALK';
       final bg = routeColor ?? (isWalkLeg ? null : AppColors.accentOf(context));
-      final txt =
-          parseHexColor(widget.leg.routeTextColor) ??
-          (routeColor == null && !isWalkLeg
-              ? AppColors.solidWhite
-              : AppColors.black);
+      final txt = routeColor != null
+          ? onLineColor(routeColor, widget.leg.routeTextColor)
+          : (!isWalkLeg ? AppColors.solidWhite : AppColors.black);
       // Sized to its own text. An Align here would take the whole of the
       // width the Row offered it, which put every leg's end station at the
       // same x instead of a fixed margin after its own line number.

@@ -9,8 +9,7 @@ import '../providers/theme_provider.dart';
 import '../services/saved_trips_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/custom_page_route.dart';
-import '../widgets/app_icon_header.dart';
-import '../widgets/app_page_scaffold.dart';
+import '../widgets/app_screen_title.dart';
 import '../widgets/edit_saved_trip_overlay.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/saved_trip_card.dart';
@@ -78,42 +77,38 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
   Widget build(BuildContext context) {
     context.watch<ThemeProvider>();
 
-    return AppPageScaffold(
-      title: 'Saved trips',
-      showBack: false,
-      scrollable: false,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              children: [
-                SizedBox(height: 12),
-                AppIconHeader(
-                  icon: LucideIcons.bookmark,
-                  title: 'Trips you kept',
-                  subtitle:
-                      'Connections you saved, rechecked for delays when you '
-                      'open them.',
-                ),
-                SizedBox(height: 20),
-              ],
+    return ColoredBox(
+      color: AppColors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: AppScreenTitle(
+                icon: LucideIcons.bookmark,
+                title: 'Saved trips',
+                subtitle: 'Rechecked for delays when you open them',
+              ),
             ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CupertinoActivityIndicator(radius: 14))
-                : ValueListenableBuilder<List<SavedTrip>>(
-                    valueListenable: SavedTripsService.savedTripsListenable,
-                    builder: (context, trips, _) {
-                      if (trips.isEmpty) return _emptyState(context);
-                      return _tripList(trips);
-                    },
-                  ),
-          ),
-        ],
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _isLoading
+                    ? const Center(
+                        child: CupertinoActivityIndicator(radius: 14),
+                      )
+                    : ValueListenableBuilder<List<SavedTrip>>(
+                        valueListenable: SavedTripsService.savedTripsListenable,
+                        builder: (context, trips, _) {
+                          if (trips.isEmpty) return _emptyState(context);
+                          return _tripList(trips);
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

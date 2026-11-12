@@ -63,10 +63,11 @@ class TripDetailsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final leg = _leg;
-    final routeColor = parseHexColorOrAccent(context, leg.routeColor);
-    final routeTextColor = parseHexColorOr(
+    final routeColor = lineColorOrAccent(context, leg.routeColor);
+    final routeTextColor = onLineColor(
+      routeColor,
       leg.routeTextColor,
-      AppColors.solidWhite,
+      fallback: AppColors.solidWhite,
     );
     final stops = buildJourneyStops(leg);
     final alerts = collectTripAlerts(leg, stops);
