@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/theme_provider.dart';
+import '../theme/dark_accent.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_icon_header.dart';
 import '../widgets/app_page_scaffold.dart';
@@ -141,17 +142,21 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                     ),
                     itemBuilder: (context, index) {
                       final color = _accentColors[index];
-                      final isSelected = selectedAccentColor == color;
+                      final swatch = themeProvider.isDark
+                          ? darkThemeAccent(color)
+                          : color;
+                      final isSelected =
+                          themeProvider.pickedAccentColor == color;
                       return GestureDetector(
                         onTap: () => _saveAccentColor(color),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeOutCubic,
                           decoration: BoxDecoration(
-                            color: color,
+                            color: swatch,
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
-                              color: isSelected ? AppColors.solidWhite : color,
+                              color: isSelected ? AppColors.solidWhite : swatch,
                               width: isSelected ? 3 : 0,
                             ),
                           ),
@@ -218,7 +223,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                       'Dark',
                       AppThemeMode.dark,
                       LucideIcons.moon,
-                      const [ThemeProvider.darkBackground, Color(0xFF1D1D1D)],
+                      const [ThemeProvider.darkBackground, Color(0xFF2A2B2F)],
                       selectedAppThemeMode,
                     ),
                   ),

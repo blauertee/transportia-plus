@@ -320,14 +320,14 @@ class _LegBadges extends StatelessWidget {
   }
 
   Widget _badge(BuildContext context, Leg leg) {
-    final routeColor = parseHexColor(leg.routeColor);
+    final routeColor = lineColor(leg.routeColor);
 
     return RouteBadgePill(
       label: leg.displayName!,
       background: routeColor ?? AppColors.accentOf(context),
-      foreground:
-          parseHexColor(leg.routeTextColor) ??
-          (routeColor == null ? AppColors.solidWhite : AppColors.black),
+      foreground: routeColor == null
+          ? AppColors.solidWhite
+          : onLineColor(routeColor, leg.routeTextColor),
     );
   }
 }

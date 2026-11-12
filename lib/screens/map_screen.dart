@@ -1595,14 +1595,14 @@ class _MapScreenState extends State<MapScreen>
   }
 
   Color _segmentColorForIndex(MapTripSegment segment, int _) {
-    final parsed = parseHexColor(segment.routeColor?.trim());
+    final parsed = lineColor(segment.routeColor);
     return parsed ?? _currentAccentColor();
   }
 
   Color _focusedRouteColor(Itinerary itinerary) {
     for (final leg in itinerary.legs) {
       if (leg.mode == 'WALK') continue;
-      final parsed = parseHexColor(leg.routeColor);
+      final parsed = lineColor(leg.routeColor);
       if (parsed != null) return parsed;
     }
     return _currentAccentColor();
@@ -3325,8 +3325,7 @@ class _MapScreenState extends State<MapScreen>
     final features = <Map<String, dynamic>>[];
     for (int i = 0; i < itinerary.legs.length; i++) {
       final leg = itinerary.legs[i];
-      final legColor =
-          parseHexColor(leg.routeColor?.trim()) ?? _currentAccentColor();
+      final legColor = lineColor(leg.routeColor) ?? _currentAccentColor();
       final colorHex = colorToHex(legColor);
       final geometry = leg.legGeometry;
       List<LatLng> points = [];

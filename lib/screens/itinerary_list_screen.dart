@@ -729,17 +729,15 @@ class LegWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     IconData icon = getLegIcon(leg.mode);
-    final routeColor = parseHexColor(leg.routeColor);
+    final routeColor = lineColor(leg.routeColor);
     final badgeColor =
         routeColor ??
         (leg.mode == 'WALK'
             ? const Color(0x00000000)
             : AppColors.accentOf(context));
-    final labelColor =
-        parseHexColor(leg.routeTextColor) ??
-        (routeColor == null && leg.mode != 'WALK'
-            ? AppColors.solidWhite
-            : AppColors.black);
+    final labelColor = routeColor != null
+        ? onLineColor(routeColor, leg.routeTextColor)
+        : (leg.mode != 'WALK' ? AppColors.solidWhite : AppColors.black);
 
     return Row(
       mainAxisSize: MainAxisSize.min,

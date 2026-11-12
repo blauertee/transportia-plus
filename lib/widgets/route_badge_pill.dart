@@ -9,7 +9,8 @@ import 'package:flutter/widgets.dart';
 /// different places: a badge sitting among body text reads better dark on the
 /// feed's colour, a chip in a departure list reads better light on it, and a
 /// walking leg has no colour at all. That choice stays at the call site;
-/// `parseHexColorOrAccent` and `parseHexColorOr` make it one line.
+/// `lineColorOrAccent` and `onLineColor` make it one line, and keep the badge
+/// legible on the theme's background.
 class RouteBadgePill extends StatelessWidget {
   const RouteBadgePill({
     super.key,
