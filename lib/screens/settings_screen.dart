@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:transportia/screens/advanced_settings_screen.dart';
 import 'package:transportia/screens/appearance_screen.dart';
 import 'package:transportia/screens/developer_info_screen.dart';
-import 'package:transportia/screens/statistics_screen.dart';
 import 'package:transportia/screens/info_screen.dart';
 import 'package:transportia/screens/legal_screen.dart';
 import 'package:transportia/screens/location_settings_screen.dart';
@@ -113,24 +112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-
-              SettingsSection(
-                title: 'Analytics',
-                children: [
-                  SettingsTile(
-                    icon: LucideIcons.chartPie,
-                    title: 'Statistics',
-                    subtitle: 'View your travel statistics',
-                    onPressed: () {
-                      Navigator.of(
-                        context,
-                      ).push(CustomPageRoute(child: const StatisticsScreen()));
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
 
               SettingsSection(
                 title: 'Preferences',
