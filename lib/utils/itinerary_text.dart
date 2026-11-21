@@ -20,8 +20,8 @@ String itineraryAsText(
   String? toName,
 }) {
   final legs = itinerary.legs;
-  final from = _named(fromName) ?? resolveOriginName(legs) ?? 'Start';
-  final to = _named(toName) ?? resolveDestinationName(legs) ?? 'Destination';
+  final from = itineraryOriginName(itinerary, fromName: fromName);
+  final to = itineraryDestinationName(itinerary, toName: toName);
   final start = itinerary.startTime.toLocal();
 
   final lines = <String>[
@@ -39,6 +39,16 @@ String itineraryAsText(
   ];
   return lines.join('\n');
 }
+
+/// What to call where [itinerary] starts: the place the rider searched for
+/// ([fromName]), else the first named stop, since the planner calls a
+/// coordinate start "START".
+String itineraryOriginName(Itinerary itinerary, {String? fromName}) =>
+    _named(fromName) ?? resolveOriginName(itinerary.legs) ?? 'Start';
+
+/// What to call where [itinerary] ends; see [itineraryOriginName].
+String itineraryDestinationName(Itinerary itinerary, {String? toName}) =>
+    _named(toName) ?? resolveDestinationName(itinerary.legs) ?? 'Destination';
 
 String _changes(int transfers) => switch (transfers) {
   0 => 'direct',
