@@ -76,17 +76,21 @@ class Transportia extends StatelessWidget {
                   value: systemBarsFor(isDark: themeProvider.isDark),
                   child: ColoredBox(
                     color: themeProvider.backgroundColor,
-                    child: IconTheme(
-                      data: IconThemeData(color: themeProvider.textColor),
-                      // Cupertino widgets (sheets, dialogs, text fields)
-                      // otherwise follow the phone's dark mode, not the
-                      // app's: a light app on a dark phone got dark sheets.
-                      child: CupertinoTheme(
-                        data: CupertinoThemeData(
-                          brightness: themeProvider.isDark
-                              ? Brightness.dark
-                              : Brightness.light,
-                        ),
+                    // Cupertino widgets (sheets, dialogs, text fields)
+                    // otherwise follow the phone's dark mode, not the app's:
+                    // a light app on a dark phone got dark sheets.
+                    child: CupertinoTheme(
+                      data: CupertinoThemeData(
+                        brightness: themeProvider.isDark
+                            ? Brightness.dark
+                            : Brightness.light,
+                      ),
+                      // Inside the CupertinoTheme, not around it: that theme
+                      // sets its own IconTheme to its primary colour, iOS
+                      // blue, which would otherwise colour every icon that
+                      // names no colour of its own.
+                      child: IconTheme(
+                        data: IconThemeData(color: themeProvider.textColor),
                         child: OfflineBannerShell(child: content),
                       ),
                     ),
