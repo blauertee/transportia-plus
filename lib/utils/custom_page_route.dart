@@ -1,25 +1,20 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/cupertino.dart';
 
-class CustomPageRoute<T> extends PageRouteBuilder<T> {
+/// How every screen is pushed: sliding in from the side, and swiped back from
+/// the left edge on every platform, so iOS — which has no system back of its
+/// own — needs no back button either.
+class CustomPageRoute<T> extends PageRoute<T>
+    with CupertinoRouteTransitionMixin<T> {
+  CustomPageRoute({required this.child});
+
   final Widget child;
 
-  CustomPageRoute({required this.child})
-    : super(
-        pageBuilder: (context, animation, secondaryAnimation) => child,
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(1.0, 0.0);
-          const end = Offset.zero;
-          const curve = Curves.ease;
+  @override
+  Widget buildContent(BuildContext context) => child;
 
-          var tween = Tween(
-            begin: begin,
-            end: end,
-          ).chain(CurveTween(curve: curve));
+  @override
+  String? get title => null;
 
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
-        },
-      );
+  @override
+  bool get maintainState => true;
 }

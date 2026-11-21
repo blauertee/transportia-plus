@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import '../theme/app_colors.dart';
+import 'options/icon_controls.dart';
 
 class SettingsSection extends StatelessWidget {
   const SettingsSection({
@@ -22,18 +23,11 @@ class SettingsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // The same small caps as the search options' groups, aligned under
+          // the page's title rather than centred.
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.black.withValues(alpha: 0.4),
-                letterSpacing: 0.5,
-              ),
-            ),
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: OptionGroupHeading(title),
           ),
           Container(
             decoration: BoxDecoration(

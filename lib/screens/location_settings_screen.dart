@@ -9,8 +9,7 @@ import 'package:provider/provider.dart';
 import '../providers/backend_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
-import '../widgets/app_icon_header.dart';
-import '../widgets/app_page_scaffold.dart';
+import '../widgets/app_screen.dart';
 import '../widgets/place_search_location_toggle.dart';
 import '../widgets/pressable_highlight.dart';
 import '../widgets/section_title.dart';
@@ -70,18 +69,11 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     context.watch<ThemeProvider>();
-    return AppPageScaffold(
+    return AppScreen.page(
+      icon: LucideIcons.mapPin,
       title: 'Location',
-      scrollable: !_isLoading,
-      padding: _isLoading ? null : const EdgeInsets.all(20),
-      body: _isLoading
-          ? Center(
-              child: Text(
-                'Checking location status...',
-                style: AppText.bodyFaint,
-              ),
-            )
-          : _buildContent(),
+      subtitle: _statusLine,
+      body: _isLoading ? const SizedBox.shrink() : _buildContent(),
     );
   }
 
@@ -90,114 +82,103 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
     final backend = context.watch<BackendProvider>();
     final themeProvider = context.watch<ThemeProvider>();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppIconHeader(
-          icon: LucideIcons.mapPin,
-          title: _getStatusTitle(),
-          subtitle: _getStatusDescription(),
+        const SectionTitle(text: 'Status Details'),
+        const SizedBox(height: 16),
+        _buildStatusCard(
+          'Location Services',
+          _isLocationServiceEnabled ? 'Enabled' : 'Disabled',
+          _isLocationServiceEnabled ? LucideIcons.check : LucideIcons.x,
+          _isLocationServiceEnabled ? accent : const Color(0xFFFF3B30),
         ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 12),
+        _buildStatusCard(
+          'App Permission',
+          _getPermissionStatusText(),
+          _getPermissionStatusIcon(),
+          _getPermissionStatusColor(),
+        ),
+        const SizedBox(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const SizedBox(height: 32),
-            const SectionTitle(text: 'Status Details'),
-            const SizedBox(height: 16),
-            _buildStatusCard(
-              'Location Services',
-              _isLocationServiceEnabled ? 'Enabled' : 'Disabled',
-              _isLocationServiceEnabled ? LucideIcons.check : LucideIcons.x,
-              _isLocationServiceEnabled ? accent : const Color(0xFFFF3B30),
-            ),
-            const SizedBox(height: 12),
-            _buildStatusCard(
-              'App Permission',
-              _getPermissionStatusText(),
-              _getPermissionStatusIcon(),
-              _getPermissionStatusColor(),
-            ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                PressableHighlight(
-                  onPressed: _openAppSettings,
-                  enableHaptics: false,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Open settings',
-                        style: TextStyle(fontSize: 16, color: accent),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(LucideIcons.settings, size: 20, color: accent),
-                    ],
+            PressableHighlight(
+              onPressed: _openAppSettings,
+              enableHaptics: false,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Open settings',
+                    style: TextStyle(fontSize: 16, color: accent),
                   ),
-                ),
-                Container(height: 20, width: 1, color: AppColors.hairline),
-                PressableHighlight(
-                  onPressed: _isLoading ? () {} : _checkLocationStatus,
-                  enableHaptics: false,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Refresh status',
-                        style: TextStyle(fontSize: 16, color: accent),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(LucideIcons.refreshCw, size: 20, color: accent),
-                    ],
+                  const SizedBox(width: 8),
+                  Icon(LucideIcons.settings, size: 20, color: accent),
+                ],
+              ),
+            ),
+            Container(height: 20, width: 1, color: AppColors.hairline),
+            PressableHighlight(
+              onPressed: _isLoading ? () {} : _checkLocationStatus,
+              enableHaptics: false,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Refresh status',
+                    style: TextStyle(fontSize: 16, color: accent),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            const SectionTitle(text: 'Place search'),
-            const SizedBox(height: 8),
-            Text(
-              'How strongly results lean towards you is set under Search and '
-              'routing options.',
-              style: AppText.bodyFaint,
-            ),
-            const SizedBox(height: 16),
-            const PlaceSearchLocationToggle(),
-            const SizedBox(height: 32),
-            const SectionTitle(text: 'Timetables'),
-            const SizedBox(height: 16),
-            ToggleCard(
-              icon: LucideIcons.mapPin,
-              title: 'Departures near you',
-              subtitle: themeProvider.showNearbyDepartures
-                  ? 'Lists the next departures from stops around you, which '
-                        'sends your position when you open Timetables'
-                  : 'Your location is not sent when you open Timetables',
-              value: themeProvider.showNearbyDepartures,
-              onChanged: (show) =>
-                  unawaited(themeProvider.setShowNearbyDepartures(show)),
-            ),
-            const SizedBox(height: 32),
-            const SectionTitle(text: 'Place details'),
-            const SizedBox(height: 8),
-            Text(
-              'Your location is never sent, only which place you tapped.',
-              style: AppText.bodyFaint,
-            ),
-            const SizedBox(height: 16),
-            ToggleCard(
-              icon: backend.placeDetailsEnabled
-                  ? LucideIcons.store
-                  : LucideIcons.eyeOff,
-              title: 'Details from OpenStreetMap',
-              subtitle: backend.placeDetailsEnabled
-                  ? 'Address, opening hours and contact for a result you '
-                        'tap on the map, looked up on OpenStreetMap'
-                  : 'Off: a tapped result shows only what the search found',
-              value: backend.placeDetailsEnabled,
-              onChanged: backend.setPlaceDetailsEnabled,
+                  const SizedBox(width: 8),
+                  Icon(LucideIcons.refreshCw, size: 20, color: accent),
+                ],
+              ),
             ),
           ],
+        ),
+        const SizedBox(height: 32),
+        const SectionTitle(text: 'Place search'),
+        const SizedBox(height: 8),
+        Text(
+          'How strongly results lean towards you is set under Search and '
+          'routing options.',
+          style: AppText.bodyFaint,
+        ),
+        const SizedBox(height: 16),
+        const PlaceSearchLocationToggle(),
+        const SizedBox(height: 32),
+        const SectionTitle(text: 'Timetables'),
+        const SizedBox(height: 16),
+        ToggleCard(
+          icon: LucideIcons.mapPin,
+          title: 'Departures near you',
+          subtitle: themeProvider.showNearbyDepartures
+              ? 'Lists the next departures from stops around you, which '
+                    'sends your position when you open Timetables'
+              : 'Your location is not sent when you open Timetables',
+          value: themeProvider.showNearbyDepartures,
+          onChanged: (show) =>
+              unawaited(themeProvider.setShowNearbyDepartures(show)),
+        ),
+        const SizedBox(height: 32),
+        const SectionTitle(text: 'Place details'),
+        const SizedBox(height: 8),
+        Text(
+          'Your location is never sent, only which place you tapped.',
+          style: AppText.bodyFaint,
+        ),
+        const SizedBox(height: 16),
+        ToggleCard(
+          icon: backend.placeDetailsEnabled
+              ? LucideIcons.store
+              : LucideIcons.eyeOff,
+          title: 'Details from OpenStreetMap',
+          subtitle: backend.placeDetailsEnabled
+              ? 'Address, opening hours and contact for a result you '
+                    'tap on the map, looked up on OpenStreetMap'
+              : 'Off: a tapped result shows only what the search found',
+          value: backend.placeDetailsEnabled,
+          onChanged: backend.setPlaceDetailsEnabled,
         ),
       ],
     );
@@ -260,18 +241,11 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
             _permissionStatus == PermissionStatus.limited);
   }
 
-  String _getStatusTitle() {
-    if (_isLocationEnabled()) {
-      return 'Location Enabled';
-    }
-    return 'Location Disabled';
-  }
-
-  String _getStatusDescription() {
-    if (_isLocationEnabled()) {
-      return 'Your location is being used for navigation';
-    }
-    return 'Enable location to use all features';
+  /// Whether the app can use the rider's location, under the page's title.
+  String get _statusLine {
+    if (_isLoading) return 'Checking location status…';
+    if (_isLocationEnabled()) return 'On, used for navigation';
+    return 'Off: turn it on to use all features';
   }
 
   String _getPermissionStatusText() {

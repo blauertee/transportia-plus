@@ -14,7 +14,7 @@ import '../services/server_capabilities_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/custom_page_route.dart';
 import '../utils/place_bias.dart';
-import '../widgets/app_page_scaffold.dart';
+import '../widgets/app_screen.dart';
 import 'quick_access_screen.dart';
 import 'search_options/search_options_backend.dart';
 import 'search_options/search_options_place_bias.dart';
@@ -104,20 +104,15 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppPageScaffold(
+    return AppScreen.page(
+      icon: LucideIcons.settings2,
       title: 'Search and routing options',
-      scrollable: true,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      subtitle:
+          'These apply to every search. Options for a single trip are on '
+          'the search screen, where “Save as default” keeps them.',
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 0, 4, 18),
-            child: OptionsNote(
-              'These apply to every search. Options for a single trip are '
-              'on the search screen, where “Save as default” keeps them.',
-            ),
-          ),
           // Everything below reads stored values, so waiting avoids showing
           // defaults for a frame and writing them back on the first tap.
           if (!_loaded) const SizedBox(height: 200) else ..._buildSections(),

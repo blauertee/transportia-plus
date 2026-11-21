@@ -4,6 +4,9 @@ import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/app_colors.dart';
 
+/// How long the bar's title takes to fade in or out.
+const Duration _kTitleFade = Duration(milliseconds: 150);
+
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback? onBackButtonPressed;
@@ -15,12 +18,17 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// False for a screen presented as a tab, which has nothing to go back to.
   final bool showBack;
 
+  /// False while the page's own large title is in view, so the name is not
+  /// shown twice; it fades in once that title scrolls away.
+  final bool titleVisible;
+
   const CustomAppBar({
     super.key,
     required this.title,
     this.onBackButtonPressed,
     this.trailing,
     this.showBack = true,
+    this.titleVisible = true,
   });
 
   @override
@@ -63,13 +71,17 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
             Center(
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.black,
+              child: AnimatedOpacity(
+                opacity: titleVisible ? 1 : 0,
+                duration: _kTitleFade,
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.black,
+                  ),
                 ),
               ),
             ),

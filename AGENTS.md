@@ -52,6 +52,7 @@
 - Never dispatch on a running index; build a list of section builders and index into it.
 - Name the condition, not the branch: `if (position.isAtStop)`, not `if (a && b && i == c)`.
 - Lift logic duplicated across unrelated files: pure helpers to `lib/utils/`; shared UI to `lib/widgets/`; shared computation onto the model.
+- Keep `MainActivity.kt` to engine wiring; each native (Kotlin) helper gets its own file beside it.
 - Give a shared widget its variants as named constructors (`SelectableTick.large`), not optional-argument piles.
 - Merging drifted copies: unify on the better behaviour; say so in the commit.
 - Name literals that are thresholds, intervals, limits, conversion factors, tolerances or meaningful indices.
