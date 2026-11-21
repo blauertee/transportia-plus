@@ -4,12 +4,15 @@ import 'package:share_plus/share_plus.dart';
 
 import '../environment.dart';
 import '../models/itinerary.dart';
+import '../services/calendar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
+import '../utils/itinerary_calendar_event.dart';
 import '../utils/itinerary_text.dart';
 import '../utils/trip_link.dart';
 import 'bottom_overlay_card.dart';
 import 'pressable_highlight.dart';
+import 'validation_toast.dart';
 
 /// How long the sheet takes to fade in and out.
 const Duration _kShareSheetFadeDuration = Duration(milliseconds: 180);
@@ -21,13 +24,21 @@ typedef ShareText = Future<void> Function(String text, {String? subject});
 Future<void> _shareWithSystem(String text, {String? subject}) =>
     SharePlus.instance.share(ShareParams(text: text, subject: subject));
 
+/// Hands [event] to the rider's calendar app, and says whether one took it.
+/// A parameter so tests can see what would have been added.
+typedef AddToCalendar = Future<bool> Function(CalendarEvent event);
+
 /// Asks how to share [itinerary], then shares it that way.
+///
+/// [addToCalendar] defaults to the system calendar where the platform has a
+/// way in, and is left out of the sheet where it has none.
 void showShareTripSheet(
   BuildContext context, {
   required Itinerary itinerary,
   String? fromName,
   String? toName,
   ShareText share = _shareWithSystem,
+  AddToCalendar? addToCalendar,
 }) {
   showGeneralDialog<void>(
     context: context,
@@ -40,6 +51,13 @@ void showShareTripSheet(
       fromName: fromName,
       toName: toName,
       share: share,
+      addToCalendar:
+          addToCalendar ??
+          (CalendarService.isSupported ? CalendarService.addEvent : null),
+      onNoCalendarApp: () {
+        if (!context.mounted) return;
+        showValidationToast(context, 'No calendar app found');
+      },
       onDismiss: () => Navigator.of(context, rootNavigator: true).pop(),
     ),
     transitionBuilder: (context, animation, _, child) =>
@@ -48,13 +66,16 @@ void showShareTripSheet(
 }
 
 /// Three ways to share a trip, one at a time: they suit different people,
-/// and a message holding all three is mostly a two-kilobyte link.
+/// and a message holding all three is mostly a two-kilobyte link. Below them,
+/// where the platform allows, the trip goes into the rider's own calendar.
 class ShareTripSheet extends StatelessWidget {
   const ShareTripSheet({
     super.key,
     required this.itinerary,
     required this.onDismiss,
     required this.share,
+    this.addToCalendar,
+    this.onNoCalendarApp,
     this.fromName,
     this.toName,
   });
@@ -64,6 +85,12 @@ class ShareTripSheet extends StatelessWidget {
   final String? toName;
   final VoidCallback onDismiss;
   final ShareText share;
+
+  /// Null where there is no calendar to add to; the row is left out then.
+  final AddToCalendar? addToCalendar;
+
+  /// Called when no calendar app took the entry.
+  final VoidCallback? onNoCalendarApp;
 
   /// The link for this trip, or null when the planner gave it no id — a trip
   /// saved before the app kept ids, or one rebuilt from its legs.
@@ -83,9 +110,21 @@ class ShareTripSheet extends StatelessWidget {
     share(text, subject: _subject);
   }
 
+  Future<void> _addToCalendar(AddToCalendar add) async {
+    onDismiss();
+    final event = itineraryAsCalendarEvent(
+      itinerary,
+      fromName: fromName,
+      toName: toName,
+      link: _link?.shareLink,
+    );
+    if (!await add(event)) onNoCalendarApp?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final link = _link;
+    final addToCalendar = this.addToCalendar;
     const unavailable = 'Not available for this trip';
     return BottomOverlayCard(
       title: 'Share this trip',
@@ -117,6 +156,13 @@ class ShareTripSheet extends StatelessWidget {
               itineraryAsText(itinerary, fromName: fromName, toName: toName),
             ),
           ),
+          if (addToCalendar != null)
+            _ShareOption(
+              icon: LucideIcons.calendarPlus,
+              title: 'Add to calendar',
+              subtitle: 'A filled-in event in your calendar app',
+              onTap: () => _addToCalendar(addToCalendar),
+            ),
         ],
       ),
     );
