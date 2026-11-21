@@ -5,6 +5,7 @@ import 'package:shared_preferences_platform_interface/in_memory_shared_preferenc
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/providers/theme_provider.dart';
+import 'package:transportia/utils/itinerary_calendar_event.dart';
 import 'package:transportia/widgets/share_trip_sheet.dart';
 
 import '../support/plan_fixtures.dart';
@@ -19,16 +20,31 @@ Itinerary _trip({String? id}) => Itinerary.fromJson({
 class _Shared {
   final texts = <String>[];
   final subjects = <String?>[];
+  final events = <CalendarEvent>[];
   var dismissed = 0;
+  var noCalendarApp = 0;
+
+  /// What the fake calendar answers: whether an app took the entry.
+  var calendarTakes = true;
 
   Future<void> share(String text, {String? subject}) async {
     texts.add(text);
     subjects.add(subject);
   }
+
+  Future<bool> addToCalendar(CalendarEvent event) async {
+    events.add(event);
+    return calendarTakes;
+  }
 }
 
-Future<_Shared> _pump(WidgetTester tester, Itinerary itinerary) async {
-  final shared = _Shared();
+Future<_Shared> _pump(
+  WidgetTester tester,
+  Itinerary itinerary, {
+  bool withCalendar = true,
+  bool calendarTakes = true,
+}) async {
+  final shared = _Shared()..calendarTakes = calendarTakes;
   await tester.pumpWidget(
     ChangeNotifierProvider<ThemeProvider>(
       create: (_) => ThemeProvider(),
@@ -42,6 +58,8 @@ Future<_Shared> _pump(WidgetTester tester, Itinerary itinerary) async {
           itinerary: itinerary,
           onDismiss: () => shared.dismissed++,
           share: shared.share,
+          addToCalendar: withCalendar ? shared.addToCalendar : null,
+          onNoCalendarApp: () => shared.noCalendarApp++,
         ),
       ),
     ),
@@ -127,5 +145,48 @@ void main() {
 
     await _tap(tester, 'Text');
     expect(shared.texts, hasLength(1));
+  });
+
+  testWidgets('add to calendar hands over the whole trip, linked', (
+    tester,
+  ) async {
+    final itinerary = _trip(id: _id);
+    final shared = await _pump(tester, itinerary);
+    await _tap(tester, 'Add to calendar');
+
+    final event = shared.events.single;
+    expect(event.title, 'S+U Berlin Hauptbahnhof → Flughafen BER');
+    expect(event.start, itinerary.startTime);
+    expect(event.end, itinerary.endTime);
+    // The share page, which opens the trip in the app with live times.
+    expect(event.description, contains('https://blauertee.github.io/fw/'));
+    expect(shared.texts, isEmpty);
+    expect(shared.dismissed, 1);
+    expect(shared.noCalendarApp, 0);
+  });
+
+  testWidgets('a trip without an id still goes into the calendar', (
+    tester,
+  ) async {
+    final shared = await _pump(tester, _trip());
+    await _tap(tester, 'Add to calendar');
+
+    expect(shared.events.single.description, isNot(contains('https://')));
+  });
+
+  testWidgets('no calendar app to take it says so', (tester) async {
+    final shared = await _pump(tester, _trip(id: _id), calendarTakes: false);
+    await _tap(tester, 'Add to calendar');
+
+    expect(shared.events, hasLength(1));
+    expect(shared.noCalendarApp, 1);
+  });
+
+  testWidgets('without a calendar to add to, the row is left out', (
+    tester,
+  ) async {
+    await _pump(tester, _trip(id: _id), withCalendar: false);
+    expect(find.text('Add to calendar'), findsNothing);
+    expect(find.text('Text'), findsOneWidget);
   });
 }
