@@ -43,7 +43,7 @@ void showShareTripSheet(
   showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'Share this trip',
+    barrierLabel: ShareTripSheet.title,
     barrierColor: const Color(0x00000000),
     transitionDuration: _kShareSheetFadeDuration,
     pageBuilder: (context, _, _) => ShareTripSheet(
@@ -79,6 +79,10 @@ class ShareTripSheet extends StatelessWidget {
     this.fromName,
     this.toName,
   });
+
+  /// The sheet's heading, and the label of the button that opens it, so the
+  /// rider sees the same words they tapped.
+  static const String title = 'Share this trip';
 
   final Itinerary itinerary;
   final String? fromName;
@@ -127,7 +131,7 @@ class ShareTripSheet extends StatelessWidget {
     final addToCalendar = this.addToCalendar;
     const unavailable = 'Not available for this trip';
     return BottomOverlayCard(
-      title: 'Share this trip',
+      title: ShareTripSheet.title,
       onDismiss: onDismiss,
       child: Column(
         mainAxisSize: MainAxisSize.min,
