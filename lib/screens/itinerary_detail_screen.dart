@@ -742,7 +742,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       () => LoadMoreButton(
         onTap: _shareItinerary,
         isLoading: false,
-        label: 'Share this trip',
+        label: ShareTripSheet.title,
         icon: LucideIcons.share2,
       ),
       () => LastUpdatedFooter(lastUpdated: _lastUpdated),
