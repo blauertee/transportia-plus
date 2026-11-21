@@ -175,11 +175,13 @@ class OverlayDialogActions extends StatelessWidget {
     required this.onCancel,
     required this.onConfirm,
     this.confirmLabel = 'Save',
+    this.cancelLabel = 'Cancel',
   });
 
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
   final String confirmLabel;
+  final String cancelLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +189,7 @@ class OverlayDialogActions extends StatelessWidget {
       children: [
         Expanded(
           child: _OverlayDialogButton(
-            label: 'Cancel',
+            label: cancelLabel,
             onTap: onCancel,
             background: AppColors.black.withValues(alpha: 0.03),
             border: AppColors.hairline,

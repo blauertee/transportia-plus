@@ -7,6 +7,7 @@ import 'package:transportia/constants/prefs_keys.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/models/saved_trip.dart';
 import 'package:transportia/models/time_selection.dart';
+import 'package:transportia/services/itinerary_refresh_service.dart';
 import 'package:transportia/services/saved_trips_service.dart';
 
 import 'support/plan_fixtures.dart';
@@ -25,13 +26,34 @@ SavedTrip _savedTrip({
   );
 }
 
+/// Notes what [SavedTripsService] tells the calendar.
+class _Recorder implements SavedTripsListener {
+  final List<String> heard = [];
+
+  @override
+  void saved(SavedTrip trip) => heard.add('saved ${trip.label}');
+
+  @override
+  void renamed(SavedTrip trip) => heard.add('renamed ${trip.label}');
+
+  @override
+  void removed(String id) => heard.add('removed');
+
+  @override
+  void pruned(List<String> ids) => heard.add('pruned ${ids.length}');
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  late _Recorder recorder;
 
   setUp(() {
     SharedPreferencesAsyncPlatform.instance =
         InMemorySharedPreferencesAsync.empty();
     SavedTripsService.savedTripsListenable.value = const [];
+    recorder = _Recorder();
+    SavedTripsService.listener = recorder;
   });
 
   final future = DateTime.now().add(const Duration(days: 2));
@@ -283,5 +305,59 @@ void main() {
         expect(trips.single.id, good.id);
       },
     );
+  });
+
+  group('tells the calendar', () {
+    test('about saves, renames and removals', () async {
+      await SavedTripsService.saveTrip(_savedTrip(departure: future));
+      final id = (await SavedTripsService.getSavedTrips()).single.id;
+      await SavedTripsService.renameTrip(id, '  Airport run ');
+      await SavedTripsService.removeTrip(id);
+
+      expect(recorder.heard, ['saved null', 'renamed Airport run', 'removed']);
+    });
+
+    test('a re-save carries the name the rider gave it', () async {
+      final trip = _savedTrip(departure: future);
+      await SavedTripsService.saveTrip(trip);
+      await SavedTripsService.renameTrip(trip.id, 'Airport run');
+      await SavedTripsService.saveTrip(trip);
+
+      expect(recorder.heard.last, 'saved Airport run');
+    });
+
+    test('not about a removal of a trip that was not saved', () async {
+      await SavedTripsService.removeTrip('nothing');
+      expect(recorder.heard, isEmpty);
+    });
+
+    test('which trips were pruned, and nothing when none were', () async {
+      final now = DateTime(2030, 6, 1);
+      await SavedTripsService.saveTrip(
+        _savedTrip(departure: now.subtract(const Duration(days: 40))),
+      );
+      recorder.heard.clear();
+
+      await SavedTripsService.pruneExpired(now: now);
+      await SavedTripsService.pruneExpired(now: now);
+
+      expect(recorder.heard, ['pruned 1']);
+    });
+
+    test('never about a live refresh', () async {
+      final trip = _savedTrip(departure: future);
+      await SavedTripsService.saveTrip(trip);
+      recorder.heard.clear();
+
+      await SavedTripsService.storeLiveItinerary(
+        id: trip.id,
+        refreshed: trip.itinerary,
+        didRefresh: true,
+        freshness: ItineraryFreshness.live,
+        at: future,
+      );
+
+      expect(recorder.heard, isEmpty);
+    });
   });
 }

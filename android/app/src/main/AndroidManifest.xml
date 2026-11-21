@@ -103,6 +103,11 @@
         android:name="android.permission.INTERNET"/>
     <uses-permission
         android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Adding saved trips to a calendar, when the rider switches it on. -->
+    <uses-permission
+        android:name="android.permission.READ_CALENDAR"/>
+    <uses-permission
+        android:name="android.permission.WRITE_CALENDAR"/>
     <queries>
         <intent>
             <action
