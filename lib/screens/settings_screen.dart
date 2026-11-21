@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:transportia/screens/advanced_settings_screen.dart';
 import 'package:transportia/screens/appearance_screen.dart';
+import 'package:transportia/screens/calendar_settings_screen.dart';
+import 'package:transportia/services/calendar_service.dart';
 import 'package:transportia/screens/developer_info_screen.dart';
 import 'package:transportia/screens/info_screen.dart';
 import 'package:transportia/screens/legal_screen.dart';
@@ -119,6 +121,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           const SizedBox(height: 12),
+
+          if (CalendarService.isSupported) ...[
+            SettingsSection(
+              title: 'Synchronization',
+              children: [
+                SettingsTile(
+                  icon: LucideIcons.calendarSync,
+                  title: CalendarSettingsScreen.title,
+                  subtitle: 'Add saved trips to your calendar',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      CustomPageRoute(child: const CalendarSettingsScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
 
           SettingsSection(
             title: 'About',

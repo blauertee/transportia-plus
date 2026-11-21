@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/itinerary.dart';
+import 'package:transportia/models/saved_trip.dart';
+import 'package:transportia/models/time_selection.dart';
 import 'package:transportia/utils/itinerary_calendar_event.dart';
 
 import '../support/plan_fixtures.dart';
@@ -89,8 +91,54 @@ void main() {
     expect(event.end.toLocal(), DateTime(2026, 10, 3, 0, 13));
   });
 
-  test('a cancelled service says so in the entry', () {
+  test('a cancellation seen once stays out of the entry', () {
     final event = itineraryAsCalendarEvent(_planned(cancelled: true));
-    expect(event.description, contains('(cancelled)'));
+    expect(event.description, isNot(contains('cancelled')));
+  });
+
+  test('a delay seen while saving stays out of the entry', () {
+    final json = planItineraryJson(departure: _departure);
+    final ride = (json['legs'] as List)[1] as Map<String, dynamic>;
+    String late(Object? at) => DateTime.parse(
+      at! as String,
+    ).add(const Duration(minutes: 9)).toUtc().toIso8601String();
+    ride['startTime'] = late(ride['startTime']);
+    ride['endTime'] = late(ride['endTime']);
+    json['endTime'] = late(json['endTime']);
+
+    final event = itineraryAsCalendarEvent(Itinerary.fromJson(json));
+
+    expect(event.end.toLocal(), DateTime(2026, 10, 2, 16, 43));
+    expect(event.description, contains('16:25  RE7'));
+    expect(event.description, contains('arrives 16:40'));
+  });
+
+  group('a saved trip', () {
+    SavedTrip saved({String? label}) => SavedTrip.fromItinerary(
+      itinerary: _planned(),
+      timeSelection: TimeSelection(dateTime: _departure, isArriveBy: false),
+      label: label,
+    );
+
+    test('is named after its route', () {
+      expect(
+        savedTripAsCalendarEvent(saved()).title,
+        'S+U Berlin Hauptbahnhof → Flughafen BER',
+      );
+    });
+
+    test('is named what the rider called it', () {
+      expect(
+        savedTripAsCalendarEvent(saved(label: '  Airport run ')).title,
+        'Airport run',
+      );
+    });
+
+    test('a blank name falls back to the route', () {
+      expect(
+        savedTripEventTitle(saved(label: '   '), fallback: 'Route'),
+        'Route',
+      );
+    });
   });
 }
