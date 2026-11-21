@@ -110,5 +110,14 @@
             <data
                 android:mimeType="text/plain"/>
         </intent>
+        <!-- Calendar apps that take a new event, so "Add to calendar" can
+             tell whether one is installed. Content type of
+             CalendarContract.Events.CONTENT_URI. -->
+        <intent>
+            <action
+                android:name="android.intent.action.INSERT"/>
+            <data
+                android:mimeType="vnd.android.cursor.dir/event"/>
+        </intent>
     </queries>
 </manifest>
