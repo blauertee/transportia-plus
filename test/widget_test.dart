@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/app.dart';
+import 'package:transportia/providers/theme_provider.dart';
 import 'package:transportia/widgets/offline_banner_shell.dart';
 
 void main() {
@@ -36,5 +37,17 @@ void main() {
     await tester.pumpWidget(const Transportia());
     final inside = tester.element(find.byType(OfflineBannerShell));
     expect(CupertinoTheme.brightnessOf(inside), Brightness.light);
+  });
+
+  testWidgets('Icons without a colour take the text colour, not iOS blue', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+
+    await tester.pumpWidget(const Transportia());
+    final inside = tester.element(find.byType(OfflineBannerShell));
+    expect(IconTheme.of(inside).color, ThemeProvider.lightText);
   });
 }
