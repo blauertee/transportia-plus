@@ -110,22 +110,40 @@ class CalendarSyncService {
       await _prefs.getBool(PrefsKeys.calendarSyncWanted) ?? false;
 
   /// Where saved trips go now, or null while the setting is off or Android
-  /// withholds the permission. Makes the app's own calendar when the chosen
-  /// one is gone.
+  /// withholds the permission. The app's own calendar until another is
+  /// chosen, or when the chosen one is gone; while it does not exist yet,
+  /// [kOwnCalendarPlaceholderId] stands for it.
   static Future<DeviceCalendar?> currentCalendar() async {
     try {
       if (!await isWanted() || !await hasAccess()) return null;
-      return await _serial(_target);
+      return await _serial(_current);
     } catch (_) {
       return null;
     }
   }
 
-  /// Switches the setting on, once the permission is granted, and says
-  /// where trips will go.
-  static Future<DeviceCalendar> enable() async {
+  /// Switches the setting on, once the permission is granted, and adds the
+  /// upcoming trips among [savedTrips] straight away: whoever turns this on
+  /// wants to see their trips. Says where they went.
+  static Future<DeviceCalendar> enable(
+    List<SavedTrip> savedTrips, {
+    DateTime? now,
+  }) async {
     await _prefs.setBool(PrefsKeys.calendarSyncWanted, true);
-    return _serial(_target);
+    return _serial(() async {
+      final at = now ?? DateTime.now();
+      final written = await _readWritten();
+      try {
+        for (final trip in savedTrips) {
+          if (!trip.arrivalTime.isAfter(at)) continue;
+          if (written.containsKey(trip.id)) continue;
+          written[trip.id] = await _write(trip);
+        }
+      } finally {
+        await _writeWritten(written);
+      }
+      return _current();
+    });
   }
 
   /// Switches the setting off. With [remove], the events added to the
@@ -137,16 +155,15 @@ class CalendarSyncService {
     final prefs = _prefs;
     try {
       if (remove) {
-        final chosenId = await prefs.getInt(PrefsKeys.calendarSyncCalendar);
-        final ownId = await prefs.getInt(PrefsKeys.calendarSyncOwnCalendar);
-        if (chosenId != null && chosenId == ownId) {
+        final current = await _current();
+        if (current.isOwn) {
           await _deleteOwnCalendar();
-        } else if (chosenId != null) {
+        } else {
           final written = await _readWritten();
-          for (final entry in written.entries) {
-            if (entry.value.calendarId != chosenId) continue;
-            if (!await _isUntouched(entry.value)) continue;
-            await bridge.deleteEvent(entry.value.eventId);
+          for (final entry in written.values) {
+            if (entry.calendarId != current.id) continue;
+            if (!await _isUntouched(entry)) continue;
+            await bridge.deleteEvent(entry.eventId);
           }
         }
       }
@@ -177,23 +194,54 @@ class CalendarSyncService {
     isOwn: true,
   );
 
-  /// Sends new saves to [calendar] from now on. Trips already added stay
-  /// where they are. Returns the calendar as it now is, which for the app's
-  /// own may have just been made.
-  static Future<DeviceCalendar> choose(DeviceCalendar calendar) =>
-      _serial(() async {
-        final target = calendar.isOwn ? await _ensureOwnCalendar() : calendar;
-        await _prefs.setInt(PrefsKeys.calendarSyncCalendar, target.id);
-        return target;
-      });
-
-  /// Deletes the app's own calendar, with every event in it.
-  static Future<void> removeOwnCalendar() => _serial(() async {
-    try {
-      await _deleteOwnCalendar();
-    } catch (_) {
-      // Left as it is; the rider can still delete it in their calendar app.
+  /// Sends saved trips to [calendar] from now on, and takes the upcoming
+  /// ones among [savedTrips] along: each untouched event moves over, and a
+  /// trip without one gets one. Past trips stay where they are, and so does
+  /// an event the rider edited, which the app then forgets.
+  ///
+  /// The app's own calendar, left holding nothing the app looks after and
+  /// nothing the rider changed, is deleted. Returns where trips go now.
+  static Future<DeviceCalendar> choose(
+    DeviceCalendar calendar, {
+    required List<SavedTrip> savedTrips,
+    DateTime? now,
+  }) => _serial(() async {
+    final prefs = _prefs;
+    final ownId = await prefs.getInt(PrefsKeys.calendarSyncOwnCalendar);
+    if (calendar.isOwn) {
+      await prefs.remove(PrefsKeys.calendarSyncCalendar);
+    } else {
+      await prefs.setInt(PrefsKeys.calendarSyncCalendar, calendar.id);
     }
+    final targetId = calendar.isOwn ? ownId : calendar.id;
+
+    final at = now ?? DateTime.now();
+    final written = await _readWritten();
+    var riderKeptOne = false;
+    try {
+      for (final trip in savedTrips) {
+        if (!trip.arrivalTime.isAfter(at)) continue;
+        final entry = written[trip.id];
+        if (entry != null) {
+          if (entry.calendarId == targetId) continue;
+          written.remove(trip.id);
+          if (!await _isUntouched(entry)) {
+            if (entry.calendarId == ownId) riderKeptOne = true;
+            continue;
+          }
+          await bridge.deleteEvent(entry.eventId);
+        }
+        written[trip.id] = await _write(trip);
+      }
+    } finally {
+      await _writeWritten(written);
+    }
+
+    final ownIsEmpty = !written.values.any((w) => w.calendarId == ownId);
+    if (!calendar.isOwn && ownId != null && ownIsEmpty && !riderKeptOne) {
+      await _deleteOwnCalendar();
+    }
+    return _current();
   });
 
   /// How many events the app looks after in [calendarId].
@@ -202,53 +250,12 @@ class CalendarSyncService {
     return written.values.where((w) => w.calendarId == calendarId).length;
   }
 
-  /// The trips in [trips] still to come that have no event yet: those to
-  /// offer when the setting goes on.
-  static Future<List<SavedTrip>> upcomingWithoutEvent(
-    List<SavedTrip> trips, {
-    DateTime? now,
-  }) async {
-    final at = now ?? DateTime.now();
-    final written = await _readWritten();
-    return [
-      for (final trip in trips)
-        if (trip.arrivalTime.isAfter(at) && !written.containsKey(trip.id)) trip,
-    ];
-  }
-
-  /// Adds an event for each of [trips] that has none yet.
-  static Future<void> addAll(List<SavedTrip> trips) async {
-    for (final trip in trips) {
-      await onSaved(trip);
-    }
-  }
-
   /// Adds an event for a trip the rider just saved. A trip that already has
   /// one keeps it as first written: saving again does not re-plan it.
   static Future<void> onSaved(SavedTrip trip) => _quietly(() async {
     final written = await _readWritten();
     if (written.containsKey(trip.id)) return;
-
-    final calendar = await _target();
-    final event = savedTripAsCalendarEvent(trip, link: _linkFor(trip));
-    final eventId = await bridge.insertEvent(
-      calendarId: calendar.id,
-      title: event.title,
-      description: event.description,
-      location: event.location,
-      start: event.start,
-      end: event.end,
-    );
-    written[trip.id] = _Written(
-      eventId: eventId,
-      calendarId: calendar.id,
-      fingerprint: calendarEventFingerprint(
-        title: event.title,
-        description: event.description,
-        startMillis: event.start.millisecondsSinceEpoch,
-        endMillis: event.end.millisecondsSinceEpoch,
-      ),
-    );
+    written[trip.id] = await _write(trip);
     await _writeWritten(written);
   });
 
@@ -315,19 +322,50 @@ class CalendarSyncService {
         }
       });
 
-  /// The calendar new saves go to: the chosen one while it exists, else the
-  /// app's own, made now when needed.
-  static Future<DeviceCalendar> _target() async {
+  /// Where trips go: the chosen calendar while it exists, else the app's
+  /// own, or [kOwnCalendarPlaceholderId] while that does not exist yet.
+  static Future<DeviceCalendar> _current() async {
     final prefs = _prefs;
     final chosenId = await prefs.getInt(PrefsKeys.calendarSyncCalendar);
     final ownId = await prefs.getInt(PrefsKeys.calendarSyncOwnCalendar);
-    if (chosenId != null) {
+    if (chosenId != null && chosenId != ownId) {
       final chosen = await bridge.readCalendar(chosenId);
-      if (chosen != null) return chosen.id == ownId ? chosen.asOwn : chosen;
+      if (chosen != null) return chosen;
     }
-    final own = await _ensureOwnCalendar();
-    await prefs.setInt(PrefsKeys.calendarSyncCalendar, own.id);
-    return own;
+    if (ownId != null) {
+      final own = await bridge.readCalendar(ownId);
+      if (own != null) return own.asOwn;
+    }
+    return _ownPlaceholder;
+  }
+
+  /// Writes [trip]'s event where trips go, making the app's own calendar
+  /// first if that is where and it does not exist yet: it is only made once
+  /// there is a trip to put in it.
+  static Future<_Written> _write(SavedTrip trip) async {
+    var calendar = await _current();
+    if (calendar.id == kOwnCalendarPlaceholderId) {
+      calendar = await _ensureOwnCalendar();
+    }
+    final event = savedTripAsCalendarEvent(trip, link: _linkFor(trip));
+    final eventId = await bridge.insertEvent(
+      calendarId: calendar.id,
+      title: event.title,
+      description: event.description,
+      location: event.location,
+      start: event.start,
+      end: event.end,
+    );
+    return _Written(
+      eventId: eventId,
+      calendarId: calendar.id,
+      fingerprint: calendarEventFingerprint(
+        title: event.title,
+        description: event.description,
+        startMillis: event.start.millisecondsSinceEpoch,
+        endMillis: event.end.millisecondsSinceEpoch,
+      ),
+    );
   }
 
   static Future<DeviceCalendar> _ensureOwnCalendar() async {

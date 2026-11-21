@@ -88,8 +88,8 @@ class CalendarPickerSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Text(
-                  'Only trips you save from now on go to the calendar you '
-                  'pick. Trips already added stay where they are.',
+                  'Your upcoming saved trips move to the calendar you pick. '
+                  'Past trips and events you edited stay where they are.',
                   style: AppText.footnote,
                 ),
               ),

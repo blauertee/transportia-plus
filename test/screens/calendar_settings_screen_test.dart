@@ -14,6 +14,7 @@ import 'package:transportia/screens/settings_screen.dart';
 import 'package:transportia/services/calendar_sync_service.dart';
 import 'package:transportia/services/saved_trips_service.dart';
 import 'package:transportia/widgets/app_toggle_switch.dart';
+import 'package:transportia/widgets/overlay_dialog.dart';
 
 import '../support/fake_calendar_bridge.dart';
 import '../support/plan_fixtures.dart';
@@ -113,7 +114,8 @@ void main() {
 
     expect(find.text('On, saved trips go to Transportia+'), findsOne);
     expect(find.text('Saved trips go to'), findsOne);
-    expect(bridge.calendars.values.where((c) => c.isLocal), hasLength(1));
+    // Nothing saved yet, so nothing to make a calendar for.
+    expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
   });
 
   testWidgets('a refusal leaves it off', (tester) async {
@@ -143,7 +145,7 @@ void main() {
   testWidgets('access revoked while on shows as off, with the way back', (
     tester,
   ) async {
-    await CalendarSyncService.enable();
+    await CalendarSyncService.enable(const []);
     permission.current = CalendarAccess.denied;
     await _pump(tester, CalendarSettingsScreen(permission: permission));
 
@@ -151,23 +153,23 @@ void main() {
     expect(find.text('Calendar access is off'), findsOne);
   });
 
-  testWidgets('switching on offers the trips already saved', (tester) async {
+  testWidgets('switching on adds the trips already saved, unasked', (
+    tester,
+  ) async {
     await SavedTripsService.saveTrip(_trip());
     await _pump(tester, CalendarSettingsScreen(permission: permission));
     await _tapToggle(tester);
 
-    expect(find.text('Add saved trips?'), findsOne);
-    await tester.tap(find.text('Add 1 trip'));
-    await tester.pumpAndSettle();
-
+    expect(find.byType(OverlayDialogCard), findsNothing);
     expect(bridge.events, hasLength(1));
+    expect(bridge.calendars.values.where((c) => c.isLocal), hasLength(1));
   });
 
   testWidgets('switching off can remove the app\'s own calendar', (
     tester,
   ) async {
     permission.current = CalendarAccess.granted;
-    await CalendarSyncService.enable();
+    await CalendarSyncService.enable([_trip()]);
     await _pump(tester, CalendarSettingsScreen(permission: permission));
     await _tapToggle(tester);
 
@@ -179,11 +181,22 @@ void main() {
     expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
   });
 
-  testWidgets('another calendar can be picked, keeping the old one', (
+  testWidgets('switching off with nothing added asks nothing', (tester) async {
+    permission.current = CalendarAccess.granted;
+    await CalendarSyncService.enable(const []);
+    await _pump(tester, CalendarSettingsScreen(permission: permission));
+    await _tapToggle(tester);
+
+    expect(find.byType(OverlayDialogCard), findsNothing);
+    expect(find.text('Off: saved trips stay in the app'), findsOne);
+  });
+
+  testWidgets('picking another calendar takes the trips along, unasked', (
     tester,
   ) async {
     permission.current = CalendarAccess.granted;
-    await CalendarSyncService.enable();
+    await SavedTripsService.saveTrip(_trip());
+    await CalendarSyncService.enable(await SavedTripsService.getSavedTrips());
     await _pump(tester, CalendarSettingsScreen(permission: permission));
 
     await tester.tap(find.text('Saved trips go to'));
@@ -192,12 +205,10 @@ void main() {
     await tester.tap(find.text('Trips'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Remove the calendar?'), findsOne);
-    await tester.tap(find.text('Keep'));
-    await tester.pumpAndSettle();
-
+    expect(find.byType(OverlayDialogCard), findsNothing);
     expect(find.text('On, saved trips go to Trips'), findsOne);
-    expect(bridge.calendars.values.where((c) => c.isLocal), hasLength(1));
+    expect(bridge.eventsIn(_nextcloud.id), hasLength(1));
+    expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
   });
 
   testWidgets('settings lists it under Synchronization', (tester) async {

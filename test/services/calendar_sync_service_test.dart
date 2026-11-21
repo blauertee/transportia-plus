@@ -60,7 +60,7 @@ void main() {
     });
 
     test('does nothing without the permission', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       bridge.calls.clear();
       permitted = false;
 
@@ -71,7 +71,7 @@ void main() {
     });
 
     test('never throws into the save, even when Android refuses', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       bridge.isRevoked = true;
 
       await expectLater(CalendarSyncService.onSaved(_trip()), completes);
@@ -80,43 +80,56 @@ void main() {
   });
 
   group('switching on', () {
-    test('makes the app its own calendar and sends trips there', () async {
-      final calendar = await CalendarSyncService.enable();
+    test('adds the upcoming saved trips straight away', () async {
+      final upcoming = _trip(tripId: 'a');
+      final past = _trip(tripId: 'b', departure: DateTime(2029, 1, 1, 9));
+
+      final calendar = await CalendarSyncService.enable([
+        upcoming,
+        past,
+      ], now: DateTime(2030));
 
       expect(calendar.isOwn, isTrue);
-      expect(calendar.isLocal, isTrue);
       expect(calendar.name, 'Transportia+');
-      expect((await CalendarSyncService.currentCalendar())!.id, calendar.id);
+      expect(bridge.eventsIn(calendar.id), hasLength(1));
+      expect(await CalendarSyncService.countIn(calendar.id), 1);
+    });
+
+    test('makes no calendar until there is a trip to put in it', () async {
+      final calendar = await CalendarSyncService.enable(const []);
+
+      expect(calendar.id, kOwnCalendarPlaceholderId);
+      expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
+      expect(
+        (await CalendarSyncService.currentCalendar())!.id,
+        kOwnCalendarPlaceholderId,
+      );
     });
 
     test('reuses its calendar rather than making a second', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable([
+        _trip(tripId: 'a'),
+      ], now: DateTime(2030));
       await CalendarSyncService.disable(remove: false);
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable([
+        _trip(tripId: 'b'),
+      ], now: DateTime(2030));
 
       expect(bridge.calendars.values.where((c) => c.isLocal), hasLength(1));
     });
 
-    test('offers only trips still to come that have no event', () async {
-      await CalendarSyncService.enable();
-      final added = _trip(tripId: 'a');
-      await CalendarSyncService.onSaved(added);
-      final past = _trip(tripId: 'b', departure: DateTime(2029, 1, 1, 9));
-      final upcoming = _trip(tripId: 'c');
+    test('switching on again does not add a trip twice', () async {
+      final trip = _trip();
+      await CalendarSyncService.enable([trip], now: DateTime(2030));
+      await CalendarSyncService.enable([trip], now: DateTime(2030));
 
-      final offered = await CalendarSyncService.upcomingWithoutEvent([
-        added,
-        past,
-        upcoming,
-      ], now: DateTime(2030));
-
-      expect(offered.map((t) => t.id), [upcoming.id]);
+      expect(bridge.events, hasLength(1));
     });
   });
 
   group('saving', () {
     test('adds one event with the trip, in the chosen calendar', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       await CalendarSyncService.onSaved(_trip(label: 'Airport run'));
 
       final event = bridge.eventsIn(own().id).single;
@@ -127,7 +140,7 @@ void main() {
     });
 
     test('saving the same trip again keeps the first event', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       final trip = _trip();
       await CalendarSyncService.onSaved(trip);
       await CalendarSyncService.onSaved(trip);
@@ -135,19 +148,16 @@ void main() {
       expect(bridge.events, hasLength(1));
     });
 
-    test('a new calendar takes new saves; old events stay put', () async {
-      await CalendarSyncService.enable();
-      await CalendarSyncService.onSaved(_trip(tripId: 'a'));
-      await CalendarSyncService.choose(_nextcloud);
-      await CalendarSyncService.onSaved(_trip(tripId: 'b'));
+    test('makes its calendar for the first trip it adds', () async {
+      await CalendarSyncService.enable(const []);
+      await CalendarSyncService.onSaved(_trip());
 
       expect(bridge.eventsIn(own().id), hasLength(1));
-      expect(bridge.eventsIn(_nextcloud.id), hasLength(1));
     });
 
     test('remakes its calendar when the chosen one is gone', () async {
-      await CalendarSyncService.enable();
-      await CalendarSyncService.choose(_nextcloud);
+      await CalendarSyncService.enable(const []);
+      await CalendarSyncService.choose(_nextcloud, savedTrips: const []);
       bridge.calendars.remove(_nextcloud.id);
 
       await CalendarSyncService.onSaved(_trip());
@@ -161,7 +171,7 @@ void main() {
     late int eventId;
 
     setUp(() async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       trip = _trip();
       await CalendarSyncService.onSaved(trip);
       eventId = bridge.events.keys.single;
@@ -249,7 +259,7 @@ void main() {
 
   group('switching off', () {
     test('keeping leaves every event and forgets them', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       await CalendarSyncService.onSaved(_trip());
 
       await CalendarSyncService.disable(remove: false);
@@ -260,18 +270,19 @@ void main() {
     });
 
     test('removing deletes the app\'s own calendar whole', () async {
-      final calendar = await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       await CalendarSyncService.onSaved(_trip());
+      final ownId = own().id;
 
       await CalendarSyncService.disable(remove: true);
 
-      expect(bridge.calendars, isNot(contains(calendar.id)));
+      expect(bridge.calendars, isNot(contains(ownId)));
       expect(bridge.events, isEmpty);
     });
 
     test('removing from another calendar checks every event', () async {
-      await CalendarSyncService.enable();
-      await CalendarSyncService.choose(_nextcloud);
+      await CalendarSyncService.enable(const []);
+      await CalendarSyncService.choose(_nextcloud, savedTrips: const []);
       await CalendarSyncService.onSaved(_trip(tripId: 'a'));
       await CalendarSyncService.onSaved(_trip(tripId: 'b'));
       final edited = bridge.events.keys.last;
@@ -284,10 +295,11 @@ void main() {
     });
 
     test('removing leaves calendars it is not switching off alone', () async {
-      await CalendarSyncService.enable();
+      await CalendarSyncService.enable(const []);
       await CalendarSyncService.onSaved(_trip(tripId: 'a'));
       final ownId = own().id;
-      await CalendarSyncService.choose(_nextcloud);
+      // Nothing to take along: the trip is not among those passed.
+      await CalendarSyncService.choose(_nextcloud, savedTrips: const []);
 
       await CalendarSyncService.disable(remove: true);
 
@@ -304,31 +316,116 @@ void main() {
       expect(calendars.map((c) => c.id), contains(_nextcloud.id));
     });
 
-    test('picking the placeholder makes the calendar', () async {
-      final calendars = await CalendarSyncService.calendars();
-      final picked = await CalendarSyncService.choose(calendars.first);
-
-      expect(picked.id, isNot(kOwnCalendarPlaceholderId));
-      expect(picked.isOwn, isTrue);
-      expect(bridge.calendars, contains(picked.id));
-    });
-
     test('marks the app\'s own calendar once it exists', () async {
-      final made = await CalendarSyncService.enable();
+      final made = await CalendarSyncService.enable([
+        _trip(),
+      ], now: DateTime(2030));
       final calendars = await CalendarSyncService.calendars();
 
       expect(calendars.where((c) => c.isOwn).single.id, made.id);
     });
+  });
 
-    test('leaving it and removing it deletes only that calendar', () async {
-      await CalendarSyncService.enable();
-      await CalendarSyncService.onSaved(_trip());
-      await CalendarSyncService.choose(_nextcloud);
+  group('choosing another calendar', () {
+    final now = DateTime(2030);
+    final upcoming = _trip(tripId: 'a');
+    final past = _trip(tripId: 'b', departure: DateTime(2029, 1, 1, 9));
 
-      await CalendarSyncService.removeOwnCalendar();
+    test('right after switching on never makes a local calendar', () async {
+      await CalendarSyncService.enable(const []);
+      final chosen = await CalendarSyncService.choose(
+        _nextcloud,
+        savedTrips: [upcoming],
+        now: now,
+      );
 
-      expect(bridge.calendars.keys, [_nextcloud.id]);
+      expect(chosen.id, _nextcloud.id);
+      expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
+      expect(bridge.eventsIn(_nextcloud.id), hasLength(1));
+    });
+
+    test('takes upcoming trips along and drops the emptied calendar', () async {
+      await CalendarSyncService.enable([upcoming], now: now);
+
+      await CalendarSyncService.choose(
+        _nextcloud,
+        savedTrips: [upcoming],
+        now: now,
+      );
+
+      expect(bridge.eventsIn(_nextcloud.id), hasLength(1));
+      expect(bridge.calendars.values.where((c) => c.isLocal), isEmpty);
       expect((await CalendarSyncService.currentCalendar())!.id, _nextcloud.id);
+    });
+
+    test('moved events are looked after where they are now', () async {
+      await CalendarSyncService.enable([upcoming], now: now);
+      await CalendarSyncService.choose(
+        _nextcloud,
+        savedTrips: [upcoming],
+        now: now,
+      );
+
+      await CalendarSyncService.onRemoved(upcoming.id);
+
+      expect(bridge.events, isEmpty);
+    });
+
+    test('past trips stay, and so does the calendar holding them', () async {
+      await CalendarSyncService.enable(const []);
+      await CalendarSyncService.onSaved(past);
+      await CalendarSyncService.onSaved(upcoming);
+      final ownId = own().id;
+
+      await CalendarSyncService.choose(
+        _nextcloud,
+        savedTrips: [upcoming, past],
+        now: now,
+      );
+
+      expect(bridge.eventsIn(ownId), hasLength(1));
+      expect(bridge.eventsIn(_nextcloud.id), hasLength(1));
+    });
+
+    test(
+      'an event the rider edited stays, with its calendar, and only there',
+      () async {
+        await CalendarSyncService.enable([upcoming], now: now);
+        final ownId = own().id;
+        bridge.events.values.single.title = 'Mine now';
+
+        await CalendarSyncService.choose(
+          _nextcloud,
+          savedTrips: [upcoming],
+          now: now,
+        );
+
+        expect(bridge.eventsIn(ownId).single.title, 'Mine now');
+        // The rider's now: no second event for the same trip.
+        expect(bridge.eventsIn(_nextcloud.id), isEmpty);
+        expect(await CalendarSyncService.countIn(ownId), 0);
+      },
+    );
+
+    test('back to the app\'s own calendar makes it again', () async {
+      await CalendarSyncService.enable(const []);
+      await CalendarSyncService.choose(
+        _nextcloud,
+        savedTrips: [upcoming],
+        now: now,
+      );
+      final calendars = await CalendarSyncService.calendars();
+
+      final back = await CalendarSyncService.choose(
+        calendars.first,
+        savedTrips: [upcoming],
+        now: now,
+      );
+
+      expect(back.isOwn, isTrue);
+      expect(back.id, isNot(kOwnCalendarPlaceholderId));
+      expect(bridge.eventsIn(back.id), hasLength(1));
+      expect(bridge.eventsIn(_nextcloud.id), isEmpty);
     });
   });
 }

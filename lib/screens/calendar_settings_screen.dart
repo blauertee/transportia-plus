@@ -135,7 +135,8 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
 
     final DeviceCalendar calendar;
     try {
-      calendar = await CalendarSyncService.enable();
+      final saved = await SavedTripsService.getSavedTrips();
+      calendar = await CalendarSyncService.enable(saved);
     } catch (_) {
       await CalendarSyncService.disable(remove: false);
       if (mounted) showValidationToast(context, 'Could not set up a calendar');
@@ -146,22 +147,6 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
       _wanted = true;
       _calendar = calendar;
     });
-    await _offerSavedTrips(calendar);
-  }
-
-  /// Offers once to add the trips already saved, if any are still to come.
-  Future<void> _offerSavedTrips(DeviceCalendar calendar) async {
-    final trips = await SavedTripsService.getSavedTrips();
-    final upcoming = await CalendarSyncService.upcomingWithoutEvent(trips);
-    if (upcoming.isEmpty || !mounted) return;
-    final add = await _ask(
-      (answer) => AddSavedTripsDialog(
-        count: upcoming.length,
-        calendar: calendar,
-        onAnswer: answer,
-      ),
-    );
-    if (add == true) await CalendarSyncService.addAll(upcoming);
   }
 
   Future<void> _switchOff() async {
@@ -169,9 +154,10 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     var remove = false;
     if (calendar != null) {
       final count = await CalendarSyncService.countIn(calendar.id);
-      if (calendar.isOwn || count > 0) {
+      final exists = calendar.id != kOwnCalendarPlaceholderId;
+      if (exists && (calendar.isOwn || count > 0)) {
         final answer = await _ask(
-          (answer) => RemoveTripsDialog.stopping(
+          (answer) => RemoveTripsDialog(
             count: count,
             calendar: calendar,
             onAnswer: answer,
@@ -226,30 +212,17 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
   }
 
   Future<void> _switchTo(DeviceCalendar choice) async {
-    final previous = _calendar;
-    if (choice.id == previous?.id) return;
+    if (choice.id == _calendar?.id) return;
 
     final DeviceCalendar now;
     try {
-      now = await CalendarSyncService.choose(choice);
+      final saved = await SavedTripsService.getSavedTrips();
+      now = await CalendarSyncService.choose(choice, savedTrips: saved);
     } catch (_) {
       if (mounted) showValidationToast(context, 'Could not use that calendar');
       return;
     }
-    if (!mounted) return;
-    setState(() => _calendar = now);
-
-    if (previous == null || !previous.isOwn || now.isOwn) return;
-    final count = await CalendarSyncService.countIn(previous.id);
-    final remove = await _ask(
-      (answer) => RemoveTripsDialog.leavingOwn(
-        count: count,
-        from: previous,
-        to: now,
-        onAnswer: answer,
-      ),
-    );
-    if (remove == true) await CalendarSyncService.removeOwnCalendar();
+    if (mounted) setState(() => _calendar = now);
   }
 
   /// Shows the dialog [build] makes, and returns its answer; null when it
