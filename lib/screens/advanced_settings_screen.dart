@@ -8,8 +8,7 @@ import '../api/motis_request_log.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../utils/custom_page_route.dart';
-import '../widgets/app_icon_header.dart';
-import '../widgets/app_page_scaffold.dart';
+import '../widgets/app_screen.dart';
 import '../widgets/section_title.dart';
 import '../widgets/settings_tile.dart';
 import '../widgets/toggle_card.dart';
@@ -24,69 +23,58 @@ class AdvancedSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
 
-    return AppPageScaffold(
+    return AppScreen.page(
+      icon: LucideIcons.terminal,
       title: 'Advanced',
-      scrollable: true,
-      padding: const EdgeInsets.all(20),
+      subtitle: 'Technical details for debugging and development',
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const AppIconHeader(
-            icon: LucideIcons.terminal,
-            title: 'Advanced',
-            subtitle: 'Technical details for debugging and development',
+          const SectionTitle(text: 'Data'),
+          const SizedBox(height: 8),
+          Text(
+            'What the server calls things, next to what the app calls them',
+            style: AppText.bodyFaint,
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 32),
-              const SectionTitle(text: 'Data'),
-              const SizedBox(height: 8),
-              Text(
-                'What the server calls things, next to what the app calls them',
-                style: AppText.bodyFaint,
-              ),
-              const SizedBox(height: 16),
-              ToggleCard(
-                icon: LucideIcons.codeXml,
-                title: 'Show GTFS fields',
-                subtitle: theme.showGtfsFields
-                    ? 'Trip and stop ids are shown on trips and departures'
-                    : 'Show raw trip and stop ids on trips and departures',
-                value: theme.showGtfsFields,
-                onChanged: theme.setShowGtfsFields,
-              ),
-              const SizedBox(height: 12),
-              ToggleCard(
-                icon: LucideIcons.clipboardCopy,
-                title: 'Show copy canvas data button',
-                subtitle: theme.showGraphCopyButton
-                    ? 'The journey graph has a button that copies what it draws'
-                    : 'Copy what the journey graph draws, to report a drawing problem',
-                value: theme.showGraphCopyButton,
-                onChanged: theme.setShowGraphCopyButton,
-              ),
-              const SizedBox(height: 32),
-              const SectionTitle(text: 'Requests'),
-              const SizedBox(height: 8),
-              Text(
-                'What the app asks the server, to compare with other clients',
-                style: AppText.bodyFaint,
-              ),
-              const SizedBox(height: 16),
-              ToggleCard(
-                icon: LucideIcons.fileClock,
-                title: 'Log MOTIS requests',
-                subtitle: theme.logMotisRequests
-                    ? 'Requests to the server are kept until the app closes'
-                    : 'Keep the requests sent to the server, to inspect them',
-                value: theme.logMotisRequests,
-                onChanged: theme.setLogMotisRequests,
-              ),
-              const SizedBox(height: 12),
-              const _RequestLogCard(),
-            ],
+          const SizedBox(height: 16),
+          ToggleCard(
+            icon: LucideIcons.codeXml,
+            title: 'Show GTFS fields',
+            subtitle: theme.showGtfsFields
+                ? 'Trip and stop ids are shown on trips and departures'
+                : 'Show raw trip and stop ids on trips and departures',
+            value: theme.showGtfsFields,
+            onChanged: theme.setShowGtfsFields,
           ),
+          const SizedBox(height: 12),
+          ToggleCard(
+            icon: LucideIcons.clipboardCopy,
+            title: 'Show copy canvas data button',
+            subtitle: theme.showGraphCopyButton
+                ? 'The journey graph has a button that copies what it draws'
+                : 'Copy what the journey graph draws, to report a drawing problem',
+            value: theme.showGraphCopyButton,
+            onChanged: theme.setShowGraphCopyButton,
+          ),
+          const SizedBox(height: 32),
+          const SectionTitle(text: 'Requests'),
+          const SizedBox(height: 8),
+          Text(
+            'What the app asks the server, to compare with other clients',
+            style: AppText.bodyFaint,
+          ),
+          const SizedBox(height: 16),
+          ToggleCard(
+            icon: LucideIcons.fileClock,
+            title: 'Log MOTIS requests',
+            subtitle: theme.logMotisRequests
+                ? 'Requests to the server are kept until the app closes'
+                : 'Keep the requests sent to the server, to inspect them',
+            value: theme.logMotisRequests,
+            onChanged: theme.setLogMotisRequests,
+          ),
+          const SizedBox(height: 12),
+          const _RequestLogCard(),
         ],
       ),
     );

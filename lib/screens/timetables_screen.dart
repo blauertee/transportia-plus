@@ -20,6 +20,7 @@ import '../utils/custom_page_route.dart';
 import '../utils/leg_helper.dart' show getLegIcon;
 import '../utils/reported_time.dart';
 import '../utils/stop_time_utils.dart';
+import '../widgets/app_screen.dart';
 import '../widgets/buttons/pill_button.dart';
 import '../widgets/delayed_time.dart';
 import '../widgets/error_notice.dart';
@@ -516,55 +517,6 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
     });
   }
 
-  /// The screen's title block: what this screen is, above what it shows.
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.accentOf(context).withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(
-            LucideIcons.clock,
-            size: 24,
-            color: AppColors.accentOf(context),
-          ),
-        ),
-        const SizedBox(width: 16),
-        // Flexible, or the title and its subtitle claim their natural width
-        // and overflow the row on a narrow screen.
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Timetables',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
-                  height: 1.1,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'Stop departures & arrivals',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.black.withValues(alpha: 0.4),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   /// The chosen stop's search field, the time picker and the search action.
   ///
   /// Only once a stop is chosen. Before that this screen is the stop search
@@ -737,59 +689,51 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
         onTap: () {
           _searchFocus.unfocus();
         },
-        child: Container(
-          color: AppColors.white,
-          child: SafeArea(
-            child: Stack(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(context),
-                          const SizedBox(height: 24),
-                          if (_selectedStop != null)
-                            _buildStopControls(context),
-                        ],
-                      ),
-                    ),
-
-                    Expanded(
-                      child: _isLoadingStopTimes
-                          ? _buildLoadingSkeleton()
-                          : _stopTimesError != null
-                          ? _buildStopTimesError()
-                          : _stopTimes != null
-                          ? BidirectionalPagedList<StopTime>(
-                              controller: _resultsScrollController,
-                              centerKey: _centerKey,
-                              items: _stopTimes!,
-                              centerIndex: _centerIndex,
-                              itemBuilder: _buildStopTimeTile,
-                              hasPrevious: _hasPreviousPage,
-                              hasNext: _hasNextPage,
-                              isLoadingPrevious: _isLoadingPrevious,
-                              isLoadingNext: _isLoadingMore,
-                              onLoadPrevious: _loadPrevious,
-                              onLoadNext: _loadMore,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: _kResultsHorizontalPadding,
-                              ),
-                              trailingExtent: _kResultsBottomSpacing,
-                            )
-                          : _buildStopSearch(),
-                    ),
-                  ],
+        child: AppScreen.tab(
+          icon: LucideIcons.clock,
+          title: 'Timetables',
+          subtitle: 'Stop departures & arrivals',
+          scrollable: false,
+          padding: EdgeInsets.zero,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_selectedStop != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  child: _buildStopControls(context),
                 ),
-              ],
-            ),
+              Expanded(child: _buildResults()),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  /// Under the title: the stop search, or once a stop is chosen, its
+  /// departures and what happened fetching them.
+  Widget _buildResults() {
+    if (_isLoadingStopTimes) return _buildLoadingSkeleton();
+    if (_stopTimesError != null) return _buildStopTimesError();
+    final stopTimes = _stopTimes;
+    if (stopTimes == null) return _buildStopSearch();
+    return BidirectionalPagedList<StopTime>(
+      controller: _resultsScrollController,
+      centerKey: _centerKey,
+      items: stopTimes,
+      centerIndex: _centerIndex,
+      itemBuilder: _buildStopTimeTile,
+      hasPrevious: _hasPreviousPage,
+      hasNext: _hasNextPage,
+      isLoadingPrevious: _isLoadingPrevious,
+      isLoadingNext: _isLoadingMore,
+      onLoadPrevious: _loadPrevious,
+      onLoadNext: _loadMore,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _kResultsHorizontalPadding,
+      ),
+      trailingExtent: _kResultsBottomSpacing,
     );
   }
 }
