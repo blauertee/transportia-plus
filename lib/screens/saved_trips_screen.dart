@@ -9,13 +9,12 @@ import '../providers/theme_provider.dart';
 import '../services/saved_trips_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/custom_page_route.dart';
-import '../widgets/app_screen_title.dart';
+import '../widgets/app_screen.dart';
 import '../widgets/edit_saved_trip_overlay.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/saved_trip_card.dart';
 import 'itinerary_detail_screen.dart';
 import '../theme/app_text.dart';
-import '../widgets/icon_badge.dart';
 
 /// The full list of kept connections, split into what is still ahead and
 /// what has already happened.
@@ -77,39 +76,21 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
   Widget build(BuildContext context) {
     context.watch<ThemeProvider>();
 
-    return ColoredBox(
-      color: AppColors.white,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: AppScreenTitle(
-                icon: LucideIcons.bookmark,
-                title: 'Saved trips',
-                subtitle: 'Rechecked for delays when you open them',
-              ),
+    return AppScreen.tab(
+      icon: LucideIcons.bookmark,
+      title: 'Saved trips',
+      subtitle: 'Rechecked for delays when you open them',
+      scrollable: false,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      body: _isLoading
+          ? const Center(child: CupertinoActivityIndicator(radius: 14))
+          : ValueListenableBuilder<List<SavedTrip>>(
+              valueListenable: SavedTripsService.savedTripsListenable,
+              builder: (context, trips, _) {
+                if (trips.isEmpty) return _emptyState();
+                return _tripList(trips);
+              },
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: _isLoading
-                    ? const Center(
-                        child: CupertinoActivityIndicator(radius: 14),
-                      )
-                    : ValueListenableBuilder<List<SavedTrip>>(
-                        valueListenable: SavedTripsService.savedTripsListenable,
-                        builder: (context, trips, _) {
-                          if (trips.isEmpty) return _emptyState(context);
-                          return _tripList(trips);
-                        },
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -164,19 +145,11 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
     );
   }
 
-  Widget _emptyState(BuildContext context) {
-    final accent = AppColors.accentOf(context);
-    return Center(
+  Widget _emptyState() {
+    return const Center(
       child: EmptyState(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        icon: IconBadge(
-          icon: LucideIcons.bookmark,
-          size: 56,
-          iconSize: 28,
-          backgroundColor: AppColors.accentWash(accent),
-          iconColor: accent,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        padding: EdgeInsets.symmetric(horizontal: 32),
+        icon: ScreenIcon(),
         title: 'No saved trips yet',
         subtitle:
             'Search for a journey, then tap the bookmark on the connection '

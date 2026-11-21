@@ -7,8 +7,7 @@ import '../environment.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_colors.dart';
 import '../utils/app_version.dart';
-import '../widgets/app_icon_header.dart';
-import '../widgets/app_page_scaffold.dart';
+import '../widgets/app_screen.dart';
 import '../widgets/custom_card.dart';
 import '../widgets/section_title.dart';
 import '../widgets/icon_badge.dart';
@@ -21,86 +20,74 @@ class InfoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appName = Environment.appName;
     context.watch<ThemeProvider>();
-    return AppPageScaffold(
+    return AppScreen.page(
+      icon: LucideIcons.info,
       title: 'About $appName',
-      scrollable: true,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      subtitle: 'Version ${AppVersion.current}',
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppIconHeader(
-            icon: LucideIcons.info,
-            title: appName,
-            subtitle: 'Version ${AppVersion.current}',
-            iconSize: 40,
+          _buildCard(
+            child: Text(
+              '$appName is a frontend for any MOTIS server. MOTIS does the '
+              'hard work of finding routes and timetables; $appName shows '
+              'everything MOTIS gives you in a way that is easy to read. '
+              'On top of that it offers the comforts only an app on your '
+              'phone can, such as saved trips and your own preferences. '
+              'Whatever is better solved on the server, $appName leaves '
+              'to MOTIS.',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.5,
+                color: AppColors.black,
+              ),
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              _buildCard(
-                child: Text(
-                  '$appName is a frontend for any MOTIS server. MOTIS does the '
-                  'hard work of finding routes and timetables; $appName shows '
-                  'everything MOTIS gives you in a way that is easy to read. '
-                  'On top of that it offers the comforts only an app on your '
-                  'phone can, such as saved trips and your own preferences. '
-                  'Whatever is better solved on the server, $appName leaves '
-                  'to MOTIS.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.5,
-                    color: AppColors.black,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const SectionTitle(text: 'Contact'),
-              const SizedBox(height: 12),
-              _buildContactItem(
-                context,
-                'Issue Tracker',
-                'github.com/blauertee/transportia-plus/issues',
-                LucideIcons.github,
-                Environment.issueTrackerUrl,
-              ),
-              if (Environment.contactEmail.isNotEmpty)
-                _buildContactItem(
-                  context,
-                  'Email',
-                  Environment.contactEmail,
-                  LucideIcons.mail,
-                  'mailto:${Environment.contactEmail}',
-                ),
-              const SizedBox(height: 24),
-              const SectionTitle(text: 'Open Source Credits'),
-              const SizedBox(height: 12),
-              Text(
-                '$appName is built with the help of amazing open-source projects and APIs:',
-                style: AppText.bodyMuted,
-              ),
-              const SizedBox(height: 12),
-              _buildCreditItem(
-                context,
-                'Transitous',
-                'Public transit routing service',
-                LucideIcons.route,
-              ),
-              _buildCreditItem(
-                context,
-                'MapLibre GL',
-                'Mapping platform',
-                LucideIcons.map,
-              ),
-              _buildCreditItem(
-                context,
-                'Lucide Icons',
-                'Icon library',
-                LucideIcons.palette,
-              ),
-              const SizedBox(height: 32),
-            ],
+          const SizedBox(height: 24),
+          const SectionTitle(text: 'Contact'),
+          const SizedBox(height: 12),
+          _buildContactItem(
+            context,
+            'Issue Tracker',
+            'github.com/blauertee/transportia-plus/issues',
+            LucideIcons.github,
+            Environment.issueTrackerUrl,
           ),
+          if (Environment.contactEmail.isNotEmpty)
+            _buildContactItem(
+              context,
+              'Email',
+              Environment.contactEmail,
+              LucideIcons.mail,
+              'mailto:${Environment.contactEmail}',
+            ),
+          const SizedBox(height: 24),
+          const SectionTitle(text: 'Open Source Credits'),
+          const SizedBox(height: 12),
+          Text(
+            '$appName is built with the help of amazing open-source projects and APIs:',
+            style: AppText.bodyMuted,
+          ),
+          const SizedBox(height: 12),
+          _buildCreditItem(
+            context,
+            'Transitous',
+            'Public transit routing service',
+            LucideIcons.route,
+          ),
+          _buildCreditItem(
+            context,
+            'MapLibre GL',
+            'Mapping platform',
+            LucideIcons.map,
+          ),
+          _buildCreditItem(
+            context,
+            'Lucide Icons',
+            'Icon library',
+            LucideIcons.palette,
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );
