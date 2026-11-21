@@ -160,4 +160,29 @@ void main() {
     expect(text, isNot(contains('START')));
     expect(text, isNot(contains('null')));
   });
+
+  group('planned', () {
+    test('reads the same as the live text when on time', () {
+      expect(
+        itineraryAsText(_planned(), planned: true),
+        itineraryAsText(_planned()),
+      );
+    });
+
+    test('leaves out cancellations', () {
+      final text = itineraryAsText(_planned(cancelled: true), planned: true);
+      expect(text, isNot(contains('cancelled')));
+    });
+
+    test('gives the planned platform over a changed one', () {
+      final json = planItineraryJson(departure: _departure);
+      final ride = (json['legs'] as List)[1] as Map<String, dynamic>;
+      (ride['from'] as Map<String, dynamic>)['scheduledTrack'] = '11';
+
+      final trip = Itinerary.fromJson(json);
+
+      expect(itineraryAsText(trip), contains('platform 12'));
+      expect(itineraryAsText(trip, planned: true), contains('platform 11'));
+    });
+  });
 }

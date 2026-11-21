@@ -83,6 +83,18 @@ class PrefsKeys {
   /// was fetched, JSON-encoded. A cache; safe to delete.
   static const String rentalCatalogue = 'rental_catalogue';
 
+  /// Whether the rider switched on adding saved trips to a calendar.
+  static const String calendarSyncWanted = 'calendar_sync_wanted';
+
+  /// The calendar new saves go to.
+  static const String calendarSyncCalendar = 'calendar_sync_calendar';
+
+  /// The calendar the app made for itself, while it exists.
+  static const String calendarSyncOwnCalendar = 'calendar_sync_own_calendar';
+
+  /// Saved trip id → the event the app wrote for it, and its fingerprint.
+  static const String calendarSyncEvents = 'calendar_sync_events';
+
   /// How 1.0.3 stored the same settings. Read once by the 1.0.3 migration, then
   /// removed; nothing else touches them.
   static const String transitWalkingSpeed = 'transit_walking_speed';

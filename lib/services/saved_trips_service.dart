@@ -4,7 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
+import 'calendar_sync_service.dart';
 import 'itinerary_refresh_service.dart';
+
+/// Told when the rider saves, renames or removes a trip, and when the app
+/// clears old ones. Not told about live refreshes: those change times the
+/// rider sees in the app, not the trip they chose.
+abstract class SavedTripsListener {
+  void saved(SavedTrip trip);
+  void renamed(SavedTrip trip);
+  void removed(String id);
+  void pruned(List<String> ids);
+}
 
 /// Storage for connections the user chose to keep.
 ///
@@ -19,6 +30,9 @@ class SavedTripsService {
 
   /// How long a trip stays in the list after it has finished.
   static const Duration _keepPastTripsFor = Duration(days: 30);
+
+  /// Keeps the calendar in step with the list. Replaced in tests.
+  static SavedTripsListener listener = CalendarSyncService.listener;
 
   static final ValueNotifier<List<SavedTrip>> savedTripsListenable =
       ValueNotifier<List<SavedTrip>>(<SavedTrip>[]);
@@ -47,13 +61,16 @@ class SavedTripsService {
     trips.add(toStore);
 
     await _persist(prefs, trips);
+    listener.saved(toStore);
   }
 
   static Future<void> removeTrip(String id) async {
     final prefs = SharedPreferencesAsync();
     final trips = await _readTrips(prefs: prefs);
+    final before = trips.length;
     trips.removeWhere((t) => t.id == id);
     await _persist(prefs, trips);
+    if (trips.length < before) listener.removed(id);
   }
 
   /// Sets a user-chosen name. Pass null or blank to fall back to the
@@ -69,6 +86,7 @@ class SavedTripsService {
       trimmed == null || trimmed.isEmpty ? null : trimmed,
     );
     await _persist(prefs, trips);
+    listener.renamed(trips[index]);
   }
 
   /// Whether a refresh result is worth storing over the saved snapshot.
@@ -121,19 +139,21 @@ class SavedTripsService {
 
   /// Drops trips that finished more than [_keepPastTripsFor] ago. Returns
   /// how many were removed.
-  static Future<int> pruneExpired() async {
+  static Future<int> pruneExpired({DateTime? now}) async {
     final prefs = SharedPreferencesAsync();
     final trips = await _readTrips(prefs: prefs);
-    final cutoff = DateTime.now().subtract(_keepPastTripsFor);
+    final cutoff = (now ?? DateTime.now()).subtract(_keepPastTripsFor);
 
-    final before = trips.length;
-    trips.removeWhere((t) => t.arrivalTime.isBefore(cutoff));
-    final removed = before - trips.length;
+    final expired = [
+      for (final trip in trips)
+        if (trip.arrivalTime.isBefore(cutoff)) trip.id,
+    ];
+    if (expired.isEmpty) return 0;
 
-    if (removed > 0) {
-      await _persist(prefs, trips);
-    }
-    return removed;
+    trips.removeWhere((t) => expired.contains(t.id));
+    await _persist(prefs, trips);
+    listener.pruned(expired);
+    return expired.length;
   }
 
   static Future<List<SavedTrip>> _readTrips({

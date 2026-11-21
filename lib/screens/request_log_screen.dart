@@ -14,6 +14,7 @@ import '../utils/motis_request_summary.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/pressable_highlight.dart';
+import '../widgets/warning_notice.dart';
 
 /// Raw request text: URLs, parameters and bodies are read character by
 /// character, so they are set in a fixed-width face.
@@ -157,25 +158,11 @@ class _LoggingOffNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.alertBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.alertBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.circleAlert, size: 18, color: AppColors.alertIcon),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Logging is off. New requests are not recorded.',
-              style: TextStyle(fontSize: 13, color: AppColors.black),
-            ),
-          ),
-        ],
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: WarningNotice(
+        icon: LucideIcons.circleAlert,
+        body: 'Logging is off. New requests are not recorded.',
       ),
     );
   }
