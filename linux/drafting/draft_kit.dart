@@ -210,7 +210,12 @@ class DraftApp extends StatelessWidget {
         // as app.dart sets it; drafts are light.
         builder: (context, child) => CupertinoTheme(
           data: const CupertinoThemeData(brightness: Brightness.light),
-          child: child ?? const SizedBox.shrink(),
+          // Inside it, as app.dart nests it: icons that name no colour take
+          // the text colour, not the CupertinoTheme's blue.
+          child: IconTheme(
+            data: const IconThemeData(color: ThemeProvider.lightText),
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
         onGenerateRoute: (settings) => PageRouteBuilder<void>(
           settings: settings,
