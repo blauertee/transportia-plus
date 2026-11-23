@@ -22,7 +22,7 @@ import '../theme/app_colors.dart';
 import '../theme/journey_metrics.dart';
 import '../utils/changeover.dart';
 import '../utils/color_utils.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/duration_formatter.dart';
 import '../utils/itinerary_leg_utils.dart';
 import '../utils/journey_graph.dart';
@@ -443,12 +443,10 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   /// for expanding the stops they call at.
   void _showLegOnMap(int displayLegIndex) {
     Haptics.lightTick();
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryMapScreen(
-          itinerary: _itinerary,
-          initialLegIndex: displayLegIndex,
-        ),
+    context.openScreen(
+      ItineraryMapScreen(
+        itinerary: _itinerary,
+        initialLegIndex: displayLegIndex,
       ),
     );
   }
@@ -545,22 +543,20 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       'graph-to',
       name: widget.toName ?? widget.savedTrip?.toName,
     );
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryListScreen(
-          fromLat: origin.lat,
-          fromLon: origin.lon,
-          toLat: destination.lat,
-          toLon: destination.lon,
-          timeSelection: TimeSelection(
-            dateTime: _itinerary.startTime,
-            isArriveBy: false,
-          ),
-          fromSelection: from,
-          toSelection: to,
-          initialView: ResultsView.graph,
-          lockedUpTo: RideLock(_itinerary, ride),
+    context.openScreen(
+      ItineraryListScreen(
+        fromLat: origin.lat,
+        fromLon: origin.lon,
+        toLat: destination.lat,
+        toLon: destination.lon,
+        timeSelection: TimeSelection(
+          dateTime: _itinerary.startTime,
+          isArriveBy: false,
         ),
+        fromSelection: from,
+        toSelection: to,
+        initialView: ResultsView.graph,
+        lockedUpTo: RideLock(_itinerary, ride),
       ),
     );
   }
@@ -689,7 +685,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           children: [
             CustomAppBar(
               title: 'Itinerary Details',
-              onBackButtonPressed: () => Navigator.of(context).pop(),
               trailing: SaveTripButton(
                 itinerary: _itinerary,
                 fromName: widget.fromName ?? widget.savedTrip?.fromName,
@@ -1079,11 +1074,7 @@ class _JourneyOverviewWidgetState extends State<JourneyOverviewWidget> {
               const SizedBox(width: 16),
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).push(
-                    CustomPageRoute(
-                      child: ItineraryMapScreen(itinerary: itinerary),
-                    ),
-                  );
+                  context.openScreen(ItineraryMapScreen(itinerary: itinerary));
                 },
                 child: Semantics(
                   button: true,
@@ -1820,9 +1811,7 @@ class _LegDetailsWidgetState extends State<LegDetailsWidget> {
       if (isWalkLeg || tripId == null || tripId.isEmpty) return badge;
       return GestureDetector(
         onTap: () {
-          Navigator.of(
-            context,
-          ).push(CustomPageRoute(child: ConnectionInfoScreen(tripId: tripId)));
+          context.openScreen(ConnectionInfoScreen(tripId: tripId));
         },
         child: badge,
       );

@@ -12,7 +12,6 @@ class AppPageScaffold extends StatelessWidget {
     this.scrollable = false,
     this.padding,
     this.footer,
-    this.onBack,
     this.showBack = true,
   });
 
@@ -22,7 +21,6 @@ class AppPageScaffold extends StatelessWidget {
   final bool scrollable;
   final EdgeInsetsGeometry? padding;
   final Widget? footer;
-  final VoidCallback? onBack;
 
   /// False for a screen presented as a tab rather than pushed.
   final bool showBack;
@@ -49,11 +47,7 @@ class AppPageScaffold extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomAppBar(
-              title: title,
-              showBack: showBack,
-              onBackButtonPressed: onBack ?? () => Navigator.of(context).pop(),
-            ),
+            CustomAppBar(title: title, showBack: showBack),
             Expanded(child: content),
             if (footer != null) footer!,
           ],

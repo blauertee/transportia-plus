@@ -9,7 +9,6 @@ const Duration _kTitleFade = Duration(milliseconds: 150);
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
-  final VoidCallback? onBackButtonPressed;
 
   /// Optional action pinned to the right of the bar, opposite the back
   /// button.
@@ -25,7 +24,6 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   const CustomAppBar({
     super.key,
     required this.title,
-    this.onBackButtonPressed,
     this.trailing,
     this.showBack = true,
     this.titleVisible = true,
@@ -45,8 +43,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: PressableHighlight(
-                  onPressed:
-                      onBackButtonPressed ?? () => Navigator.of(context).pop(),
+                  // The same back as the system's, so a screen's
+                  // BackStep is asked first.
+                  onPressed: () => Navigator.of(context).maybePop(),
                   borderRadius: BorderRadius.circular(22),
                   enableHaptics: false,
                   child: Row(

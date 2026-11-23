@@ -8,7 +8,7 @@ import 'package:transportia/screens/developer_info_screen.dart';
 import 'package:transportia/screens/info_screen.dart';
 import 'package:transportia/screens/legal_screen.dart';
 import 'package:transportia/screens/location_settings_screen.dart';
-import 'package:transportia/utils/custom_page_route.dart';
+import 'package:transportia/navigation/routes.dart';
 import 'package:transportia/screens/search_options_screen.dart';
 import 'package:transportia/environment.dart';
 import 'package:flutter/cupertino.dart';
@@ -57,9 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _openDeveloperInfo() {
     if (!mounted || _debugOpened) return;
     _debugOpened = true;
-    Navigator.of(
-      context,
-    ).push(CustomPageRoute(child: const DeveloperInfoScreen()));
+    context.openScreen(const DeveloperInfoScreen());
   }
 
   @override
@@ -82,9 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Location',
                 subtitle: 'Location permissions',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    CustomPageRoute(child: const LocationSettingsScreen()),
-                  );
+                  context.openScreen(const LocationSettingsScreen());
                 },
               ),
               SettingsTile(
@@ -92,9 +88,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Appearance',
                 subtitle: 'Theme and display',
                 onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(CustomPageRoute(child: const AppearanceScreen()));
+                  context.openScreen(const AppearanceScreen());
                 },
               ),
               SettingsTile(
@@ -102,9 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Search and routing options',
                 subtitle: 'Place search, rental providers, transfers',
                 onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(CustomPageRoute(child: const SearchOptionsScreen()));
+                  context.openScreen(const SearchOptionsScreen());
                 },
               ),
               SettingsTile(
@@ -112,9 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Advanced',
                 subtitle: 'Technical details for debugging',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    CustomPageRoute(child: const AdvancedSettingsScreen()),
-                  );
+                  context.openScreen(const AdvancedSettingsScreen());
                 },
               ),
             ],
@@ -131,9 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: CalendarSettingsScreen.title,
                   subtitle: 'Add saved trips to your calendar',
                   onPressed: () {
-                    Navigator.of(context).push(
-                      CustomPageRoute(child: const CalendarSettingsScreen()),
-                    );
+                    context.openScreen(const CalendarSettingsScreen());
                   },
                 ),
               ],
@@ -149,9 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'About ${Environment.appName}',
                 subtitle: 'About, credits, and more',
                 onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(CustomPageRoute(child: const InfoScreen()));
+                  context.openScreen(const InfoScreen());
                 },
               ),
               SettingsTile(
@@ -159,9 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Legal',
                 subtitle: 'Privacy policy and terms of service',
                 onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(CustomPageRoute(child: const LegalScreen()));
+                  context.openScreen(const LegalScreen());
                 },
               ),
             ],

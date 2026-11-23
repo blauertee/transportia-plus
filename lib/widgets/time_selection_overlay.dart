@@ -1,16 +1,10 @@
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../models/time_selection.dart';
+import '../navigation/routes.dart';
 import '../theme/app_colors.dart';
 import '../utils/time_utils.dart';
 import 'bottom_overlay_card.dart';
-
-/// How long the overlay takes to fade in and out.
-const Duration _kTimeOverlayFadeDuration = Duration(milliseconds: 180);
-
-/// Fully transparent: the overlay's own card dims what is behind it, so a
-/// barrier colour here would dim it twice.
-const Color _kTimeOverlayBarrierColor = Color(0x00000000);
 
 /// How many days past today the calendar reaches.
 const int _kSelectableDaysAhead = 365;
@@ -50,20 +44,15 @@ Future<void> showTimeSelectionOverlay(
   required VoidCallback onDismiss,
   bool showDepartArriveToggle = true,
 }) {
-  return showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    barrierLabel: 'Time selection',
-    barrierColor: _kTimeOverlayBarrierColor,
-    transitionDuration: _kTimeOverlayFadeDuration,
-    pageBuilder: (context, _, __) => TimeSelectionOverlay(
+  return context.openSheet<void>(
+    label: 'Time selection',
+    dismissible: false,
+    builder: (_) => TimeSelectionOverlay(
       currentSelection: currentSelection,
       onSelectionChanged: onSelectionChanged,
       onDismiss: onDismiss,
       showDepartArriveToggle: showDepartArriveToggle,
     ),
-    transitionBuilder: (context, animation, _, child) =>
-        FadeTransition(opacity: animation, child: child),
   );
 }
 

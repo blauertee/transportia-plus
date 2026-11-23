@@ -14,7 +14,7 @@ import '../services/saved_places_service.dart';
 import '../services/transitous_geocode_service.dart';
 import '../services/transitous_map_service.dart';
 import '../theme/app_colors.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/favorite_icons.dart';
 import '../utils/haptics.dart';
 import '../utils/list_reorder.dart';
@@ -423,23 +423,20 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
 
   Future<void> _pickOnMap() async {
     final results = _mapResults;
-    final picked = await Navigator.of(context)
-        .push<TransitousLocationSuggestion>(
-          CustomPageRoute(
-            child: MapPlacePickerScreen.pick(
-              title: results.isEmpty
-                  ? widget.mapPickerTitle
-                  : 'Results for “$_query”',
-              confirmLabel: widget.mapPickerConfirmLabel,
-              results: results,
-              origin: widget.placeBias,
-              query: results.isEmpty ? null : _query,
-              type: widget.type,
-              // A point is not a stop, so a timetable is not offered one.
-              allowsPoint: !_stopsOnly,
-            ),
-          ),
-        );
+    final picked = await context.openScreen<TransitousLocationSuggestion>(
+      MapPlacePickerScreen.pick(
+        title: results.isEmpty
+            ? widget.mapPickerTitle
+            : 'Results for “$_query”',
+        confirmLabel: widget.mapPickerConfirmLabel,
+        results: results,
+        origin: widget.placeBias,
+        query: results.isEmpty ? null : _query,
+        type: widget.type,
+        // A point is not a stop, so a timetable is not offered one.
+        allowsPoint: !_stopsOnly,
+      ),
+    );
     if (!mounted || picked == null) return;
     _pick(picked);
   }

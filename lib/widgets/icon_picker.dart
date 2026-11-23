@@ -4,7 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../utils/app_icons.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/icon_catalogue.dart';
 import 'app_icon_view.dart';
 import 'app_page_scaffold.dart';
@@ -101,14 +101,12 @@ class IconPickerScreen extends StatefulWidget {
     required String confirmLabel,
     required String selected,
     List<String> suggestions = const [],
-  }) => Navigator.of(context).push<String>(
-    CustomPageRoute(
-      child: IconPickerScreen(
-        title: title,
-        confirmLabel: confirmLabel,
-        selected: selected,
-        suggestions: suggestions,
-      ),
+  }) => context.openScreen<String>(
+    IconPickerScreen(
+      title: title,
+      confirmLabel: confirmLabel,
+      selected: selected,
+      suggestions: suggestions,
     ),
   );
 

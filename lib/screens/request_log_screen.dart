@@ -9,7 +9,7 @@ import '../providers/theme_provider.dart';
 import '../api/motis_request_log.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/motis_request_summary.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/empty_state.dart';
@@ -90,10 +90,8 @@ class _RequestLogScreenState extends State<RequestLogScreen> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _RequestCard(
                             record: shown[i],
-                            onPressed: () => Navigator.of(context).push(
-                              CustomPageRoute(
-                                child: RequestDetailScreen(record: shown[i]),
-                              ),
+                            onPressed: () => context.openScreen(
+                              RequestDetailScreen(record: shown[i]),
                             ),
                           ),
                         ),

@@ -11,12 +11,10 @@ import 'custom_app_bar.dart';
 const bool _kShowIconInTitle = false;
 
 /// Platforms whose system already offers a way back: Android's back gesture
-/// or button, and the edge swipe [CustomPageRoute] gives iOS. Elsewhere a
-/// pushed screen keeps a back button.
-const Set<TargetPlatform> _kPlatformsWithSystemBack = {
-  TargetPlatform.android,
-  TargetPlatform.iOS,
-};
+/// or button. Elsewhere, iOS included, a pushed screen keeps a back button:
+/// the app ships for Android, and has no iOS-only navigation to give iOS a
+/// back of its own.
+const Set<TargetPlatform> _kPlatformsWithSystemBack = {TargetPlatform.android};
 
 /// How far a pushed screen scrolls before its name moves into the bar, where
 /// there is one: about the height of the title, so the name is never gone
