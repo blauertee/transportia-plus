@@ -115,5 +115,8 @@
 - Run `flutter analyze`, `flutter test` and `dart format .` before each commit, not once at the end; analyze must be clean, not merely no-worse.
 
 ## Security & Configuration Tips
+- Never put anything about the local dev setup or devices (machines, users,
+  paths, hardware) into anything that reaches GitHub: commits, branches, PRs,
+  issues, comments, CI config or logs.
 - Do not commit secrets or keys. Manage platform permissions via `permission_handler` and update `AndroidManifest.xml`/`Info.plist` as needed.
 - Keep `pubspec.yaml` assets in sync (e.g., `assets/images/welcome-image.png`).
