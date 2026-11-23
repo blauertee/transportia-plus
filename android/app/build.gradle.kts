@@ -43,16 +43,23 @@ android {
         includeInBundle = false
     }
 
+    // Nullable so builds without key.properties (debug APKs on PRs, forks)
+    // still configure; only a release build needs the keystore.
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
             storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-            storePassword = keystoreProperties["storePassword"] as String
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
     buildTypes {
+        // A separate id lets a debug build install beside a release build;
+        // their signatures differ, so one cannot replace the other.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
