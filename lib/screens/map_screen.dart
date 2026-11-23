@@ -27,7 +27,6 @@ import '../models/saved_trip.dart';
 import '../screens/itinerary_detail_screen.dart';
 import '../screens/itinerary_list_screen.dart';
 import '../screens/location_settings_screen.dart';
-import '../screens/timetables_screen.dart';
 import '../screens/location_search_screen.dart';
 import '../screens/via_stops_screen.dart';
 import '../services/location_service.dart';
@@ -50,7 +49,8 @@ import '../utils/geo_utils.dart';
 import '../utils/map_framing.dart';
 import '../utils/map_visibility.dart';
 import '../utils/haptics.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/back_step.dart';
+import '../navigation/routes.dart';
 import '../utils/leg_helper.dart';
 import '../utils/map_marker_utils.dart';
 import '../utils/polyline_utils.dart';
@@ -422,13 +422,11 @@ class _MapScreenState extends State<MapScreen>
   }
 
   /// Via stops need a search of their own, so they get a screen.
-  Future<void> _openViaStopPicker() async {
+  void _openViaStopPicker() {
     _unfocusInputs();
-    final updated = await Navigator.of(context).push<RoutingOptions>(
-      CustomPageRoute(child: ViaStopsScreen(options: _options)),
+    context.openScreen<void>(
+      ViaStopsScreen(options: _options, onChanged: _onOptionsChanged),
     );
-    if (!mounted || updated == null || updated == _options) return;
-    _onOptionsChanged(updated);
   }
 
   void _onOptionsChanged(RoutingOptions options) {
@@ -782,9 +780,7 @@ class _MapScreenState extends State<MapScreen>
       final status = await Permission.locationWhenInUse.status;
       if (!mounted) return;
       if (status.isPermanentlyDenied) {
-        Navigator.of(
-          context,
-        ).push(CustomPageRoute(child: const LocationSettingsScreen()));
+        context.openScreen(const LocationSettingsScreen());
       }
       return;
     }
@@ -1761,7 +1757,7 @@ class _MapScreenState extends State<MapScreen>
 
   void _closeTimeSelectionOverlay() {
     if (!_showTimeSelectionOverlay) return;
-    Navigator.of(context, rootNavigator: true).maybePop();
+    Navigator.of(context).maybePop();
   }
 
   void _toggleTimeSelectionOverlay() {
@@ -1794,11 +1790,10 @@ class _MapScreenState extends State<MapScreen>
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
-    return PopScope(
-      canPop: _canPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _stepBack();
-      },
+    return BackStep(
+      enabled: widget.isActive,
+      canStepBack: _canStepBack,
+      onStepBack: _stepBack,
       child: _showsMap
           ? AnnotatedRegion<SystemUiOverlayStyle>(
               value: systemBarsOverMap(
@@ -1811,22 +1806,21 @@ class _MapScreenState extends State<MapScreen>
     );
   }
 
-  bool get _canPop =>
-      !_isTripFocus &&
-      !_isQuickSettings &&
-      !_isSheetCollapsed &&
-      !_showTimeSelectionOverlay &&
-      _selectedStop == null &&
-      _longPressLatLng == null;
+  bool get _canStepBack =>
+      _isTripFocus ||
+      _isQuickSettings ||
+      _isSheetCollapsed ||
+      _selectedStop != null ||
+      _longPressLatLng != null;
 
   /// Back closes whatever is open over the search, innermost first, and
-  /// finally raises a card left down over the map.
+  /// finally raises a card left down over the map. The time picker is a
+  /// sheet of its own, which back closes before it gets here.
   void _stepBack() {
     if (_isTripFocus) return _exitTripFocus();
     if (_isQuickSettings) return _closeQuickSettings();
     if (_selectedStop != null) return _dismissStopOverlay();
     if (_longPressLatLng != null) return _dismissLongPressOverlay();
-    if (_showTimeSelectionOverlay) return _closeTimeSelectionOverlay();
     _expandSheetToCard();
     _stopDragRumble();
   }
@@ -2133,21 +2127,19 @@ class _MapScreenState extends State<MapScreen>
     final from = resolvedFrom.isMyLocation ? here! : resolvedFrom.latLng;
     final to = resolvedTo.isMyLocation ? here! : resolvedTo.latLng;
 
-    Navigator.of(context)
-        .push(
-          CupertinoPageRoute(
-            builder: (_) => ItineraryListScreen(
-              fromLat: from.latitude,
-              fromLon: from.longitude,
-              toLat: to.latitude,
-              toLon: to.longitude,
-              timeSelection: timeSelection,
-              options: _options,
-              // Not My Location: a trip saved from these results is reopened
-              // from somewhere else, where it would name the wrong place.
-              fromSelection: resolvedFrom.isMyLocation ? null : resolvedFrom,
-              toSelection: resolvedTo.isMyLocation ? null : resolvedTo,
-            ),
+    context
+        .openScreen(
+          ItineraryListScreen(
+            fromLat: from.latitude,
+            fromLon: from.longitude,
+            toLat: to.latitude,
+            toLon: to.longitude,
+            timeSelection: timeSelection,
+            options: _options,
+            // Not My Location: a trip saved from these results is reopened
+            // from somewhere else, where it would name the wrong place.
+            fromSelection: resolvedFrom.isMyLocation ? null : resolvedFrom,
+            toSelection: resolvedTo.isMyLocation ? null : resolvedTo,
           ),
         )
         .then((_) {
@@ -2436,21 +2428,18 @@ class _MapScreenState extends State<MapScreen>
   Future<void> _openLocationSearch(RouteFieldKind field) async {
     _unfocusInputs();
     _notifyOverlayVisibility(overlaysVisible: true);
-    final picked = await Navigator.of(context)
-        .push<TransitousLocationSuggestion>(
-          CustomPageRoute(
-            child: LocationSearchScreen(
-              title: field == RouteFieldKind.from ? 'Origin' : 'Destination',
-              bucket: SavedPlacesBucket.search,
-              initialQuery: _controllerFor(field).text,
-              placeBias: _placeBiasLatLng(),
-              // Offered on both endpoints, and whether or not location has
-              // been permitted yet: the row is how a rider finds out the app
-              // can do this, and tapping it is what asks.
-              showMyLocation: true,
-            ),
-          ),
-        );
+    final picked = await context.openScreen<TransitousLocationSuggestion>(
+      LocationSearchScreen(
+        title: field == RouteFieldKind.from ? 'Origin' : 'Destination',
+        bucket: SavedPlacesBucket.search,
+        initialQuery: _controllerFor(field).text,
+        placeBias: _placeBiasLatLng(),
+        // Offered on both endpoints, and whether or not location has
+        // been permitted yet: the row is how a rider finds out the app
+        // can do this, and tapping it is what asks.
+        showMyLocation: true,
+      ),
+    );
     if (!mounted) return;
     _notifyOverlayVisibility();
     if (picked == null) return;
@@ -3863,16 +3852,7 @@ class _MapScreenState extends State<MapScreen>
     final suggestion = _suggestionFromStop(stop);
     unawaited(_recordSavedPlace(suggestion));
     _dismissStopOverlay();
-    if (widget.onTimetableRequested != null) {
-      widget.onTimetableRequested!(suggestion);
-      widget.onTabChangeRequested?.call(1);
-      return;
-    }
-    Navigator.of(context).push(
-      CupertinoPageRoute(
-        builder: (_) => TimetablesScreen(initialStop: suggestion),
-      ),
-    );
+    widget.onTimetableRequested?.call(suggestion);
   }
 
   void _openAllSettings() {
@@ -4029,13 +4009,8 @@ class _MapScreenState extends State<MapScreen>
   void _onRecentTripTap(SavedTrip trip) {
     Haptics.lightTick();
     _unfocusInputs();
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryDetailScreen(
-          itinerary: trip.itinerary,
-          savedTrip: trip,
-        ),
-      ),
+    context.openScreen(
+      ItineraryDetailScreen(itinerary: trip.itinerary, savedTrip: trip),
     );
   }
 }

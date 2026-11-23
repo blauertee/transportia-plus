@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../api/endpoints/trip_endpoint.dart';
 import '../api/transitous_api_exception.dart';
 import '../environment.dart';
+import '../navigation/routes.dart';
 import '../providers/theme_provider.dart';
 import '../services/rental_providers_service.dart';
 import '../services/routing_options_service.dart';
@@ -91,11 +91,7 @@ class _SharedTripScreenState extends State<SharedTripScreen> {
       );
       if (!mounted) return;
       unawaited(
-        Navigator.of(context).pushReplacement(
-          CupertinoPageRoute(
-            builder: (_) => ItineraryDetailScreen(itinerary: itinerary),
-          ),
-        ),
+        context.replaceScreen(ItineraryDetailScreen(itinerary: itinerary)),
       );
     } catch (error) {
       if (!mounted) return;
@@ -119,10 +115,7 @@ class _SharedTripScreenState extends State<SharedTripScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CustomAppBar(
-              title: 'Shared trip',
-              onBackButtonPressed: () => Navigator.of(context).pop(),
-            ),
+            CustomAppBar(title: 'Shared trip'),
             Expanded(
               child: switch (_stage) {
                 _Stage.askServer => _buildServerQuestion(),

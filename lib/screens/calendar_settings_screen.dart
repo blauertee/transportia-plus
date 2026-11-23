@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../models/device_calendar.dart';
+import '../navigation/routes.dart';
 import '../providers/theme_provider.dart';
 import '../services/calendar_sync_service.dart';
 import '../services/saved_trips_service.dart';
@@ -26,9 +27,6 @@ const double _kHighlightInset = 10;
 
 /// Whether the app may read and write the device's calendars.
 enum CalendarAccess { granted, denied, permanentlyDenied }
-
-/// How long the picker sheet takes to fade in and out.
-const Duration _kSheetFadeDuration = Duration(milliseconds: 180);
 
 /// Asks Android about the calendar permission. Replaced in tests.
 class CalendarPermission {
@@ -188,26 +186,15 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     }
     if (!mounted) return;
 
-    DeviceCalendar? picked;
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: CalendarPickerSheet.title,
-      barrierColor: const Color(0x00000000),
-      transitionDuration: _kSheetFadeDuration,
-      pageBuilder: (sheetContext, _, _) => CalendarPickerSheet(
+    final choice = await context.openSheet<DeviceCalendar>(
+      label: CalendarPickerSheet.title,
+      builder: (sheetContext) => CalendarPickerSheet(
         calendars: calendars,
         selectedId: _calendar?.id,
-        onPicked: (calendar) {
-          picked = calendar;
-          Navigator.of(sheetContext).pop();
-        },
+        onPicked: (calendar) => Navigator.of(sheetContext).pop(calendar),
         onDismiss: () => Navigator.of(sheetContext).pop(),
       ),
-      transitionBuilder: (_, animation, _, child) =>
-          FadeTransition(opacity: animation, child: child),
     );
-    final choice = picked;
     if (choice != null) await _switchTo(choice);
   }
 

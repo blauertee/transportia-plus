@@ -12,7 +12,7 @@ import '../services/rental_providers_service.dart';
 import '../services/routing_options_service.dart';
 import '../services/server_capabilities_service.dart';
 import '../theme/app_colors.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/place_bias.dart';
 import '../widgets/app_screen.dart';
 import 'quick_access_screen.dart';
@@ -161,9 +161,7 @@ class _SearchOptionsScreenState extends State<SearchOptionsScreen> {
             description:
                 'Which modes each icon on the routing card switches, and '
                 'what the sections are called.',
-            onTap: () => Navigator.of(
-              context,
-            ).push(CustomPageRoute<void>(child: const QuickAccessScreen())),
+            onTap: () => context.openScreen(const QuickAccessScreen()),
           ),
         ],
       ),

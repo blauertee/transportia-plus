@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:transportia/utils/custom_page_route.dart';
 import 'package:transportia/widgets/app_screen.dart';
 import 'package:transportia/widgets/custom_app_bar.dart';
 
@@ -58,19 +57,21 @@ void main() {
     expect(find.byType(CustomAppBar), findsNothing);
   });
 
-  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
-    testWidgets('a page has no back bar on ${platform.name}, which has its '
-        'own way back', (tester) async {
-      await _on(platform, () async {
-        await _pump(tester, _page());
+  testWidgets('a page has no back bar on Android, which has its own way '
+      'back', (tester) async {
+    await _on(TargetPlatform.android, () async {
+      await _pump(tester, _page());
 
-        expect(find.byType(CustomAppBar), findsNothing);
-        expect(find.text('Appearance'), findsOneWidget);
-      });
+      expect(find.byType(CustomAppBar), findsNothing);
+      expect(find.text('Appearance'), findsOneWidget);
     });
-  }
+  });
 
-  for (final platform in [TargetPlatform.linux, TargetPlatform.windows]) {
+  for (final platform in [
+    TargetPlatform.iOS,
+    TargetPlatform.linux,
+    TargetPlatform.windows,
+  ]) {
     testWidgets('a page keeps a back bar on ${platform.name}', (tester) async {
       await _on(platform, () async {
         await _pump(tester, _page());
@@ -144,22 +145,5 @@ void main() {
     await _pump(tester, const Center(child: ScreenIcon()));
 
     expect(find.byType(Icon), findsNothing);
-  });
-
-  testWidgets('a pushed page is swiped back from the left edge', (
-    tester,
-  ) async {
-    await _pump(tester, const Text('Home'));
-    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-    navigator.push(CustomPageRoute<void>(child: _page()));
-    await tester.pumpAndSettle();
-    expect(find.text('Home'), findsNothing);
-
-    // Past half the width, where the gesture commits to going back.
-    await tester.dragFrom(const Offset(5, 300), const Offset(600, 0));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Appearance'), findsNothing);
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import '../navigation/back_step.dart';
 import '../widgets/floating_nav_bar.dart';
 import 'map_screen.dart';
 import 'saved_trips_screen.dart';
@@ -77,14 +78,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return 1.0 - Curves.easeInOut.transform(fadeProgress);
   }
 
-  bool _handleBackGesture() {
-    if (_currentIndex != 0) {
-      setState(() => _currentIndex = 0);
-      return false;
-    }
-    return true;
-  }
-
   @override
   void dispose() {
     PlanRequests.pending.removeListener(_handlePlanRequested);
@@ -96,13 +89,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _currentIndex == 0,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          _handleBackGesture();
-        }
-      },
+    // Each tab undoes its own steps first; then back returns to routing.
+    return BackStep(
+      canStepBack: _currentIndex != _kMapTabIndex,
+      onStepBack: () => setState(() => _currentIndex = _kMapTabIndex),
       child: Stack(
         children: [
           IndexedStack(

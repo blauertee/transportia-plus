@@ -7,7 +7,7 @@ import '../providers/theme_provider.dart';
 import '../api/motis_request_log.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/section_title.dart';
 import '../widgets/settings_tile.dart';
@@ -106,9 +106,7 @@ class _RequestLogCard extends StatelessWidget {
             1 => '1 request',
             final n => '$n requests',
           },
-          onPressed: () => Navigator.of(
-            context,
-          ).push(CustomPageRoute(child: const RequestLogScreen())),
+          onPressed: () => context.openScreen(const RequestLogScreen()),
         ),
       ),
     );

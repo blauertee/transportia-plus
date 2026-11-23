@@ -13,6 +13,8 @@
   - `lib/screens/`: UI screens (e.g., `map_screen.dart`, `welcome_screen.dart`),
     with a subdirectory per screen large enough to be split up.
   - `lib/services/`: platform/data services (e.g., `location_service.dart`).
+  - `lib/navigation/`: how screens and sheets open and how back is caught;
+    see Navigation.
   - `lib/migrations/`: storage migrations; one at a time, see Storage & Migrations.
   - `lib/utils/`: pure helpers — no widgets, no `BuildContext`. Shared logic
     belongs here.
@@ -21,8 +23,9 @@
     `skeletons/`.
   - `lib/providers/`, `lib/theme/`, `lib/constants/`, `lib/animations/`:
     app state, colours, preference keys, shared curves.
-- `docs/`: audit trackers (`doc-contradictions.md`, `unused-code.md`) and
-  the measurements behind tuned constants (`geocode-place-bias.md`).
+- `docs/`: audit trackers (`doc-contradictions.md`, `unused-code.md`),
+  the measurements behind tuned constants (`geocode-place-bias.md`) and the
+  screen tree with its back routes (`navigation.md`).
 - `linux/drafting/`: renders app screens to PNGs for design review; see its
   README. Unrelated to the Linux desktop runner beside it.
 - `assets/`: images and static assets (declared in `pubspec.yaml`).
@@ -60,6 +63,12 @@
 - Scope constants where used: file-level `_k…`; `static const` on the class; `lib/theme/` app-wide.
 - Comment why code is as it is; delete comments describing what it used to be.
 - Keep comments on constraints still live, even when they read as history.
+
+## Navigation
+- Open screens with `context.openScreen`, sheets with `context.openSheet`.
+- Catch back only with `BackStep`; back buttons call `maybePop`.
+- `test/navigation_guard_test.dart` enforces both.
+- Add each new path to `docs/navigation.md`.
 
 ## Testing Guidelines
 - Place tests in `test/` with `_test.dart` suffix (e.g., `route_field_box_test.dart`).

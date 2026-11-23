@@ -16,7 +16,8 @@ import '../services/stop_times_service.dart';
 import '../screens/location_search_screen.dart';
 import '../services/transitous_geocode_service.dart';
 import '../utils/color_utils.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/back_step.dart';
+import '../navigation/routes.dart';
 import '../utils/leg_helper.dart' show getLegIcon;
 import '../utils/reported_time.dart';
 import '../utils/stop_time_utils.dart';
@@ -123,7 +124,9 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
   @override
   void didUpdateWidget(covariant TimetablesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.initialStop?.id != oldWidget.initialStop?.id) {
+    // Each request is a new suggestion, so the same stop asked for again,
+    // after back cleared it, still opens.
+    if (!identical(widget.initialStop, oldWidget.initialStop)) {
       _applyInitialStop(widget.initialStop);
     }
     // Where the rider is now, for the list that is about to be built again.
@@ -245,7 +248,7 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
 
   void _closeTimeSelectionOverlay() {
     if (!_showTimeSelectionOverlay) return;
-    Navigator.of(context, rootNavigator: true).maybePop();
+    Navigator.of(context).maybePop();
   }
 
   void _handleTimeButtonTapDown() {
@@ -277,6 +280,14 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
       if (!mounted) return;
       _onSearch();
     });
+  }
+
+  /// Back puts the keyboard away, then the stop, and only then leaves the
+  /// tab: a stop's departures are a step into the tab, not a place of their
+  /// own.
+  void _stepBack() {
+    if (_searchFocus.hasFocus) return _searchFocus.unfocus();
+    _clearStop();
   }
 
   /// Puts the screen back to being the stop search.
@@ -652,9 +663,7 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
   Widget _buildStopTimeTile(StopTime stopTime) {
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
-          CustomPageRoute(child: ConnectionInfoScreen(tripId: stopTime.tripId)),
-        );
+        context.openScreen(ConnectionInfoScreen(tripId: stopTime.tripId));
       },
       child: _StopTimeCard(stopTime: stopTime),
     );
@@ -674,17 +683,10 @@ class _TimetablesScreenState extends State<TimetablesScreen> {
   Widget build(BuildContext context) {
     context.watch<ThemeProvider>();
 
-    return PopScope(
-      canPop: !_searchFocus.hasFocus && !_showTimeSelectionOverlay,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
-          if (_showTimeSelectionOverlay) {
-            _closeTimeSelectionOverlay();
-          } else if (_searchFocus.hasFocus) {
-            _searchFocus.unfocus();
-          }
-        }
-      },
+    return BackStep(
+      enabled: widget.isOpen,
+      canStepBack: _searchFocus.hasFocus || _selectedStop != null,
+      onStepBack: _stepBack,
       child: GestureDetector(
         onTap: () {
           _searchFocus.unfocus();

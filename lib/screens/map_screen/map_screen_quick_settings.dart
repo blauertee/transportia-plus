@@ -279,24 +279,14 @@ class _QuickButtonSelectFieldState extends State<_QuickButtonSelectField> {
           ),
         )
         .toList();
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'Quick button',
-      barrierColor: const Color(0x00000000),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, _, __) {
-        return QuickButtonPickerSheet<_QuickButtonAction>(
-          selected: widget.value,
-          options: pickerOptions,
-          onSelected: (action) {
-            widget.onChanged(action);
-          },
-        );
-      },
-      transitionBuilder: (context, animation, _, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
+    context.openSheet<void>(
+      label: 'Quick button',
+      dismissible: false,
+      builder: (_) => QuickButtonPickerSheet<_QuickButtonAction>(
+        selected: widget.value,
+        options: pickerOptions,
+        onSelected: widget.onChanged,
+      ),
     );
   }
 

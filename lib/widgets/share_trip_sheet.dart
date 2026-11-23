@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../environment.dart';
 import '../models/itinerary.dart';
+import '../navigation/routes.dart';
 import '../services/calendar_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
@@ -13,9 +14,6 @@ import '../utils/trip_link.dart';
 import 'bottom_overlay_card.dart';
 import 'pressable_highlight.dart';
 import 'validation_toast.dart';
-
-/// How long the sheet takes to fade in and out.
-const Duration _kShareSheetFadeDuration = Duration(milliseconds: 180);
 
 /// Hands [text] to the system share sheet. A parameter so tests can see what
 /// would have been shared.
@@ -40,13 +38,9 @@ void showShareTripSheet(
   ShareText share = _shareWithSystem,
   AddToCalendar? addToCalendar,
 }) {
-  showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: ShareTripSheet.title,
-    barrierColor: const Color(0x00000000),
-    transitionDuration: _kShareSheetFadeDuration,
-    pageBuilder: (context, _, _) => ShareTripSheet(
+  context.openSheet<void>(
+    label: ShareTripSheet.title,
+    builder: (sheetContext) => ShareTripSheet(
       itinerary: itinerary,
       fromName: fromName,
       toName: toName,
@@ -58,10 +52,8 @@ void showShareTripSheet(
         if (!context.mounted) return;
         showValidationToast(context, 'No calendar app found');
       },
-      onDismiss: () => Navigator.of(context, rootNavigator: true).pop(),
+      onDismiss: () => Navigator.of(sheetContext).pop(),
     ),
-    transitionBuilder: (context, animation, _, child) =>
-        FadeTransition(opacity: animation, child: child),
   );
 }
 

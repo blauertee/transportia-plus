@@ -7,7 +7,7 @@ import '../screens/connection_info_screen.dart';
 import '../services/stop_times_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/color_utils.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../utils/leg_helper.dart';
 import '../utils/reported_time.dart';
 import 'bottom_overlay_card.dart';
@@ -17,13 +17,6 @@ import 'pressable_highlight.dart';
 import 'route_badge_pill.dart';
 import 'skeletons/skeleton_shimmer.dart';
 import '../theme/app_text.dart';
-
-/// How long the sheet takes to fade in and out.
-const Duration _kStopSheetFadeDuration = Duration(milliseconds: 180);
-
-/// Fully transparent, so the sheet floats over the screen it was opened from
-/// rather than dimming it.
-const Color _kStopSheetBarrierColor = Color(0x00000000);
 
 /// Shows [StopDeparturesSheet] over the current screen.
 ///
@@ -37,20 +30,14 @@ void showStopDeparturesSheet(
 }) {
   if (stopId == null || stopId.isEmpty) return;
 
-  showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Stop departures',
-    barrierColor: _kStopSheetBarrierColor,
-    transitionDuration: _kStopSheetFadeDuration,
-    pageBuilder: (context, _, __) => StopDeparturesSheet(
+  context.openSheet<void>(
+    label: 'Stop departures',
+    builder: (sheetContext) => StopDeparturesSheet(
       stopId: stopId,
       stopName: stopName,
       referenceTime: referenceTime,
-      onDismiss: () => Navigator.of(context, rootNavigator: true).pop(),
+      onDismiss: () => Navigator.of(sheetContext).pop(),
     ),
-    transitionBuilder: (context, animation, _, child) =>
-        FadeTransition(opacity: animation, child: child),
   );
 }
 
@@ -118,10 +105,8 @@ class _StopDeparturesSheetState extends State<StopDeparturesSheet> {
 
   void _openConnection(String tripId) {
     if (tripId.isEmpty) return;
-    widget.onDismiss();
-    Navigator.of(
-      context,
-    ).push(CustomPageRoute(child: ConnectionInfoScreen(tripId: tripId)));
+    // Over the sheet, not instead of it: back from the trip comes back here.
+    context.openScreen(ConnectionInfoScreen(tripId: tripId));
   }
 
   @override

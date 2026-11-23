@@ -8,7 +8,7 @@ import '../models/saved_trip.dart';
 import '../providers/theme_provider.dart';
 import '../services/saved_trips_service.dart';
 import '../theme/app_colors.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../widgets/app_screen.dart';
 import '../widgets/edit_saved_trip_overlay.dart';
 import '../widgets/empty_state.dart';
@@ -49,13 +49,8 @@ class _SavedTripsScreenState extends State<SavedTripsScreen> {
   }
 
   void _openTrip(SavedTrip trip) {
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryDetailScreen(
-          itinerary: trip.itinerary,
-          savedTrip: trip,
-        ),
-      ),
+    context.openScreen(
+      ItineraryDetailScreen(itinerary: trip.itinerary, savedTrip: trip),
     );
   }
 

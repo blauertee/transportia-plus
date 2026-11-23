@@ -11,6 +11,7 @@ import 'environment.dart';
 import 'constants/prefs_keys.dart';
 import 'models/my_location.dart';
 import 'models/time_selection.dart';
+import 'navigation/routes.dart';
 import 'providers/backend_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/itinerary_list_screen.dart';
@@ -57,16 +58,8 @@ class Transportia extends StatelessWidget {
               ],
               supportedLocales: const [Locale('en', 'US'), Locale('en')],
               pageRouteBuilder:
-                  <T>(RouteSettings settings, WidgetBuilder builder) {
-                    return PageRouteBuilder<T>(
-                      settings: settings,
-                      pageBuilder: (context, animation, secondaryAnimation) =>
-                          builder(context),
-                      transitionsBuilder:
-                          (context, animation, secondaryAnimation, child) =>
-                              child,
-                    );
-                  },
+                  <T>(RouteSettings settings, WidgetBuilder builder) =>
+                      ScreenRoute<T>(settings: settings, builder: builder),
               textStyle: baseTextStyle,
               builder: (context, child) {
                 final content = child ?? const SizedBox.shrink();
@@ -175,9 +168,7 @@ class _RootGateState extends State<_RootGate> {
     }
     final link = TripLink.tryParse(uri);
     if (link == null) return;
-    Navigator.of(
-      context,
-    ).push(CupertinoPageRoute(builder: (_) => SharedTripScreen(link: link)));
+    context.openScreen(SharedTripScreen(link: link));
   }
 
   void _handleGeoLink(Uri uri) {
@@ -191,15 +182,13 @@ class _RootGateState extends State<_RootGate> {
     if (_seen != true) {
       // No routing screen behind the welcome flow to land on.
       final currentPosition = LocationService.currentPosition();
-      Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (_) => ItineraryListScreen(
-            fromLat: currentPosition.then((position) => position.latitude),
-            fromLon: currentPosition.then((position) => position.longitude),
-            toLat: destination.latitude,
-            toLon: destination.longitude,
-            timeSelection: TimeSelection.now(),
-          ),
+      context.openScreen(
+        ItineraryListScreen(
+          fromLat: currentPosition.then((position) => position.latitude),
+          fromLon: currentPosition.then((position) => position.longitude),
+          toLat: destination.latitude,
+          toLon: destination.longitude,
+          timeSelection: TimeSelection.now(),
         ),
       );
       return;

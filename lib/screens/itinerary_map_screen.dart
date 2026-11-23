@@ -133,10 +133,7 @@ class _ItineraryMapScreenState extends State<ItineraryMapScreen> {
           children: [
             Column(
               children: [
-                CustomAppBar(
-                  title: 'Journey Map',
-                  onBackButtonPressed: () => Navigator.of(context).pop(),
-                ),
+                CustomAppBar(title: 'Journey Map'),
                 Expanded(
                   child: MapLibreMap(
                     onMapCreated: _onMapCreated,
@@ -380,23 +377,11 @@ class _ItineraryMapScreenState extends State<ItineraryMapScreen> {
     final referenceTime = stop.timeAtStop ?? DateTime.now().toUtc();
     setState(() => _selectedStopPopup = null);
 
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Stop departures',
-      barrierColor: const Color(0x00000000),
-      transitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, _, __) {
-        return StopDeparturesSheet(
-          stopId: stop.stopId,
-          stopName: stop.name?.isNotEmpty == true ? stop.name! : 'Stop',
-          referenceTime: referenceTime,
-          onDismiss: () => Navigator.of(context, rootNavigator: true).pop(),
-        );
-      },
-      transitionBuilder: (context, animation, _, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
+    showStopDeparturesSheet(
+      context,
+      stopId: stop.stopId,
+      stopName: stop.name?.isNotEmpty == true ? stop.name! : 'Stop',
+      referenceTime: referenceTime,
     );
   }
 

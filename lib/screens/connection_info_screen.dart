@@ -7,7 +7,7 @@ import '../models/itinerary.dart';
 import '../providers/theme_provider.dart';
 import '../services/trip_details_service.dart';
 import '../theme/app_colors.dart';
-import '../utils/custom_page_route.dart';
+import '../navigation/routes.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/journey/trip_details_view.dart';
@@ -108,10 +108,8 @@ class _ConnectionInfoScreenState extends State<ConnectionInfoScreen> {
   );
 
   void _openTripOnMap() {
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryMapScreen(itinerary: _itinerary!, showCarousel: false),
-      ),
+    context.openScreen(
+      ItineraryMapScreen(itinerary: _itinerary!, showCarousel: false),
     );
   }
 
@@ -124,10 +122,7 @@ class _ConnectionInfoScreenState extends State<ConnectionInfoScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomAppBar(
-              title: 'Connection Info',
-              onBackButtonPressed: () => Navigator.of(context).pop(),
-            ),
+            CustomAppBar(title: 'Connection Info'),
             Expanded(child: _buildBody()),
           ],
         ),

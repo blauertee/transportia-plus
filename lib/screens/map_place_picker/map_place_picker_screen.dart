@@ -169,10 +169,7 @@ class _MapPlacePickerScreenState extends State<MapPlacePickerScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            CustomAppBar(
-              title: widget.title,
-              onBackButtonPressed: () => Navigator.of(context).pop(),
-            ),
+            CustomAppBar(title: widget.title),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, box) => _buildMap(context, box.biggest),

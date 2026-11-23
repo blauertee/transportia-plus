@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:transportia/services/transitous_geocode_service.dart';
-import 'package:transportia/utils/custom_page_route.dart';
+import 'package:transportia/navigation/routes.dart';
 import 'package:transportia/utils/leg_helper.dart';
-import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -115,18 +114,16 @@ class ItineraryListScreen extends StatefulWidget {
       fromLon = from.lon;
     }
     unawaited(
-      navigator.push(
-        CupertinoPageRoute(
-          builder: (_) => ItineraryListScreen(
-            fromLat: fromLat,
-            fromLon: fromLon,
-            toLat: to.lat,
-            toLon: to.lon,
-            timeSelection: time,
-            options: options,
-            fromSelection: from.isMyLocation ? null : from,
-            toSelection: to,
-          ),
+      navigator.openScreen(
+        ItineraryListScreen(
+          fromLat: fromLat,
+          fromLon: fromLon,
+          toLat: to.lat,
+          toLon: to.lon,
+          timeSelection: time,
+          options: options,
+          fromSelection: from.isMyLocation ? null : from,
+          toSelection: to,
         ),
       ),
     );
@@ -296,59 +293,46 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
   @override
   Widget build(BuildContext context) {
     context.watch<ThemeProvider>();
-    return PopScope(
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          FocusScope.of(context).unfocus();
-        }
-      },
-      child: Container(
-        color: AppColors.white,
-        child: SafeArea(
-          child: Column(
-            children: [
-              CustomAppBar(
-                title: 'Search Results',
-                onBackButtonPressed: () {
-                  FocusScope.of(context).unfocus();
-                  Navigator.of(context).pop();
-                },
+    return Container(
+      color: AppColors.white,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const CustomAppBar(title: 'Search Results'),
+            ResultsViewTabs(
+              selected: _view,
+              onSelect: (view) => setState(() => _view = view),
+            ),
+            if (_view == ResultsView.list && _locks.isLocked)
+              _LockedJourneyHint(
+                controller: _locks,
+                originName: widget.fromSelection?.name,
               ),
-              ResultsViewTabs(
-                selected: _view,
-                onSelect: (view) => setState(() => _view = view),
-              ),
-              if (_view == ResultsView.list && _locks.isLocked)
-                _LockedJourneyHint(
-                  controller: _locks,
-                  originName: widget.fromSelection?.name,
-                ),
-              Expanded(
-                child: _view == ResultsView.graph
-                    ? _buildGraph()
-                    : _locks.results != null
-                    ? _buildLockedList(_locks.results!)
-                    : _isLoading
-                    ? _buildLoadingSkeleton()
-                    : _itineraries.isEmpty
-                    ? _buildEmpty()
-                    : BidirectionalPagedList<Itinerary>(
-                        controller: _scrollController,
-                        centerKey: _centerKey,
-                        items: _itineraries,
-                        centerIndex: _centerIndex,
-                        itemBuilder: _buildItineraryTile,
-                        hasPrevious: _previousPageCursor != null,
-                        hasNext: _nextPageCursor != null,
-                        isLoadingPrevious: _isLoadingPrevious,
-                        isLoadingNext: _isLoadingMore,
-                        onLoadPrevious: _loadPrevious,
-                        onLoadNext: _loadMore,
-                        trailingExtent: _kListBottomSpacing,
-                      ),
-              ),
-            ],
-          ),
+            Expanded(
+              child: _view == ResultsView.graph
+                  ? _buildGraph()
+                  : _locks.results != null
+                  ? _buildLockedList(_locks.results!)
+                  : _isLoading
+                  ? _buildLoadingSkeleton()
+                  : _itineraries.isEmpty
+                  ? _buildEmpty()
+                  : BidirectionalPagedList<Itinerary>(
+                      controller: _scrollController,
+                      centerKey: _centerKey,
+                      items: _itineraries,
+                      centerIndex: _centerIndex,
+                      itemBuilder: _buildItineraryTile,
+                      hasPrevious: _previousPageCursor != null,
+                      hasNext: _nextPageCursor != null,
+                      isLoadingPrevious: _isLoadingPrevious,
+                      isLoadingNext: _isLoadingMore,
+                      onLoadPrevious: _loadPrevious,
+                      onLoadNext: _loadMore,
+                      trailingExtent: _kListBottomSpacing,
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -364,13 +348,11 @@ class _ItineraryListScreenState extends State<ItineraryListScreen> {
         toName: widget.toSelection?.name,
       ),
     );
-    Navigator.of(context).push(
-      CustomPageRoute(
-        child: ItineraryDetailScreen(
-          itinerary: itinerary,
-          fromName: widget.fromSelection?.name,
-          toName: widget.toSelection?.name,
-        ),
+    context.openScreen(
+      ItineraryDetailScreen(
+        itinerary: itinerary,
+        fromName: widget.fromSelection?.name,
+        toName: widget.toSelection?.name,
       ),
     );
   }
