@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:transportia/models/map_render_profile.dart';
 import 'package:transportia/widgets/map/configured_map_platform.dart';
 
-/// The profile phones without Vulkan get.
+/// Every part away from the standard profile.
 const MapRenderProfile _compatible = MapRenderProfile(
   renderer: FlutterRenderer.skia,
   composition: MapComposition.hybrid,

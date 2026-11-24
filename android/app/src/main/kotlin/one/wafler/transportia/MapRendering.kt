@@ -49,12 +49,14 @@ class MapRendering private constructor(
 
         /**
          * What phones without Vulkan get. Impeller falls back to OpenGL ES
-         * there, which leaves the map texture blank on some older drivers.
+         * there, and on some older drivers the map's texture then stays
+         * blank; hybrid composition draws the map outside Flutter's picture.
+         * Skia draws it too, but Flutter is phasing Skia out on Android.
          */
         private val COMPATIBLE = mapOf(
-            RENDERER to SKIA,
+            RENDERER to "impeller",
             COMPOSITION to "hybrid",
-            SURFACE to "surfaceView",
+            SURFACE to "textureView",
         )
 
         /**
