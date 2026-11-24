@@ -140,8 +140,6 @@ class _MapScreenState extends State<MapScreen>
   double? _snapTarget;
   bool _hasVibrator = false;
   bool _hasCustomVibration = false;
-  Timer? _dragVibeTimer;
-  Timer? _dragVibeDeadline;
   bool _didInitLocation = false;
   VoidCallback? _activateListener;
   TransitousLocationSuggestion? _fromSelection;
@@ -251,9 +249,6 @@ class _MapScreenState extends State<MapScreen>
 
   /// How often focused-trip times are re-checked against the clock.
   static const Duration _tripRefreshTick = Duration(seconds: 5);
-
-  /// Gap between pulses of the rumble felt while dragging the sheet.
-  static const Duration _dragRumbleInterval = Duration(milliseconds: 90);
   static const String _kShowStopsPrefKey = PrefsKeys.mapShowStops;
   static const String _kQuickButtonPrefKey = PrefsKeys.mapQuickButton;
   static const String _kShowVehiclesPrefKey = PrefsKeys.mapShowVehicles;
@@ -485,7 +480,6 @@ class _MapScreenState extends State<MapScreen>
     _toCtrl.removeListener(_handleToTextChanged);
     _fromCtrl.dispose();
     _toCtrl.dispose();
-    _stopDragRumble();
     _activateListener?.call();
     _activateListener = null;
     _stopMapTimers();
@@ -1835,7 +1829,6 @@ class _MapScreenState extends State<MapScreen>
     if (_selectedStop != null) return _dismissStopOverlay();
     if (_longPressLatLng != null) return _dismissLongPressOverlay();
     _expandSheetToCard();
-    _stopDragRumble();
   }
 
   /// Without the map the search is the page: the same card, nothing under it
@@ -2296,13 +2289,11 @@ class _MapScreenState extends State<MapScreen>
   void _toggleSheet(double expandedTop, double collapsedTop) {
     _unfocusInputs();
     _animateTo(_isSheetCollapsed ? expandedTop : collapsedTop, collapsedTop);
-    _stopDragRumble();
   }
 
   void _onSheetDragStart() {
     _unfocusInputs();
     _snapCtrl.stop();
-    _startDragRumble();
   }
 
   void _onSheetDragUpdate(double dy, double topStop, double collapsedTop) {
@@ -2318,7 +2309,6 @@ class _MapScreenState extends State<MapScreen>
       _snapStopFor(velocityDy, [expandedTop, collapsedTop]),
       collapsedTop,
     );
-    _stopDragRumble();
   }
 
   void _animateTo(double target, double collapsedTop) {
@@ -2359,29 +2349,6 @@ class _MapScreenState extends State<MapScreen>
     _hasCustomVibration = await Haptics.hasCustomVibrationsSupport();
     if (!mounted) return;
     setState(() {});
-  }
-
-  /// Longer than any real drag, and short enough that a missed stop is a
-  /// blip rather than a phone that will not settle.
-  ///
-  /// The loop bounds itself rather than trusting every call site to remember
-  /// to stop it.
-  static const Duration _maxDragRumble = Duration(seconds: 4);
-
-  void _startDragRumble() {
-    _stopDragRumble();
-    if (!_hasCustomVibration || !Haptics.isEnabled) return;
-    _dragVibeTimer = Timer.periodic(_dragRumbleInterval, (_) {
-      Haptics.dragRumblePulse();
-    });
-    _dragVibeDeadline = Timer(_maxDragRumble, _stopDragRumble);
-  }
-
-  void _stopDragRumble() {
-    _dragVibeTimer?.cancel();
-    _dragVibeTimer = null;
-    _dragVibeDeadline?.cancel();
-    _dragVibeDeadline = null;
   }
 
   void _handleFromTextChanged() => _handleTextChanged(RouteFieldKind.from);
@@ -3731,7 +3698,6 @@ class _MapScreenState extends State<MapScreen>
     final collapsedTop = _lastComputedCollapsedTop;
     if (expandedTop != null && collapsedTop != null) {
       _animateTo(expandedTop, collapsedTop);
-      _stopDragRumble();
     }
   }
 
@@ -3966,7 +3932,6 @@ class _MapScreenState extends State<MapScreen>
     _dismissLongPressOverlay();
     if (_isSheetCollapsed) return;
     _unfocusInputs();
-    _stopDragRumble();
     final colTop = _lastComputedCollapsedTop;
     final expTop = _lastComputedExpandedTop;
     if (colTop != null && expTop != null) {
