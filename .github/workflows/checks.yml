@@ -70,11 +70,11 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      # Debuggable, so `run-as` and a debugger can attach to it. Only
-      # arm64 keeps the download small; CONTACT_EMAIL stays unset because
-      # fork PRs get no secrets.
+      # Debuggable, so `run-as` and a debugger can attach to it. Both ARM
+      # ABIs, so it installs on 32-bit phones as well as 64-bit ones;
+      # CONTACT_EMAIL stays unset because fork PRs get no secrets.
       - name: Build
-        run: flutter build apk --debug --target-platform android-arm64
+        run: flutter build apk --debug --target-platform android-arm,android-arm64
 
       - name: Upload
         uses: actions/upload-artifact@v4
