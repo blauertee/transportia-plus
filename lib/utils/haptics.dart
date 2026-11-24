@@ -24,14 +24,12 @@ class Haptics {
   }
 
   /// Vibration amplitudes, on the 1–255 scale the platform takes.
-  static const int _rumbleAmplitude = 25;
   static const int _snapAmplitude = 90;
   static const int _tickAmplitude = 120;
   static const int _firmAmplitude = 200;
 
   /// Pulse lengths in milliseconds. Anything under about ten reads as a click
   /// rather than a buzz.
-  static const int _rumblePulseMs = 8;
   static const int _snapMs = 10;
   static const int _lightTickMs = 12;
   static const int _mediumTickMs = 18;
@@ -72,10 +70,6 @@ class Haptics {
 
   static Future<void> mediumTick() async {
     await _tryVibrate(duration: _mediumTickMs, amplitude: _firmAmplitude);
-  }
-
-  static Future<void> dragRumblePulse() async {
-    await _tryVibrate(duration: _rumblePulseMs, amplitude: _rumbleAmplitude);
   }
 
   static Future<void> snap({required bool useCustomAmplitude}) async {
