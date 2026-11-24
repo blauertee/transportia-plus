@@ -75,8 +75,8 @@ class BottomSheetHandle extends StatelessWidget {
       onVerticalDragStart: (_) => drag.onStart(),
       onVerticalDragUpdate: (d) => drag.onUpdate(d.delta.dy),
       onVerticalDragEnd: (d) => drag.onEnd(d.velocity.pixelsPerSecond.dy),
-      // A drag that loses the arena after starting reports no end, and the
-      // drag rumble only stops on one.
+      // A drag that loses the arena after starting reports no end; without
+      // one the card would be left between its stops.
       onVerticalDragCancel: () => drag.onEnd(0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
