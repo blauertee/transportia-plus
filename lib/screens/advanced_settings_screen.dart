@@ -221,13 +221,15 @@ class _MapRenderingSection extends StatelessWidget {
       ToggleCard(
         icon: LucideIcons.layers,
         title: 'Hybrid composition',
-        subtitle: profile.composition == MapComposition.hybrid
+        subtitle: profile.composition == MapComposition.hybridComposition
             ? 'Android draws the map as a view of its own'
             : 'The map is copied into the app\'s picture',
-        value: profile.composition == MapComposition.hybrid,
+        value: profile.composition == MapComposition.hybridComposition,
         onChanged: (on) => service.setOverride(
           profile.copyWith(
-            composition: on ? MapComposition.hybrid : MapComposition.texture,
+            composition: on
+                ? MapComposition.hybridComposition
+                : MapComposition.flutter,
           ),
         ),
       ),

@@ -9,21 +9,37 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../models/map_render_profile.dart';
 
-/// maplibre_gl's own map view type.
-const String _kPluginViewType = 'plugins.flutter.io/maplibre_gl';
-
-/// `SurfaceViewMapFactory.kt`: the same map, drawn into a SurfaceView.
-const String _kSurfaceViewType = 'transportia/maplibre_surface_view';
+/// maplibre_gl's map view type.
+const String _kViewType = 'plugins.flutter.io/maplibre_gl';
 
 /// maplibre_gl's Android platform, with the map's view built as [profile]
 /// says. The standard profile is left entirely to the plugin.
 ///
-/// The plugin's own `useHybridComposition` switch is not used: it still
-/// creates the view through `initAndroidView`, which is texture based.
+/// The plugin's own `useHybridComposition` switch ties two things together:
+/// it draws into a TextureView, and it composes through `initAndroidView`,
+/// which is texture based too. Here the two are set apart, and hybrid
+/// composition is the real one (`initExpensiveAndroidView`).
 class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
   ConfiguredMapLibreChannel(this.profile);
 
   final MapRenderProfile profile;
+
+  /// Whether the map's native view exists and its channel is set up.
+  bool _isCreated = false;
+
+  @override
+  Future<void> initPlatform(int id) {
+    _isCreated = true;
+    return super.initPlatform(id);
+  }
+
+  /// maplibre_gl 0.27 also disposes the platform of a map whose native view
+  /// was never created, such as one left before it loaded, and its channel
+  /// is unset until then; there is nothing on the channel to let go of yet.
+  @override
+  void dispose() {
+    if (_isCreated) super.dispose();
+  }
 
   @override
   Widget buildView(
@@ -32,8 +48,8 @@ class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
     Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers,
   ) {
     final usesPluginView =
-        profile.composition == MapComposition.texture &&
-        profile.surface == MapSurface.textureView;
+        profile.composition == MapComposition.flutter &&
+        profile.surface == MapSurface.surfaceView;
     if (usesPluginView || defaultTargetPlatform != TargetPlatform.android) {
       return super.buildView(
         creationParams,
@@ -42,12 +58,13 @@ class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
       );
     }
 
-    final viewType = profile.surface == MapSurface.surfaceView
-        ? _kSurfaceViewType
-        : _kPluginViewType;
-    if (profile.composition == MapComposition.texture) {
+    // The plugin's native side reads this option as "draw into a
+    // TextureView", whatever the name says.
+    creationParams['options']?['useHybridComposition'] =
+        profile.surface == MapSurface.textureView;
+    if (profile.composition == MapComposition.flutter) {
       return AndroidView(
-        viewType: viewType,
+        viewType: _kViewType,
         onPlatformViewCreated: onPlatformViewCreated,
         gestureRecognizers: gestureRecognizers,
         creationParams: creationParams,
@@ -55,7 +72,6 @@ class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
       );
     }
     return _hybridView(
-      viewType,
       creationParams,
       onPlatformViewCreated,
       gestureRecognizers,
@@ -63,13 +79,12 @@ class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
   }
 
   Widget _hybridView(
-    String viewType,
     Map<String, dynamic> creationParams,
     OnPlatformViewCreatedCallback onPlatformViewCreated,
     Set<Factory<OneSequenceGestureRecognizer>>? gestureRecognizers,
   ) {
     return PlatformViewLink(
-      viewType: viewType,
+      viewType: _kViewType,
       surfaceFactory: (context, controller) => AndroidViewSurface(
         controller: controller as AndroidViewController,
         gestureRecognizers:
@@ -81,7 +96,7 @@ class ConfiguredMapLibreChannel extends MapLibreMethodChannel {
         final controller =
             PlatformViewsService.initExpensiveAndroidView(
                 id: params.id,
-                viewType: viewType,
+                viewType: _kViewType,
                 layoutDirection: TextDirection.ltr,
                 creationParams: creationParams,
                 creationParamsCodec: const StandardMessageCodec(),
