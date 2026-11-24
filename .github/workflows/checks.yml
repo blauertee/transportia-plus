@@ -1,8 +1,8 @@
 name: "Checks"
 
-# Static analysis and tests. Needs no secrets, so it also runs for PRs from
-# forks. To make it block merges, require the "Analyze and test" check in the
-# branch protection rules.
+# Static analysis, tests and a debuggable APK. Needs no secrets, so it also
+# runs for PRs from forks. To make it block merges, require the "Analyze and
+# test" check in the branch protection rules.
 on:
   pull_request:
     branches:
@@ -45,3 +45,40 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  debug-apk:
+    name: Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set Up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: oracle
+          java-version: '25'
+
+      - name: Set Up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          channel: stable
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # Debuggable, so `run-as` and a debugger can attach to it. Both ARM
+      # ABIs, so it installs on 32-bit phones as well as 64-bit ones;
+      # CONTACT_EMAIL stays unset because fork PRs get no secrets.
+      - name: Build
+        run: flutter build apk --debug --target-platform android-arm,android-arm64
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: transportia-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
