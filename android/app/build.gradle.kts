@@ -83,7 +83,8 @@ flutter {
 }
 
 dependencies {
-    // SurfaceViewMapFactory builds maps itself; maplibre_gl keeps the SDK to
-    // itself. Same version as maplibre_gl's android/build.gradle.
-    implementation("org.maplibre.gl:android-sdk:12.3.1")
+    // Newer than maplibre_gl 0.27.1's own 13.5.0, for 13.7's fixes on older
+    // Adreno GPUs. Gradle takes the higher version; drop this line once
+    // maplibre_gl ships 13.7 or later.
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
 }

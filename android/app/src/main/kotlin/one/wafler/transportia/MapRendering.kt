@@ -6,7 +6,6 @@ import android.os.Build
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import org.maplibre.maplibregl.SurfaceViewMapFactory
 
 /**
  * How maps are drawn on this phone, chosen from what its GPU offers or set
@@ -17,11 +16,13 @@ import org.maplibre.maplibregl.SurfaceViewMapFactory
  * - `renderer`: Flutter's own renderer, `impeller` or `skia`. The engine
  *   reads it once per process, so it is decided here, before Flutter starts,
  *   and a change applies from the next start.
- * - `composition`: how the map's native view reaches the screen. `texture`
- *   copies it into Flutter's picture; `hybrid` lets Android draw it as a view
- *   of its own.
- * - `surface`: whether MapLibre draws into a `textureView` or a
- *   `surfaceView`.
+ * - `composition`: how the map's native view reaches the screen. `flutter`
+ *   draws it into Flutter's own frame; `hybridComposition` lets Android draw
+ *   it as a view of its own.
+ * - `surface`: whether MapLibre draws into a `surfaceView` or a
+ *   `textureView`.
+ *
+ * The names are maplibre_gl's (`AndroidMapView` from 0.28 on).
  *
  * The choice is kept in Android's own preferences rather than Flutter's,
  * because the renderer has to be known before any Dart code runs.
@@ -48,11 +49,11 @@ class MapRendering private constructor(
 
         private const val SKIA = "skia"
 
-        /** What every phone with a working Vulkan driver gets. */
+        /** What every other phone gets: Flutter's and maplibre_gl's defaults. */
         private val STANDARD = mapOf(
             RENDERER to "impeller",
-            COMPOSITION to "texture",
-            SURFACE to "textureView",
+            COMPOSITION to "flutter",
+            SURFACE to "surfaceView",
         )
 
         /**
@@ -63,7 +64,7 @@ class MapRendering private constructor(
          */
         private val COMPATIBLE = mapOf(
             RENDERER to "impeller",
-            COMPOSITION to "hybrid",
+            COMPOSITION to "hybridComposition",
             SURFACE to "textureView",
         )
 
@@ -80,9 +81,6 @@ class MapRendering private constructor(
          */
         private const val IMPELLER_MIN_SDK = Build.VERSION_CODES.Q
 
-        /** Platform view type of [SurfaceViewMapFactory]. */
-        private const val SURFACE_VIEW_MAP_TYPE = "transportia/maplibre_surface_view"
-
         /**
          * The renderer this process's engine was started with. The engine
          * takes its arguments once per process, so only the first call to
@@ -97,15 +95,9 @@ class MapRendering private constructor(
             return if (renderer == SKIA) listOf("--enable-impeller=false") else emptyList()
         }
 
-        fun register(engine: FlutterEngine, activity: MainActivity) {
+        fun register(engine: FlutterEngine, context: Context) {
             MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
-                .setMethodCallHandler(MapRendering(activity.applicationContext))
-            engine.platformViewsController.registry.registerViewFactory(
-                SURFACE_VIEW_MAP_TYPE,
-                SurfaceViewMapFactory(engine.dartExecutor.binaryMessenger) {
-                    activity.lifecycle
-                },
-            )
+                .setMethodCallHandler(MapRendering(context.applicationContext))
         }
 
         /**

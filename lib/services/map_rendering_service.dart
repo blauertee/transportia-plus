@@ -42,6 +42,9 @@ class MapRenderingService extends ChangeNotifier {
   /// From `main()`, before the first map.
   Future<void> load() async {
     if (!isSupported) return;
+    // Read at each map's creation, so a change applies to the next map.
+    MapLibrePlatform.createInstance = () =>
+        ConfiguredMapLibreChannel(_state.effective);
     try {
       final wire = await _channel.invokeMapMethod<Object?, Object?>('state');
       if (wire != null) _state = MapRenderState.fromWire(wire);
@@ -53,9 +56,6 @@ class MapRenderingService extends ChangeNotifier {
     } on MissingPluginException {
       return;
     }
-    // Read at each map's creation, so a change applies to the next map.
-    MapLibrePlatform.createInstance = () =>
-        ConfiguredMapLibreChannel(_state.effective);
   }
 
   /// Sets the profile by hand, or with null lets the app choose again.

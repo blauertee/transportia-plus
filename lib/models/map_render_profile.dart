@@ -3,18 +3,19 @@ enum FlutterRenderer { impeller, skia }
 
 /// How the map's native view reaches the screen.
 enum MapComposition {
-  /// Copied into Flutter's picture as a texture.
-  texture,
+  /// Drawn into Flutter's own frame: a TextureView as a texture layer, a
+  /// SurfaceView through a virtual display.
+  flutter,
 
   /// Drawn by Android as a view of its own, with Flutter's layers around it.
-  hybrid,
+  hybridComposition,
 }
 
 /// What MapLibre draws into.
-enum MapSurface { textureView, surfaceView }
+enum MapSurface { surfaceView, textureView }
 
 /// One way of drawing maps; `android/.../MapRendering.kt` holds the same
-/// three choices under the same names.
+/// three choices under the same names, which are maplibre_gl's.
 class MapRenderProfile {
   const MapRenderProfile({
     required this.renderer,
@@ -22,12 +23,12 @@ class MapRenderProfile {
     required this.surface,
   });
 
-  /// What a phone with a working Vulkan driver gets, and every other
-  /// platform: maplibre_gl's own defaults.
+  /// What most phones get, and every other platform: Flutter's and
+  /// maplibre_gl's own defaults.
   static const MapRenderProfile standard = MapRenderProfile(
     renderer: FlutterRenderer.impeller,
-    composition: MapComposition.texture,
-    surface: MapSurface.textureView,
+    composition: MapComposition.flutter,
+    surface: MapSurface.surfaceView,
   );
 
   final FlutterRenderer renderer;

@@ -3,7 +3,7 @@ import 'package:transportia/models/map_render_profile.dart';
 
 const MapRenderProfile _compatible = MapRenderProfile(
   renderer: FlutterRenderer.skia,
-  composition: MapComposition.hybrid,
+  composition: MapComposition.hybridComposition,
   surface: MapSurface.surfaceView,
 );
 
@@ -21,11 +21,13 @@ void main() {
     test('falls back to the standard choice for unknown names', () {
       final profile = MapRenderProfile.fromWire({
         'renderer': 'vulkan',
-        'composition': 'hybrid',
+        'composition': 'hybridComposition',
       });
       expect(
         profile,
-        MapRenderProfile.standard.copyWith(composition: MapComposition.hybrid),
+        MapRenderProfile.standard.copyWith(
+          composition: MapComposition.hybridComposition,
+        ),
       );
     });
   });
@@ -62,7 +64,9 @@ void main() {
         'rendererInUse': 'impeller',
       });
       final otherComposition = running.withOverride(
-        MapRenderProfile.standard.copyWith(composition: MapComposition.hybrid),
+        MapRenderProfile.standard.copyWith(
+          composition: MapComposition.hybridComposition,
+        ),
         dartVersion: '3.10.0',
       );
       expect(otherComposition.needsRestart, isFalse);

@@ -225,7 +225,7 @@ void main() {
 
       final camera = tester
           .widget<MapLibreMap>(find.byType(MapLibreMap))
-          .initialCameraPosition;
+          .initialCameraPosition!;
       // Paris, France: the city and its two stations.
       expect(camera.target.latitude, closeTo(48.86, 0.1));
       expect(camera.target.longitude, closeTo(2.35, 0.1));
@@ -389,7 +389,7 @@ void main() {
       await _pump(tester, picker());
       final centre = tester
           .widget<MapLibreMap>(find.byType(MapLibreMap))
-          .initialCameraPosition
+          .initialCameraPosition!
           .target;
 
       await tester.tap(find.text('Search in this area'));
