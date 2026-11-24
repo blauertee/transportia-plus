@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../theme/app_colors.dart';
 import '../pressable_highlight.dart';
+import 'sheet_scroll_controller.dart';
 
 /// Corner radius of the sheet where it meets the map.
 const double _kSheetCornerRadius = 16;
@@ -49,12 +50,18 @@ class SheetDrag {
     required this.onStart,
     required this.onUpdate,
     required this.onEnd,
+    this.body,
   });
 
   final VoidCallback onTap;
   final VoidCallback onStart;
   final ValueChanged<double> onUpdate;
   final ValueChanged<double> onEnd;
+
+  /// How a drag on the sheet's body moves it, for a sheet with a stop above
+  /// the one it rests on. Null leaves the body to scroll and only the handle
+  /// to move the sheet.
+  final SheetBodyDrag? body;
 }
 
 /// The bar at the top of a bottom sheet, which both drags the sheet and

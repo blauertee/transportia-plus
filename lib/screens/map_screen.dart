@@ -71,7 +71,9 @@ import '../widgets/last_updated_footer.dart';
 import '../widgets/stop_departures_sheet.dart';
 import '../widgets/journey/trip_details_view.dart';
 import '../widgets/journey/trip_timeline.dart' show StopTapCallback;
+import '../widgets/floating_nav_bar.dart';
 import '../widgets/map/bottom_sheet_chrome.dart';
+import '../widgets/map/sheet_scroll_controller.dart';
 import '../widgets/map/long_press_selection_modal.dart';
 import '../widgets/map/stop_selection_modal.dart';
 import '../theme/app_text.dart';
@@ -130,6 +132,21 @@ class _MapScreenState extends State<MapScreen>
   bool _isSheetCollapsed = false;
   double? _sheetTop;
   static const double _collapsedMapFraction = 0.25;
+
+  /// Room the search card keeps between its Search button and the nav bar
+  /// when it rests.
+  static const double _kSearchClearance = 8;
+
+  /// Closer than this to the top stop, the stop the card rests on is dropped:
+  /// two stops that near are hard to tell apart under a finger.
+  static const double _kMinStopGap = 100;
+
+  /// How dark the map gets behind the card once it is raised all the way.
+  static const double _kRaisedScrim = 0.42;
+
+  /// Past this much of the way up, the dimmed map counts as dark for the
+  /// status bar's icons.
+  static const double _kDimmedMapRise = 0.5;
   static const double _bottomBarHeight = 116.0;
   static const double _tripFocusBottomBarHeight = 200.0;
   static const List<String> _mapStyleCycle = ['default', 'light', 'dark'];
@@ -1805,7 +1822,7 @@ class _MapScreenState extends State<MapScreen>
           ? AnnotatedRegion<SystemUiOverlayStyle>(
               value: systemBarsOverMap(
                 appIsDark: theme.isDark,
-                mapIsDark: theme.isMapDark,
+                mapIsDark: theme.isMapDark || _isMapDimmed,
               ),
               child: _buildSplitLayout(),
             )
@@ -1817,12 +1834,14 @@ class _MapScreenState extends State<MapScreen>
       _isTripFocus ||
       _isQuickSettings ||
       _isSheetCollapsed ||
+      _isSheetRaised ||
       _selectedStop != null ||
       _longPressLatLng != null;
 
   /// Back closes whatever is open over the search, innermost first, and
-  /// finally raises a card left down over the map. The time picker is a
-  /// sheet of its own, which back closes before it gets here.
+  /// finally brings the card back to where it rests: down from the top, or up
+  /// off the map. The time picker is a sheet of its own, which back closes
+  /// before it gets here.
   void _stepBack() {
     if (_isTripFocus) return _exitTripFocus();
     if (_isQuickSettings) return _closeQuickSettings();
@@ -1830,6 +1849,21 @@ class _MapScreenState extends State<MapScreen>
     if (_longPressLatLng != null) return _dismissLongPressOverlay();
     _expandSheetToCard();
   }
+
+  /// How far the card is between where it rests (0) and the top stop (1).
+  double get _sheetRise {
+    final top = _lastComputedTopStop;
+    final rest = _lastComputedExpandedTop;
+    final sheetTop = _sheetTop;
+    if (top == null || rest == null || sheetTop == null) return 0;
+    final span = rest - top;
+    if (span <= 0) return 0;
+    return ((rest - sheetTop) / span).clamp(0.0, 1.0);
+  }
+
+  bool get _isSheetRaised => _sheetRise > 0;
+
+  bool get _isMapDimmed => _showsMap && _sheetRise > _kDimmedMapRise;
 
   /// Without the map the search is the page: the same card, nothing under it
   /// to uncover, so it never collapses.
@@ -1846,6 +1880,7 @@ class _MapScreenState extends State<MapScreen>
         return Stack(
           children: [
             Positioned.fill(child: RepaintBoundary(child: _buildMap())),
+            _buildRaisedScrim(sheet.rise),
             if (!_isTripFocus && !_isQuickSettings)
               _buildControlPills(sheet.progress),
             ..._buildMapOverlays(),
@@ -1869,38 +1904,141 @@ class _MapScreenState extends State<MapScreen>
         ? _tripFocusBottomBarHeight
         : _bottomBarHeight;
     final collapsedTop = math.max(0.0, totalHeight - bottomBarHeight);
-    final expandedTop = (totalHeight * _collapsedMapFraction).clamp(
-      0.0,
-      collapsedTop,
-    );
+    final (:top, :rest) = _sheetStops(totalHeight, collapsedTop);
+    final previousRest = _lastComputedExpandedTop;
     _lastComputedCollapsedTop = collapsedTop;
-    _lastComputedExpandedTop = expandedTop;
+    _lastComputedExpandedTop = rest;
+    _lastComputedTopStop = top;
     _lastBottomBarHeight = bottomBarHeight;
 
-    _sheetTop ??= expandedTop;
+    _sheetTop ??= rest;
     _sheetTop = _isBottomBarResizeAnimating
-        ? math.max(_sheetTop!, expandedTop)
-        : _sheetTop!.clamp(expandedTop, collapsedTop);
+        ? math.max(_sheetTop!, top)
+        : _sheetTop!.clamp(top, collapsedTop);
+    _followRestingStop(previousRest, rest, collapsedTop);
 
-    final travel = collapsedTop - expandedTop;
+    final travel = collapsedTop - rest;
     final progress = travel <= 0.0
         ? 1.0
-        : ((_sheetTop! - expandedTop) / travel).clamp(0.0, 1.0);
+        : ((_sheetTop! - rest) / travel).clamp(0.0, 1.0);
     _reportSheetPosition(
       collapsed: (_sheetTop! - collapsedTop).abs() < 1.0,
       progress: progress,
     );
 
+    final stops = {top, rest, collapsedTop}.toList();
     return _SheetLayout(
       drag: SheetDrag(
-        onTap: () => _toggleSheet(expandedTop, collapsedTop),
+        onTap: () => _toggleSheet(rest, collapsedTop),
         onStart: _onSheetDragStart,
-        onUpdate: (dy) => _onSheetDragUpdate(dy, expandedTop, collapsedTop),
-        onEnd: (velocity) =>
-            _onSheetDragEnd(velocity, expandedTop, collapsedTop),
+        onUpdate: (dy) => _moveSheetBy(dy, top, collapsedTop),
+        onEnd: (velocity) => _onSheetDragEnd(velocity, stops, collapsedTop),
+        body: _hasTopStop
+            ? SheetBodyDrag(
+                isRaised: () => _isOnStop(top),
+                isResting: () => !_snapCtrl.isAnimating && stops.any(_isOnStop),
+                moveBy: (dy) => _moveSheetBy(dy, top, collapsedTop),
+                onStart: _onSheetDragStart,
+                onEnd: (velocity) =>
+                    _onSheetDragEnd(velocity, stops, collapsedTop),
+              )
+            : null,
       ),
       bottomBarHeight: bottomBarHeight,
       progress: progress,
+      rise: _sheetRise,
+    );
+  }
+
+  /// Only the search card goes above where it rests: trip focus and quick
+  /// settings have a fixed amount to show, and the map is what they are about.
+  bool get _hasTopStop => !_isTripFocus && !_isQuickSettings;
+
+  /// The highest the sheet goes and where it rests.
+  ///
+  /// The search card goes up to the status bar, never under it: a card under
+  /// it would need the bar's height as padding, switched on partway up, and
+  /// the card would jump by it. It rests with the map keeping a quarter of the
+  /// screen, or higher where that would leave Search under the nav bar.
+  ({double top, double rest}) _sheetStops(
+    double totalHeight,
+    double collapsedTop,
+  ) {
+    final quarter = (totalHeight * _collapsedMapFraction).clamp(
+      0.0,
+      collapsedTop,
+    );
+    if (!_hasTopStop) return (top: quarter, rest: quarter);
+    final insets = MediaQuery.paddingOf(context);
+    final top = math.min(insets.top, quarter);
+    final searchBottom = _searchBottomInCard;
+    if (searchBottom == null) return (top: top, rest: quarter);
+    final searchClearsNavBar =
+        totalHeight -
+        insets.bottom -
+        FloatingNavBar.reservedHeight -
+        _kSearchClearance -
+        searchBottom;
+    final rest = math.max(top, math.min(quarter, searchClearsNavBar));
+    final restCrowdsTop = rest - top < _kMinStopGap;
+    if (restCrowdsTop) return (top: top, rest: top);
+    return (top: top, rest: rest);
+  }
+
+  bool _isOnStop(double stop) =>
+      (_sheetTop! - stop).abs() < _kSheetStopTolerance;
+
+  /// Keeps a card that was resting on its stop there when the stop moves:
+  /// when Search is first measured, and when trip focus or quick settings
+  /// hand back to the search card.
+  void _followRestingStop(
+    double? previousRest,
+    double rest,
+    double collapsedTop,
+  ) {
+    if (previousRest == null) return;
+    final restMoved = (previousRest - rest).abs() >= _kSheetStopTolerance;
+    final wasResting = (_sheetTop! - previousRest).abs() < _kSheetStopTolerance;
+    if (!restMoved || !wasResting) return;
+    if (_snapCtrl.isAnimating || _isSheetDragging) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _animateTo(rest, collapsedTop);
+    });
+  }
+
+  void _onSearchBottomMeasured(double bottom) {
+    final previous = _searchBottomInCard;
+    if (previous != null && (previous - bottom).abs() < 0.5) return;
+    setState(() {
+      _searchBottomInCard = bottom;
+      // The first measurement lands before anyone can have moved the card,
+      // so it starts where it rests instead of sliding there.
+      final restingOnFirstGuess =
+          previous == null &&
+          !_isSheetDragging &&
+          !_snapCtrl.isAnimating &&
+          _sheetTop == _lastComputedExpandedTop;
+      if (restingOnFirstGuess) _sheetTop = null;
+    });
+  }
+
+  /// The map darkening behind a raised card, so the strip of it left above
+  /// reads as something behind the card rather than a map to use.
+  ///
+  /// Always in the stack, empty while the card rests: the stack's children
+  /// carry no keys, so one appearing ahead of the sheet would shift the sheet
+  /// onto another element and rebuild it, ending the drag that raised it.
+  Widget _buildRaisedScrim(double rise) {
+    return Positioned.fill(
+      child: rise <= 0
+          ? const SizedBox.shrink()
+          : IgnorePointer(
+              child: ColoredBox(
+                color: AppColors.solidBlack.withValues(
+                  alpha: _kRaisedScrim * rise,
+                ),
+              ),
+            ),
     );
   }
 
@@ -2075,6 +2213,7 @@ class _MapScreenState extends State<MapScreen>
       timeSelection: _timeSelection,
       recentTrips: _recentTrips,
       onRecentTripTap: _onRecentTripTap,
+      onSearchBottomMeasured: drag == null ? null : _onSearchBottomMeasured,
     );
   }
 
@@ -2230,7 +2369,16 @@ class _MapScreenState extends State<MapScreen>
   }
 
   double? _lastComputedCollapsedTop;
+
+  /// Where the sheet rests: the search card's middle stop, or the raised stop
+  /// of a sheet without one above it.
   double? _lastComputedExpandedTop;
+  double? _lastComputedTopStop;
+
+  /// Where the Search button ends below the card's top edge; null until the
+  /// card has been laid out once.
+  double? _searchBottomInCard;
+  bool _isSheetDragging = false;
   double? _lastBottomBarHeight;
   bool _isBottomBarResizeAnimating = false;
   bool _skipAutoCenterOnSnap = false;
@@ -2285,30 +2433,36 @@ class _MapScreenState extends State<MapScreen>
     return best;
   }
 
-  /// Sends the sheet to whichever of its two stops it is not already at.
+  /// Sends the sheet down onto the map, or up off it to where it rests.
   void _toggleSheet(double expandedTop, double collapsedTop) {
     _unfocusInputs();
     _animateTo(_isSheetCollapsed ? expandedTop : collapsedTop, collapsedTop);
   }
 
+  /// A drag on the handle or the card's body has started. A body drag may
+  /// only ever scroll, so the sheet counts as dragged once it moves.
   void _onSheetDragStart() {
     _unfocusInputs();
     _snapCtrl.stop();
   }
 
-  void _onSheetDragUpdate(double dy, double topStop, double collapsedTop) {
-    setState(() => _sheetTop = (_sheetTop! + dy).clamp(topStop, collapsedTop));
+  /// Moves the sheet by [dy] within its stops and returns what it could not
+  /// take, which a drag on the card's body scrolls instead.
+  double _moveSheetBy(double dy, double topStop, double collapsedTop) {
+    _isSheetDragging = true;
+    final current = _sheetTop!;
+    final next = (current + dy).clamp(topStop, collapsedTop);
+    if (next != current) setState(() => _sheetTop = next);
+    return dy - (next - current);
   }
 
   void _onSheetDragEnd(
     double velocityDy,
-    double expandedTop,
+    List<double> stops,
     double collapsedTop,
   ) {
-    _animateTo(
-      _snapStopFor(velocityDy, [expandedTop, collapsedTop]),
-      collapsedTop,
-    );
+    _isSheetDragging = false;
+    _animateTo(_snapStopFor(velocityDy, stops), collapsedTop);
   }
 
   void _animateTo(double target, double collapsedTop) {
@@ -3999,6 +4153,7 @@ class _SheetLayout {
     required this.drag,
     required this.bottomBarHeight,
     required this.progress,
+    required this.rise,
   });
 
   final SheetDrag drag;
@@ -4006,6 +4161,9 @@ class _SheetLayout {
   /// How much of the sheet still shows when it is down.
   final double bottomBarHeight;
 
-  /// 0 raised, 1 down over the map.
+  /// 0 where it rests, 1 down over the map.
   final double progress;
+
+  /// 0 where it rests, 1 at the top stop.
+  final double rise;
 }
