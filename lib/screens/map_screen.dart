@@ -75,6 +75,7 @@ import '../widgets/map/bottom_sheet_chrome.dart';
 import '../widgets/map/long_press_selection_modal.dart';
 import '../widgets/map/stop_selection_modal.dart';
 import '../theme/app_text.dart';
+import '../services/map_rendering_service.dart';
 
 part 'map_screen/map_screen_models.dart';
 part 'map_screen/map_screen_controls.dart';
@@ -272,6 +273,7 @@ class _MapScreenState extends State<MapScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    MapRenderingService.instance.addListener(_onMapRenderingChanged);
     // Whether a page covers it is read in didChangeDependencies, the first
     // place inherited widgets can be.
     _visibility = MapVisibility.initial(
@@ -469,6 +471,7 @@ class _MapScreenState extends State<MapScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    MapRenderingService.instance.removeListener(_onMapRenderingChanged);
     PlanRequests.pending.removeListener(_applyPlanRequest);
     RoutingOptionsService.optionsListenable.removeListener(
       _onStoredOptionsChanged,
@@ -621,11 +624,21 @@ class _MapScreenState extends State<MapScreen>
     return ok;
   }
 
-  void _followMapSetting() {
-    final showsMap = Provider.of<ThemeProvider>(context).showsSearchMap;
+  /// [theme] is passed when called outside a build, where the provider
+  /// may not be listened to.
+  void _followMapSetting([ThemeProvider? theme]) {
+    final showsMap =
+        (theme ?? Provider.of<ThemeProvider>(context)).showsSearchMap &&
+        !MapRenderingService.instance.state.mapsOff;
     if (showsMap == _showsMap) return;
     _showsMap = showsMap;
     if (!showsMap) _releaseMap();
+  }
+
+  /// Maps turned off or on in the advanced settings.
+  void _onMapRenderingChanged() {
+    if (!mounted) return;
+    setState(() => _followMapSetting(context.read<ThemeProvider>()));
   }
 
   /// Lets go of everything the map held once it is turned off. Its timers

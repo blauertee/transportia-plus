@@ -124,4 +124,24 @@ void main() {
       expect(state.detectedStandard, isTrue);
     });
   });
+
+  group('maps off', () {
+    test('reads the switch the platform side sends', () {
+      expect(MapRenderState.fromWire({'mapsOff': true}).mapsOff, isTrue);
+      expect(MapRenderState.fromWire({}).mapsOff, isFalse);
+    });
+
+    test('survives a change of profile, and a profile survives it', () {
+      final off = MapRenderState.fromWire({
+        'detected': _compatible.toWire(),
+        'rendererInUse': 'impeller',
+      }).withMapsOff(true);
+      final manual = off.withOverride(
+        MapRenderProfile.standard,
+        dartVersion: '3.10.0',
+      );
+      expect(manual.mapsOff, isTrue);
+      expect(manual.withMapsOff(false).override, MapRenderProfile.standard);
+    });
+  });
 }
