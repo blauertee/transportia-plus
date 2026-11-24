@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. Everything is backed up except the map rendering
+     choice: it was made for one phone's GPU, and a restore onto another
+     phone should start from that phone's own. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="map_rendering.xml"/>
+</full-backup-content>
