@@ -2,9 +2,11 @@ import 'package:flutter/widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../models/map_render_profile.dart';
 import '../models/motis_request_record.dart';
 import '../providers/theme_provider.dart';
 import '../api/motis_request_log.dart';
+import '../services/map_rendering_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text.dart';
 import '../navigation/routes.dart';
@@ -75,6 +77,10 @@ class AdvancedSettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const _RequestLogCard(),
+          if (MapRenderingService.instance.isSupported) ...[
+            const SizedBox(height: 32),
+            const _MapRenderingSection(),
+          ],
         ],
       ),
     );
@@ -110,5 +116,113 @@ class _RequestLogCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// How maps are drawn: chosen by the app from the phone's GPU, or by hand
+/// when a map stays blank or the app closes as one opens.
+class _MapRenderingSection extends StatelessWidget {
+  const _MapRenderingSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final service = MapRenderingService.instance;
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final state = service.state;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionTitle(text: 'Map rendering'),
+            const SizedBox(height: 8),
+            Text(
+              'Worth changing only if a map stays blank, or the app closes '
+              'as a map opens',
+              style: AppText.bodyFaint,
+            ),
+            const SizedBox(height: 16),
+            ToggleCard(
+              icon: LucideIcons.wandSparkles,
+              title: 'Choose automatically',
+              subtitle: state.isAutomatic
+                  ? _detectedSummary(state)
+                  : 'The choices below apply instead',
+              value: state.isAutomatic,
+              onChanged: (automatic) =>
+                  service.setOverride(automatic ? null : state.detected),
+            ),
+            if (!state.isAutomatic) ..._manualChoices(service, state.effective),
+            if (state.needsRestart) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Restart the app to switch to '
+                '${_rendererName(state.effective.renderer)}',
+                style: AppText.bodyMuted,
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  static String _detectedSummary(MapRenderState state) => state.hasVulkan
+      ? 'This phone has Vulkan, so maps are drawn the standard way'
+      : 'This phone has no Vulkan, so maps are drawn the compatible way';
+
+  static String _rendererName(FlutterRenderer renderer) => switch (renderer) {
+    FlutterRenderer.impeller => 'Impeller',
+    FlutterRenderer.skia => 'Skia',
+  };
+
+  List<Widget> _manualChoices(
+    MapRenderingService service,
+    MapRenderProfile profile,
+  ) {
+    return [
+      const SizedBox(height: 12),
+      ToggleCard(
+        icon: LucideIcons.cpu,
+        title: 'Impeller',
+        subtitle: profile.renderer == FlutterRenderer.impeller
+            ? 'The app draws with Impeller, its newer renderer'
+            : 'The app draws with Skia, its older renderer',
+        value: profile.renderer == FlutterRenderer.impeller,
+        onChanged: (on) => service.setOverride(
+          profile.copyWith(
+            renderer: on ? FlutterRenderer.impeller : FlutterRenderer.skia,
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      ToggleCard(
+        icon: LucideIcons.layers,
+        title: 'Hybrid composition',
+        subtitle: profile.composition == MapComposition.hybrid
+            ? 'Android draws the map as a view of its own'
+            : 'The map is copied into the app\'s picture',
+        value: profile.composition == MapComposition.hybrid,
+        onChanged: (on) => service.setOverride(
+          profile.copyWith(
+            composition: on ? MapComposition.hybrid : MapComposition.texture,
+          ),
+        ),
+      ),
+      const SizedBox(height: 12),
+      ToggleCard(
+        icon: LucideIcons.frame,
+        title: 'SurfaceView',
+        subtitle: profile.surface == MapSurface.surfaceView
+            ? 'MapLibre draws into a SurfaceView'
+            : 'MapLibre draws into a TextureView',
+        value: profile.surface == MapSurface.surfaceView,
+        onChanged: (on) => service.setOverride(
+          profile.copyWith(
+            surface: on ? MapSurface.surfaceView : MapSurface.textureView,
+          ),
+        ),
+      ),
+    ];
   }
 }
