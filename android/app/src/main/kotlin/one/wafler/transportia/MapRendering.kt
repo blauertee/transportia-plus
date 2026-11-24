@@ -47,6 +47,13 @@ class MapRendering private constructor(
          */
         private const val DART_VERSION = "dartVersion"
 
+        /**
+         * Whether no map is drawn at all, for phones whose GPU driver fails
+         * whatever the profile. Kept here rather than in Flutter's
+         * preferences so it stays out of backups with the rest.
+         */
+        private const val MAPS_OFF = "mapsOff"
+
         private const val SKIA = "skia"
 
         /** What every other phone gets: Flutter's and maplibre_gl's defaults. */
@@ -137,8 +144,17 @@ class MapRendering private constructor(
                     "overrideDartVersion" to context
                         .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                         .getString(DART_VERSION, null),
+                    "mapsOff" to context
+                        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(MAPS_OFF, false),
                 ),
             )
+            "setMapsOff" -> {
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putBoolean(MAPS_OFF, call.arguments as Boolean)
+                    .apply()
+                result.success(null)
+            }
             "setOverride" -> {
                 val profile = call.arguments as Map<*, *>?
                 val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()

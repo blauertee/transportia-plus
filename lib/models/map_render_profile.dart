@@ -86,6 +86,7 @@ class MapRenderState {
     required this.override,
     required this.rendererInUse,
     this.overrideDartVersion,
+    this.mapsOff = false,
   });
 
   /// Before the platform side has answered, and on platforms without one.
@@ -108,6 +109,9 @@ class MapRenderState {
   /// under. Null for an override older than this field.
   final String? overrideDartVersion;
 
+  /// Whether no map is drawn at all: each stays blank and fetches nothing.
+  final bool mapsOff;
+
   static MapRenderState fromWire(Map<Object?, Object?> wire) => MapRenderState(
     detected: MapRenderProfile.fromWire(wire['detected']) ?? fallback.detected,
     override: MapRenderProfile.fromWire(wire['override']),
@@ -115,6 +119,7 @@ class MapRenderState {
         FlutterRenderer.values.asNameMap()[wire['rendererInUse']] ??
         fallback.rendererInUse,
     overrideDartVersion: wire['overrideDartVersion'] as String?,
+    mapsOff: wire['mapsOff'] == true,
   );
 
   bool get isAutomatic => override == null;
@@ -143,5 +148,14 @@ class MapRenderState {
     override: override,
     rendererInUse: rendererInUse,
     overrideDartVersion: override == null ? null : dartVersion,
+    mapsOff: mapsOff,
+  );
+
+  MapRenderState withMapsOff(bool mapsOff) => MapRenderState(
+    detected: detected,
+    override: override,
+    rendererInUse: rendererInUse,
+    overrideDartVersion: overrideDartVersion,
+    mapsOff: mapsOff,
   );
 }

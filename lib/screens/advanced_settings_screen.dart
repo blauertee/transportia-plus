@@ -143,28 +143,50 @@ class _MapRenderingSection extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             ToggleCard(
-              icon: LucideIcons.wandSparkles,
-              title: 'Choose automatically',
-              subtitle: state.isAutomatic
-                  ? _detectedSummary(state)
-                  : 'The choices below apply instead',
-              value: state.isAutomatic,
-              onChanged: (automatic) =>
-                  service.setOverride(automatic ? null : state.detected),
+              icon: LucideIcons.map,
+              title: 'Show maps',
+              subtitle: state.mapsOff
+                  ? 'Maps stay blank and load nothing, for phones where they '
+                        'make the app close'
+                  : 'Turn off if maps keep making the app close; they then '
+                        'stay blank and load nothing',
+              value: !state.mapsOff,
+              onChanged: (on) => service.setMapsOff(!on),
             ),
-            if (!state.isAutomatic) ..._manualChoices(service, state.effective),
-            if (state.needsRestart) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Restart the app to switch to '
-                '${_rendererName(state.effective.renderer)}',
-                style: AppText.bodyMuted,
-              ),
-            ],
+            if (!state.mapsOff) ..._renderingChoices(service, state),
           ],
         );
       },
     );
+  }
+
+  /// How maps are drawn, while they are drawn at all.
+  List<Widget> _renderingChoices(
+    MapRenderingService service,
+    MapRenderState state,
+  ) {
+    return [
+      const SizedBox(height: 12),
+      ToggleCard(
+        icon: LucideIcons.wandSparkles,
+        title: 'Choose automatically',
+        subtitle: state.isAutomatic
+            ? _detectedSummary(state)
+            : 'The choices below apply instead',
+        value: state.isAutomatic,
+        onChanged: (automatic) =>
+            service.setOverride(automatic ? null : state.detected),
+      ),
+      if (!state.isAutomatic) ..._manualChoices(service, state.effective),
+      if (state.needsRestart) ...[
+        const SizedBox(height: 12),
+        Text(
+          'Restart the app to switch to '
+          '${_rendererName(state.effective.renderer)}',
+          style: AppText.bodyMuted,
+        ),
+      ],
+    ];
   }
 
   static String _detectedSummary(MapRenderState state) => state.detectedStandard

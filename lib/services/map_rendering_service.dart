@@ -58,6 +58,13 @@ class MapRenderingService extends ChangeNotifier {
     }
   }
 
+  /// Turns every map off, or back on. Maps already open follow at once.
+  Future<void> setMapsOff(bool mapsOff) async {
+    _state = _state.withMapsOff(mapsOff);
+    notifyListeners();
+    await _channel.invokeMethod<void>('setMapsOff', mapsOff);
+  }
+
   /// Sets the profile by hand, or with null lets the app choose again.
   Future<void> setOverride(MapRenderProfile? override) async {
     _state = _state.withOverride(override, dartVersion: _dartVersion);
