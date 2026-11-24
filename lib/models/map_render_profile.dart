@@ -84,6 +84,7 @@ class MapRenderState {
     required this.detected,
     required this.override,
     required this.rendererInUse,
+    this.overrideDartVersion,
   });
 
   /// Before the platform side has answered, and on platforms without one.
@@ -102,12 +103,17 @@ class MapRenderState {
   /// The renderer the engine started with.
   final FlutterRenderer rendererInUse;
 
+  /// The Dart version, and so the Flutter release, [override] was set
+  /// under. Null for an override older than this field.
+  final String? overrideDartVersion;
+
   static MapRenderState fromWire(Map<Object?, Object?> wire) => MapRenderState(
     detected: MapRenderProfile.fromWire(wire['detected']) ?? fallback.detected,
     override: MapRenderProfile.fromWire(wire['override']),
     rendererInUse:
         FlutterRenderer.values.asNameMap()[wire['rendererInUse']] ??
         fallback.rendererInUse,
+    overrideDartVersion: wire['overrideDartVersion'] as String?,
   );
 
   bool get isAutomatic => override == null;
@@ -122,9 +128,19 @@ class MapRenderState {
   /// Whether the chosen renderer differs from the one running.
   bool get needsRestart => effective.renderer != rendererInUse;
 
-  MapRenderState withOverride(MapRenderProfile? override) => MapRenderState(
+  /// Whether the override was set under another Flutter release than the
+  /// one running, [dartVersion]. What it worked around may be fixed there,
+  /// so the app chooses again; whoever still needs it sets it again.
+  bool overrideOutdatedFor(String dartVersion) =>
+      override != null && overrideDartVersion != dartVersion;
+
+  MapRenderState withOverride(
+    MapRenderProfile? override, {
+    required String dartVersion,
+  }) => MapRenderState(
     detected: detected,
     override: override,
     rendererInUse: rendererInUse,
+    overrideDartVersion: override == null ? null : dartVersion,
   );
 }

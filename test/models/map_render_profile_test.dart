@@ -63,10 +63,58 @@ void main() {
       });
       final otherComposition = running.withOverride(
         MapRenderProfile.standard.copyWith(composition: MapComposition.hybrid),
+        dartVersion: '3.10.0',
       );
       expect(otherComposition.needsRestart, isFalse);
-      expect(running.withOverride(_compatible).needsRestart, isTrue);
-      expect(running.withOverride(null).needsRestart, isFalse);
+      expect(
+        running.withOverride(_compatible, dartVersion: '3.10.0').needsRestart,
+        isTrue,
+      );
+      expect(
+        running.withOverride(null, dartVersion: '3.10.0').needsRestart,
+        isFalse,
+      );
+    });
+
+    test('an override is outdated once the Flutter release changes', () {
+      final state = stateFrom({
+        'detected': MapRenderProfile.standard.toWire(),
+        'override': _compatible.toWire(),
+        'rendererInUse': 'skia',
+        'overrideDartVersion': '3.10.0',
+      });
+      expect(state.overrideOutdatedFor('3.10.0'), isFalse);
+      expect(state.overrideOutdatedFor('3.11.0'), isTrue);
+    });
+
+    test('an override without a version is outdated', () {
+      final state = stateFrom({
+        'detected': MapRenderProfile.standard.toWire(),
+        'override': _compatible.toWire(),
+        'rendererInUse': 'skia',
+      });
+      expect(state.overrideOutdatedFor('3.10.0'), isTrue);
+    });
+
+    test('automatic is never outdated', () {
+      final state = stateFrom({
+        'detected': _compatible.toWire(),
+        'rendererInUse': 'impeller',
+        'overrideDartVersion': '3.9.0',
+      });
+      expect(state.overrideOutdatedFor('3.10.0'), isFalse);
+    });
+
+    test('setting an override records the version, clearing forgets it', () {
+      final running = stateFrom({
+        'detected': MapRenderProfile.standard.toWire(),
+        'rendererInUse': 'impeller',
+      });
+      final manual = running.withOverride(_compatible, dartVersion: '3.10.0');
+      expect(manual.overrideDartVersion, '3.10.0');
+      expect(manual.overrideOutdatedFor('3.10.0'), isFalse);
+      final automatic = manual.withOverride(null, dartVersion: '3.10.0');
+      expect(automatic.overrideDartVersion, isNull);
     });
 
     test('an empty answer is the standard phone', () {

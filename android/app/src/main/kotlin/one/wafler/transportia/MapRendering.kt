@@ -40,6 +40,12 @@ class MapRendering private constructor(
         private const val SURFACE = "surface"
         private val KEYS = listOf(RENDERER, COMPOSITION, SURFACE)
 
+        /**
+         * The Dart version an override was set under, which moves with every
+         * Flutter release; the Dart side drops an override from an older one.
+         */
+        private const val DART_VERSION = "dartVersion"
+
         private const val SKIA = "skia"
 
         /** What every phone with a working Vulkan driver gets. */
@@ -136,12 +142,15 @@ class MapRendering private constructor(
                     "detected" to detected(context),
                     "override" to override(context),
                     "rendererInUse" to (rendererInUse ?: STANDARD.getValue(RENDERER)),
+                    "overrideDartVersion" to context
+                        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .getString(DART_VERSION, null),
                 ),
             )
             "setOverride" -> {
                 val profile = call.arguments as Map<*, *>?
                 val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                for (key in KEYS) {
+                for (key in KEYS + DART_VERSION) {
                     val value = profile?.get(key) as String?
                     if (value == null) editor.remove(key) else editor.putString(key, value)
                 }
