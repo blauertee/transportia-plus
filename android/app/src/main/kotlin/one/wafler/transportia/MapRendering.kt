@@ -2,6 +2,7 @@ package one.wafler.transportia
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -31,6 +32,7 @@ class MapRendering private constructor(
 
     companion object {
         private const val CHANNEL = "transportia/map_rendering"
+        /** Left out of backups (`res/xml/backup_rules.xml`): the choice fits one phone. */
         private const val PREFS = "map_rendering"
 
         private const val RENDERER = "renderer"
@@ -48,10 +50,10 @@ class MapRendering private constructor(
         )
 
         /**
-         * What phones without Vulkan get. Impeller falls back to OpenGL ES
-         * there, and on some older drivers the map's texture then stays
-         * blank; hybrid composition draws the map outside Flutter's picture.
-         * Skia draws it too, but Flutter is phasing Skia out on Android.
+         * What phones get where Impeller draws with OpenGL ES. On some older
+         * drivers the map's texture then stays blank; hybrid composition
+         * draws the map outside Flutter's picture. Skia draws it too, but
+         * Flutter is phasing Skia out on Android.
          */
         private val COMPATIBLE = mapOf(
             RENDERER to "impeller",
@@ -64,6 +66,13 @@ class MapRendering private constructor(
          * Impeller's Vulkan backend runs on.
          */
         private const val VULKAN_1_1 = 0x00401000
+
+        /**
+         * Below this, the engine runs Skia whatever it is asked, and the map
+         * draws without help (`kMinimumAndroidApiLevelForImpeller` in the
+         * engine).
+         */
+        private const val IMPELLER_MIN_SDK = Build.VERSION_CODES.Q
 
         /** Platform view type of [SurfaceViewMapFactory]. */
         private const val SURFACE_VIEW_MAP_TYPE = "transportia/maplibre_surface_view"
@@ -93,14 +102,20 @@ class MapRendering private constructor(
             )
         }
 
-        private fun hasVulkan(context: Context): Boolean =
-            context.packageManager.hasSystemFeature(
-                PackageManager.FEATURE_VULKAN_HARDWARE_VERSION,
-                VULKAN_1_1,
-            )
+        /**
+         * Whether Impeller would run here without Vulkan, on OpenGL ES: the
+         * one case the compatible profile is for. Everything else keeps the
+         * engine's and the plugin's own defaults, whatever they become.
+         */
+        private fun impellerOnOpenGl(context: Context): Boolean =
+            Build.VERSION.SDK_INT >= IMPELLER_MIN_SDK &&
+                !context.packageManager.hasSystemFeature(
+                    PackageManager.FEATURE_VULKAN_HARDWARE_VERSION,
+                    VULKAN_1_1,
+                )
 
         private fun detected(context: Context): Map<String, String> =
-            if (hasVulkan(context)) STANDARD else COMPATIBLE
+            if (impellerOnOpenGl(context)) COMPATIBLE else STANDARD
 
         /** The profile set by hand, or null while the app chooses. */
         private fun override(context: Context): Map<String, String>? {
@@ -121,7 +136,6 @@ class MapRendering private constructor(
                     "detected" to detected(context),
                     "override" to override(context),
                     "rendererInUse" to (rendererInUse ?: STANDARD.getValue(RENDERER)),
-                    "hasVulkan" to hasVulkan(context),
                 ),
             )
             "setOverride" -> {

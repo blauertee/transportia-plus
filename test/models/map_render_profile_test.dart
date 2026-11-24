@@ -39,11 +39,10 @@ void main() {
         'detected': _compatible.toWire(),
         'override': null,
         'rendererInUse': 'skia',
-        'hasVulkan': false,
       });
       expect(state.isAutomatic, isTrue);
       expect(state.effective, _compatible);
-      expect(state.hasVulkan, isFalse);
+      expect(state.detectedStandard, isFalse);
       expect(state.needsRestart, isFalse);
     });
 
@@ -52,7 +51,6 @@ void main() {
         'detected': _compatible.toWire(),
         'override': MapRenderProfile.standard.toWire(),
         'rendererInUse': 'skia',
-        'hasVulkan': false,
       });
       expect(state.isAutomatic, isFalse);
       expect(state.effective, MapRenderProfile.standard);
@@ -62,7 +60,6 @@ void main() {
       final running = stateFrom({
         'detected': MapRenderProfile.standard.toWire(),
         'rendererInUse': 'impeller',
-        'hasVulkan': true,
       });
       final otherComposition = running.withOverride(
         MapRenderProfile.standard.copyWith(composition: MapComposition.hybrid),
@@ -76,7 +73,7 @@ void main() {
       final state = stateFrom({});
       expect(state.effective, MapRenderProfile.standard);
       expect(state.rendererInUse, FlutterRenderer.impeller);
-      expect(state.hasVulkan, isTrue);
+      expect(state.detectedStandard, isTrue);
     });
   });
 }

@@ -84,7 +84,6 @@ class MapRenderState {
     required this.detected,
     required this.override,
     required this.rendererInUse,
-    required this.hasVulkan,
   });
 
   /// Before the platform side has answered, and on platforms without one.
@@ -92,7 +91,6 @@ class MapRenderState {
     detected: MapRenderProfile.standard,
     override: null,
     rendererInUse: FlutterRenderer.impeller,
-    hasVulkan: true,
   );
 
   /// The app's own choice, from what the GPU offers.
@@ -104,18 +102,18 @@ class MapRenderState {
   /// The renderer the engine started with.
   final FlutterRenderer rendererInUse;
 
-  final bool hasVulkan;
-
   static MapRenderState fromWire(Map<Object?, Object?> wire) => MapRenderState(
     detected: MapRenderProfile.fromWire(wire['detected']) ?? fallback.detected,
     override: MapRenderProfile.fromWire(wire['override']),
     rendererInUse:
         FlutterRenderer.values.asNameMap()[wire['rendererInUse']] ??
         fallback.rendererInUse,
-    hasVulkan: wire['hasVulkan'] != false,
   );
 
   bool get isAutomatic => override == null;
+
+  /// Whether the app chose maplibre_gl's and Flutter's own defaults.
+  bool get detectedStandard => detected == MapRenderProfile.standard;
 
   /// What maps opened from now on use; the renderer only from the next
   /// start, see [needsRestart].
@@ -128,6 +126,5 @@ class MapRenderState {
     detected: detected,
     override: override,
     rendererInUse: rendererInUse,
-    hasVulkan: hasVulkan,
   );
 }

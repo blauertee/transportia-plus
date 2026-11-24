@@ -167,8 +167,8 @@ class _MapRenderingSection extends StatelessWidget {
     );
   }
 
-  static String _detectedSummary(MapRenderState state) => state.hasVulkan
-      ? 'This phone has Vulkan, so maps are drawn the standard way'
+  static String _detectedSummary(MapRenderState state) => state.detectedStandard
+      ? 'Maps are drawn the standard way on this phone'
       : 'This phone has no Vulkan, so maps are drawn the compatible way';
 
   static String _rendererName(FlutterRenderer renderer) => switch (renderer) {
