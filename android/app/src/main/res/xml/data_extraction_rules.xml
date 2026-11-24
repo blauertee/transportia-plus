@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer; same rule as backup_rules.xml, for cloud backups
+     and phone-to-phone transfers alike. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="map_rendering.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="map_rendering.xml"/>
+    </device-transfer>
+</data-extraction-rules>

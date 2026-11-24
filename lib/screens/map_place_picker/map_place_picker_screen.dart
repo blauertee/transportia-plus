@@ -29,6 +29,7 @@ import '../../widgets/map/place_details_sheet.dart';
 import '../../widgets/validation_toast.dart';
 import 'edge_tabs.dart';
 import 'result_pins.dart';
+import '../../widgets/map/switchable_map.dart';
 
 /// Points at a place on the map, or picks one of a search's results there.
 ///
@@ -187,19 +188,21 @@ class _MapPlacePickerScreenState extends State<MapPlacePickerScreen> {
     final camera = _camera ?? initial;
     return Stack(
       children: [
-        MapLibreMap(
-          onMapCreated: _onMapCreated,
-          onStyleLoadedCallback: _onStyleLoaded,
-          styleString: context.watch<ThemeProvider>().mapStyleUrl,
-          initialCameraPosition: initial,
-          myLocationEnabled: true,
-          rotateGesturesEnabled: true,
-          tiltGesturesEnabled: false,
-          compassEnabled: false,
-          trackCameraPosition: true,
-          onCameraMove: (position) => setState(() => _camera = position),
-          onMapClick: _onMapTap,
-          onMapLongClick: _onMapLongPress,
+        SwitchableMap(
+          builder: (context) => MapLibreMap(
+            onMapCreated: _onMapCreated,
+            onStyleLoadedCallback: _onStyleLoaded,
+            styleString: context.watch<ThemeProvider>().mapStyleUrl,
+            initialCameraPosition: initial,
+            myLocationEnabled: true,
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: false,
+            compassEnabled: false,
+            trackCameraPosition: true,
+            onCameraMove: (position) => setState(() => _camera = position),
+            onMapClick: _onMapTap,
+            onMapLongClick: _onMapLongPress,
+          ),
         ),
         if (_results.isNotEmpty)
           Positioned.fill(

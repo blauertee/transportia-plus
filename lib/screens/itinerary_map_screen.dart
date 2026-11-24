@@ -26,6 +26,7 @@ import '../utils/leg_notices.dart';
 import '../widgets/journey/leg_notice_stack.dart';
 import '../widgets/stop_departures_sheet.dart';
 import '../theme/app_text.dart';
+import '../widgets/map/switchable_map.dart';
 
 class ItineraryMapScreen extends StatefulWidget {
   final Itinerary itinerary;
@@ -135,16 +136,18 @@ class _ItineraryMapScreenState extends State<ItineraryMapScreen> {
               children: [
                 CustomAppBar(title: 'Journey Map'),
                 Expanded(
-                  child: MapLibreMap(
-                    onMapCreated: _onMapCreated,
-                    onStyleLoadedCallback: _onStyleLoaded,
-                    styleString: context.watch<ThemeProvider>().mapStyleUrl,
-                    initialCameraPosition: _calculateInitialCamera(),
-                    myLocationEnabled: true,
-                    myLocationRenderMode: MyLocationRenderMode.compass,
-                    rotateGesturesEnabled: true,
-                    tiltGesturesEnabled: false,
-                    compassEnabled: false,
+                  child: SwitchableMap(
+                    builder: (context) => MapLibreMap(
+                      onMapCreated: _onMapCreated,
+                      onStyleLoadedCallback: _onStyleLoaded,
+                      styleString: context.watch<ThemeProvider>().mapStyleUrl,
+                      initialCameraPosition: _calculateInitialCamera(),
+                      myLocationEnabled: true,
+                      myLocationRenderMode: MyLocationRenderMode.compass,
+                      rotateGesturesEnabled: true,
+                      tiltGesturesEnabled: false,
+                      compassEnabled: false,
+                    ),
                   ),
                 ),
               ],

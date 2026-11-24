@@ -81,3 +81,9 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // SurfaceViewMapFactory builds maps itself; maplibre_gl keeps the SDK to
+    // itself. Same version as maplibre_gl's android/build.gradle.
+    implementation("org.maplibre.gl:android-sdk:12.3.1")
+}
