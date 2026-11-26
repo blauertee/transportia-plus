@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
+import '../utils/stored_list.dart';
 
 /// The connections the rider most recently opened, kept as [SavedTrip]s.
 ///
@@ -60,23 +61,10 @@ class RecentTripsService {
   /// Most recently opened first.
   static Future<List<SavedTrip>> getRecentTrips() async {
     try {
-      final encoded = await SharedPreferencesAsync().getString(_key);
-      if (encoded == null || encoded.isEmpty) return [];
-
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List) return [];
-
-      final trips = <SavedTrip>[];
-      for (final item in decoded) {
-        if (item is! Map<String, dynamic>) continue;
-        try {
-          trips.add(SavedTrip.fromJson(item));
-        } catch (_) {
-          // An entry this build cannot read is dropped, not the whole list.
-          continue;
-        }
-      }
-      return trips;
+      return decodeStoredList(
+        await SharedPreferencesAsync().getString(_key),
+        SavedTrip.fromJson,
+      );
     } catch (_) {
       return [];
     }

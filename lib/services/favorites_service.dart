@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../utils/geo_utils.dart';
+import '../utils/stored_list.dart';
 
 class FavoritePlace {
   final String id;
@@ -242,20 +243,13 @@ class FavoritesService {
   static Future<List<FavoritePlace>> _readFavorites({
     SharedPreferencesAsync? prefs,
   }) async {
-    try {
-      final storage = prefs ?? SharedPreferencesAsync();
-      final String? jsonString = await storage.getString(_favoritesKey);
-      if (jsonString == null || jsonString.isEmpty) {
-        return <FavoritePlace>[];
-      }
-
-      final List<dynamic> jsonList = json.decode(jsonString) as List<dynamic>;
-      return jsonList
-          .map((item) => FavoritePlace.fromJson(item as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      return <FavoritePlace>[];
-    }
+    final storage = prefs ?? SharedPreferencesAsync();
+    // One by one: every write saves what was read, so a single favourite
+    // this build cannot read must not empty the whole list.
+    return decodeStoredList(
+      await storage.getString(_favoritesKey),
+      FavoritePlace.fromJson,
+    );
   }
 
   static Future<void> _persistFavorites(

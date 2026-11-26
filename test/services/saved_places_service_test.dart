@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -259,5 +261,41 @@ void main() {
 
       expect(await load(), isEmpty);
     });
+  });
+
+  group('a remembered place this build cannot read', () {
+    test('is skipped, not the whole list', () async {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.withData({
+            // Literal, as a released build would have written it.
+            'saved_places_search': jsonEncode([
+              _place(name: 'Alexanderplatz').toJson(),
+              {'name': 42, 'type': 'STOP', 'lat': 52.5, 'lon': 13.4},
+              _place(name: 'Ostkreuz', lat: 52.503, lon: 13.469).toJson(),
+            ]),
+          });
+
+      final places = await SavedPlacesService.loadPlaces(
+        bucket: SavedPlacesBucket.search,
+      );
+
+      expect(places.map((p) => p.name), ['Alexanderplatz', 'Ostkreuz']);
+    });
+
+    test(
+      'a value that is not JSON reads as empty rather than throwing',
+      () async {
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.withData({
+              'saved_places_timetable': '[{"name":',
+            });
+
+        final places = await SavedPlacesService.loadPlaces(
+          bucket: SavedPlacesBucket.timetable,
+        );
+
+        expect(places, isEmpty);
+      },
+    );
   });
 }

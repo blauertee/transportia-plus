@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/services/favorites_service.dart';
@@ -118,6 +121,45 @@ void main() {
       );
       expect(removed, isNull);
       expect(FavoritesService.favoritesListenable.value, isEmpty);
+    });
+  });
+
+  group('a favourite this build cannot read', () {
+    // Literal, as a released build would have written it.
+    const key = 'favorite_places';
+
+    void seed(List<Object?> entries) {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.withData({key: jsonEncode(entries)});
+    }
+
+    test('is skipped, not the whole list', () async {
+      seed([
+        _place(id: 'fav_1').toJson(),
+        {'id': 'fav_broken', 'name': 'No position'},
+        _place(id: 'fav_2', lat: 52.4, lon: 13.5).toJson(),
+      ]);
+
+      final favourites = await FavoritesService.getFavorites();
+
+      expect(favourites.map((f) => f.id), ['fav_1', 'fav_2']);
+    });
+
+    test('does not cost the others their place on the next write', () async {
+      seed([
+        _place(id: 'fav_1').toJson(),
+        {'id': 'fav_broken', 'lat': 'north'},
+      ]);
+
+      await FavoritesService.saveFavorite(
+        _place(id: 'fav_2', lat: 52.4, lon: 13.5),
+      );
+
+      final stored = await SharedPreferencesAsync().getString(key);
+      final ids = [
+        for (final entry in jsonDecode(stored!) as List) (entry as Map)['id'],
+      ];
+      expect(ids, ['fav_2', 'fav_1']);
     });
   });
 }

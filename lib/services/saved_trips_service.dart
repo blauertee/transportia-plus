@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
+import '../utils/stored_list.dart';
 import 'calendar_sync_service.dart';
 import 'itinerary_refresh_service.dart';
 
@@ -161,24 +162,10 @@ class SavedTripsService {
   }) async {
     try {
       final storage = prefs ?? SharedPreferencesAsync();
-      final encoded = await storage.getString(_savedTripsKey);
-      if (encoded == null || encoded.isEmpty) return <SavedTrip>[];
-
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List) return <SavedTrip>[];
-
-      final trips = <SavedTrip>[];
-      for (final item in decoded) {
-        if (item is! Map<String, dynamic>) continue;
-        try {
-          trips.add(SavedTrip.fromJson(item));
-        } catch (_) {
-          // Skip entries written by an older or newer schema rather than
-          // dropping the whole list.
-          continue;
-        }
-      }
-
+      final trips = decodeStoredList(
+        await storage.getString(_savedTripsKey),
+        SavedTrip.fromJson,
+      );
       _sort(trips);
       return trips;
     } catch (_) {
