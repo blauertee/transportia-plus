@@ -156,6 +156,42 @@ class TransitPlace {
     modes: modes,
   );
 
+  /// Fields [mergeRealTime] takes from the fresh place when it has them.
+  static const List<String> _realTimeKeys = [
+    'arrival',
+    'departure',
+    'track',
+    'pickupType',
+    'dropoffType',
+  ];
+
+  /// Fields [mergeRealTime] keeps from the original, filling them from the
+  /// fresh place only where the original had none.
+  static const List<String> _scheduleKeys = [
+    'scheduledArrival',
+    'scheduledDeparture',
+    'scheduledTrack',
+  ];
+
+  /// [mergeRealTime] on the JSON the two places were parsed from, so a
+  /// stored snapshot says what the merged place says. Makes the same choice
+  /// field for field; the two are tested against each other.
+  static Map<String, dynamic> mergeRealTimeJson(
+    Map<String, dynamic> planned,
+    Map<String, dynamic> fresh,
+  ) {
+    final freshAlerts = fresh['alerts'];
+    return withoutNulls({
+      ...planned,
+      for (final key in _realTimeKeys) key: fresh[key] ?? planned[key],
+      for (final key in _scheduleKeys) key: planned[key] ?? fresh[key],
+      'cancelled': fresh['cancelled'],
+      'alerts': freshAlerts is List && freshAlerts.isNotEmpty
+          ? freshAlerts
+          : planned['alerts'],
+    });
+  }
+
   factory TransitPlace.fromJson(Map<String, dynamic> json) {
     return TransitPlace(
       name: asString(json['name']) ?? '',

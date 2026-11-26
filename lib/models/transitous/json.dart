@@ -45,6 +45,13 @@ Duration? asDuration(Object? value) {
 Map<String, dynamic>? asMap(Object? value) =>
     value is Map<String, dynamic> ? value : null;
 
+/// [json] without its null entries: a patched snapshot leaves out what
+/// neither side had, rather than adding keys the server never sent.
+Map<String, dynamic> withoutNulls(Map<String, dynamic> json) => {
+  for (final MapEntry(:key, :value) in json.entries)
+    if (value != null) key: value,
+};
+
 List<String> asStringList(Object? value) => value is List
     ? value.whereType<String>().toList(growable: false)
     : const <String>[];

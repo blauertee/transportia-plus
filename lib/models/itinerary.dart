@@ -175,11 +175,15 @@ class Itinerary {
   /// serializers for the whole model tree. Null for itineraries that were
   /// not built from an API response.
   ///
-  /// This is always the *planned* snapshot: [withLegs] carries it over
-  /// unchanged, so a real-time refresh does not rewrite it. That is
-  /// deliberate — live times are re-derived on load, and the schedule is
-  /// what is worth storing.
+  /// It says what [legs] say: [withLegs] puts each leg's own JSON in, so a
+  /// saved trip that stores it after a real-time refresh reopens on the live
+  /// times rather than on the plan. Null when any leg has no JSON to give.
   final Map<String, dynamic>? sourceJson;
+
+  /// Where [sourceJson] keeps [plannedStartTime] once a refresh has moved
+  /// [startTime]. The app's own key, not the planner's; it is stored with
+  /// saved trips, so it keeps this name.
+  static const String _plannedStartKey = 'plannedStartTime';
 
   Itinerary({
     required this.duration,
@@ -195,6 +199,12 @@ class Itinerary {
   });
 
   bool get hasTicketInfo => ticketInfo.isNotEmpty;
+
+  /// When the planner first said this connection leaves, however a refresh
+  /// has moved [startTime] since. Part of what makes it the same
+  /// connection, so a delay does not turn a saved trip into another one.
+  DateTime get plannedStartTime =>
+      asDateTime(sourceJson?[_plannedStartKey]) ?? startTime;
 
   /// Whether any leg is a ride on a scheduled service. Walking, cycling and
   /// shared vehicles carry no trip id.
@@ -234,20 +244,51 @@ class Itinerary {
     // Rides, not everything that is not a walk: a bike or a shared scooter
     // to the station is no change of vehicle.
     final transitLegCount = newLegs.where((l) => !l.isStreet).length;
+    final duration = newLegs.last.endTime
+        .difference(newLegs.first.startTime)
+        .inSeconds;
+    final transfers = transitLegCount > 0 ? transitLegCount - 1 : 0;
     return Itinerary(
-      duration: newLegs.last.endTime
-          .difference(newLegs.first.startTime)
-          .inSeconds,
+      duration: duration,
       startTime: newLegs.first.startTime,
       endTime: newLegs.last.endTime,
-      transfers: transitLegCount > 0 ? transitLegCount - 1 : 0,
+      transfers: transfers,
       legs: newLegs,
       id: id,
       isDirect: isDirect,
       fare: fare,
       ticketInfo: ticketInfo,
-      sourceJson: sourceJson,
+      sourceJson: _snapshotWith(newLegs, duration, transfers),
     );
+  }
+
+  /// [sourceJson] with [newLegs] in place of its own, and the times and
+  /// count of changes that follow from them. Fares, ticketing and the
+  /// refresh handle stay as planned, as they do on the model.
+  Map<String, dynamic>? _snapshotWith(
+    List<Leg> newLegs,
+    int duration,
+    int transfers,
+  ) {
+    final json = sourceJson;
+    if (json == null) return null;
+    final legsJson = <Map<String, dynamic>>[];
+    for (final leg in newLegs) {
+      final legJson = leg.sourceJson;
+      // A leg built in code has nothing to store, and a snapshot without it
+      // would not be this itinerary.
+      if (legJson == null) return null;
+      legsJson.add(legJson);
+    }
+    return {
+      ...json,
+      _plannedStartKey: json[_plannedStartKey] ?? json['startTime'],
+      'duration': duration,
+      'startTime': legsJson.first['startTime'],
+      'endTime': legsJson.last['endTime'],
+      'transfers': transfers,
+      'legs': legsJson,
+    };
   }
 
   double get walkingDistance {
@@ -497,6 +538,12 @@ class Leg {
 
   final TicketUrls? ticketUrls;
 
+  /// The raw API object this leg was parsed from, patched along with the
+  /// leg by [withRealTimeFrom] and [sliceBetween] so it always says what the
+  /// leg says. [Itinerary.withLegs] builds its snapshot from these. Null for
+  /// legs built in code.
+  final Map<String, dynamic>? sourceJson;
+
   Leg({
     required this.mode,
     required this.from,
@@ -544,6 +591,7 @@ class Leg {
     this.wheelchairAccessible,
     this.reservation,
     this.ticketUrls,
+    this.sourceJson,
   });
 
   /// Typed form of [mode]; null when the server sends a mode this build does
@@ -578,6 +626,13 @@ class Leg {
   /// [fresh], while keeping itinerary-specific context (fare indices,
   /// geometry) from this leg. [cancelled] overrides the fresh leg's own.
   Leg withRealTimeFrom(Leg fresh, {bool? cancelled}) {
+    final isCancelled = cancelled ?? fresh.cancelled;
+    final takesStops = fresh.intermediateStops.isNotEmpty;
+    // A ride a refresh could not find again comes back as a stand-in
+    // without its trip id, whose only alert is the server's error text.
+    final takesAlerts =
+        fresh.alerts.isNotEmpty && (fresh.isRide || !fresh.cancelled);
+    final takesAlternatives = fresh.alternatives.isNotEmpty;
     return Leg(
       mode: mode,
       from: from.mergeRealTime(fresh.from),
@@ -610,21 +665,15 @@ class Leg {
       tripTo: fresh.tripTo ?? tripTo,
       category: category,
       source: source,
-      cancelled: cancelled ?? fresh.cancelled,
-      intermediateStops: fresh.intermediateStops.isNotEmpty
+      cancelled: isCancelled,
+      intermediateStops: takesStops
           ? fresh.intermediateStops
           : intermediateStops,
-      // A ride a refresh could not find again comes back as a stand-in
-      // without its trip id, whose only alert is the server's error text.
-      alerts: fresh.alerts.isNotEmpty && (fresh.isRide || !fresh.cancelled)
-          ? fresh.alerts
-          : alerts,
+      alerts: takesAlerts ? fresh.alerts : alerts,
       legGeometry: legGeometry,
       steps: steps,
       rental: rental,
-      alternatives: fresh.alternatives.isNotEmpty
-          ? fresh.alternatives
-          : alternatives,
+      alternatives: takesAlternatives ? fresh.alternatives : alternatives,
       interlineWithPreviousLeg: interlineWithPreviousLeg,
       fareTransferIndex: fareTransferIndex,
       effectiveFareLegIndex: effectiveFareLegIndex,
@@ -633,7 +682,63 @@ class Leg {
       wheelchairAccessible: wheelchairAccessible,
       reservation: reservation,
       ticketUrls: ticketUrls,
+      sourceJson: _realTimeJsonFrom(
+        fresh,
+        cancelled: isCancelled,
+        takesStops: takesStops,
+        takesAlerts: takesAlerts,
+        takesAlternatives: takesAlternatives,
+      ),
     );
+  }
+
+  /// Fields [withRealTimeFrom] takes from the fresh leg as they are.
+  static const List<String> _liveKeys = [
+    'startTime',
+    'endTime',
+    'duration',
+    'realTime',
+    'scheduled',
+  ];
+
+  /// Fields [withRealTimeFrom] takes from the fresh leg when it has them.
+  static const List<String> _liveWhenGivenKeys = [
+    'scheduledStartTime',
+    'scheduledEndTime',
+    'tripFrom',
+    'tripTo',
+    'loopedCalendarSince',
+  ];
+
+  /// [sourceJson] as [withRealTimeFrom] changes the leg, making the choices
+  /// it made. Null when either leg has no JSON.
+  Map<String, dynamic>? _realTimeJsonFrom(
+    Leg fresh, {
+    required bool cancelled,
+    required bool takesStops,
+    required bool takesAlerts,
+    required bool takesAlternatives,
+  }) {
+    final planned = sourceJson;
+    final live = fresh.sourceJson;
+    if (planned == null || live == null) return null;
+    Map<String, dynamic> place(String key) => TransitPlace.mergeRealTimeJson(
+      asMap(planned[key]) ?? const {},
+      asMap(live[key]) ?? const {},
+    );
+    Object? pick(String key, {required bool fromFresh}) =>
+        fromFresh ? live[key] : planned[key];
+    return withoutNulls({
+      ...planned,
+      'from': place('from'),
+      'to': place('to'),
+      for (final key in _liveKeys) key: live[key],
+      for (final key in _liveWhenGivenKeys) key: live[key] ?? planned[key],
+      'cancelled': cancelled,
+      'intermediateStops': pick('intermediateStops', fromFresh: takesStops),
+      'alerts': pick('alerts', fromFresh: takesAlerts),
+      'alternatives': pick('alternatives', fromFresh: takesAlternatives),
+    });
   }
 
   /// The part of this leg that [from] → [to] actually travels.
@@ -719,7 +824,44 @@ class Leg {
       wheelchairAccessible: wheelchairAccessible,
       reservation: reservation,
       ticketUrls: ticketUrls,
+      sourceJson: _slicedJson(start, end, departs: departs, arrives: arrives),
     );
+  }
+
+  /// [sourceJson] cut down as [sliceBetween] cuts the leg, from [start] to
+  /// [end] in the leg's stops end to end. Null when there is no JSON, or
+  /// when its stops do not line up with the parsed ones.
+  Map<String, dynamic>? _slicedJson(
+    int start,
+    int end, {
+    required DateTime departs,
+    required DateTime arrives,
+  }) {
+    final json = sourceJson;
+    if (json == null) return null;
+    final stops = json['intermediateStops'];
+    final stopsJson = stops is List ? stops : const [];
+    // The parser skips a stop it cannot read, which would shift every
+    // index after it.
+    if (stopsJson.length != intermediateStops.length) return null;
+    final sequence = [json['from'], ...stopsJson, json['to']];
+    final origin = asMap(sequence[start]) ?? const {};
+    final destination = asMap(sequence[end]) ?? const {};
+    return withoutNulls({
+      ...json,
+      'from': sequence[start],
+      'to': sequence[end],
+      'startTime': departs.toUtc().toIso8601String(),
+      'endTime': arrives.toUtc().toIso8601String(),
+      'scheduledStartTime':
+          origin['scheduledDeparture'] ?? json['scheduledStartTime'],
+      'scheduledEndTime':
+          destination['scheduledArrival'] ?? json['scheduledEndTime'],
+      'duration': arrives.difference(departs).inSeconds,
+      'tripFrom': json['tripFrom'] ?? sequence.first,
+      'tripTo': json['tripTo'] ?? sequence.last,
+      'intermediateStops': sequence.sublist(start + 1, end),
+    });
   }
 
   /// Whether two places are the same station.
@@ -813,6 +955,7 @@ class Leg {
         ),
         reservation: Reservation.fromWire(json['reservation']),
         ticketUrls: ticketUrls == null ? null : TicketUrls.fromJson(ticketUrls),
+        sourceJson: json,
       );
     } catch (e, stackTrace) {
       developer.log(

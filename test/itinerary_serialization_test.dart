@@ -112,11 +112,49 @@ void main() {
       }
     });
 
-    test('survives a real-time refresh via withLegs', () {
+    test('carries the live times through a refresh via withLegs', () {
       final original = Itinerary.fromJson(_decodePlanItinerary());
 
-      // Simulate the refresh path: the transit leg comes back delayed.
-      final freshTransit = Leg(
+      // The refresh path: the ride comes back from the server five minutes
+      // late, on another platform.
+      final rideJson = Map<String, dynamic>.of(
+        (_decodePlanItinerary()['legs'] as List).last as Map<String, dynamic>,
+      );
+      rideJson
+        ..['startTime'] = '2026-08-05T07:19:00Z'
+        ..['endTime'] = '2026-08-05T07:34:00Z'
+        ..['from'] = {
+          ...rideJson['from'] as Map<String, dynamic>,
+          'track': '14',
+        };
+      final refreshed = original.withLegs([
+        original.legs.first,
+        original.legs.last.withRealTimeFrom(Leg.fromJson(rideJson)),
+      ]);
+
+      // What is stored is what is on screen, so a trip reopened offline
+      // shows the live times rather than the plan under a live stamp.
+      final reopened = Itinerary.fromJson(
+        jsonDecode(jsonEncode(refreshed.sourceJson)) as Map<String, dynamic>,
+      );
+      expect(reopened.endTime, DateTime.parse('2026-08-05T07:34:00Z'));
+      expect(reopened.duration, refreshed.duration);
+      expect(reopened.legs.last.startTime, refreshed.legs.last.startTime);
+      expect(reopened.legs.last.fromTrack, '14');
+      // What the refresh does not touch stays as planned.
+      expect(
+        reopened.legs.last.scheduledEndTime,
+        original.legs.last.scheduledEndTime,
+      );
+      expect(reopened.legs.last.routeColor, '1F4E9C');
+      expect(reopened.legs.first.endTime, original.legs.first.endTime);
+      // And the connection still knows when it was first meant to leave.
+      expect(reopened.plannedStartTime, original.startTime);
+    });
+
+    test('is dropped by withLegs when a leg has none to give', () {
+      final original = Itinerary.fromJson(_decodePlanItinerary());
+      final builtInCode = Leg(
         mode: 'RAIL',
         from: const TransitPlace(
           name: 'Hauptbahnhof',
@@ -129,19 +167,14 @@ void main() {
         duration: 900,
         realTime: true,
       );
+
+      // Keeping the old snapshot would store the plan as if it were live.
       final refreshed = original.withLegs([
         original.legs.first,
-        original.legs.last.withRealTimeFrom(freshTransit),
+        original.legs.last.withRealTimeFrom(builtInCode),
       ]);
-
-      // The live view moved...
       expect(refreshed.endTime, DateTime.parse('2026-08-05T07:34:00Z'));
-      // ...but the stored snapshot is still the schedule, and still saveable.
-      expect(refreshed.sourceJson, isNotNull);
-      expect(
-        Itinerary.fromJson(refreshed.sourceJson!).endTime,
-        original.endTime,
-      );
+      expect(refreshed.sourceJson, isNull);
     });
 
     test('is null for itineraries built in code rather than parsed', () {
