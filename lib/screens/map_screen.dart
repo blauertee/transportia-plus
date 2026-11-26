@@ -508,8 +508,8 @@ class _MapScreenState extends State<MapScreen>
     unawaited(_clearFocusedVehicles());
     unawaited(_clearFocusedStops());
     unawaited(_removeRouteSymbols());
-    super.dispose();
     _snapCtrl.dispose();
+    super.dispose();
   }
 
   void _maybeAttachActivateListener() {
