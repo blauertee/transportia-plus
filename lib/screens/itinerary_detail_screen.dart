@@ -455,47 +455,49 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     if (_isRefreshing) return;
 
     _isRefreshing = true;
-    // The refresh re-plans, so it needs the settings the journey was planned
-    // under; without them the server answers with its own defaults and the
-    // street legs come back unrouted.
-    final result = await ItineraryRefreshService.refresh(
-      _itinerary,
-      options: await RoutingOptionsService.load(),
-    );
-
-    if (!mounted) {
-      _isRefreshing = false;
-      return;
-    }
-
-    // Only move the timestamp when live data actually arrived, so a pull
-    // that reached nothing does not read as a successful refresh.
-    final now = DateTime.now();
-    setState(() {
-      _freshness = result.freshness;
-      if (result.didRefresh) {
-        _itinerary = result.itinerary;
-        _lastUpdated = now;
-      }
-    });
-
-    // Keep what the check found, so a restart opens on it instead of on the
-    // plan. The service decides whether this result may overwrite the stored
-    // connection — a refresh that came back with a different one may not.
-    final saved = widget.savedTrip;
-    if (saved != null) {
-      unawaited(
-        SavedTripsService.storeLiveItinerary(
-          id: saved.id,
-          refreshed: result.itinerary,
-          didRefresh: result.didRefresh,
-          freshness: result.freshness,
-          at: now,
-        ),
+    try {
+      // The refresh re-plans, so it needs the settings the journey was planned
+      // under; without them the server answers with its own defaults and the
+      // street legs come back unrouted.
+      final result = await ItineraryRefreshService.refresh(
+        _itinerary,
+        options: await RoutingOptionsService.load(),
       );
-    }
 
-    _isRefreshing = false;
+      if (!mounted) return;
+
+      // Only move the timestamp when live data actually arrived, so a pull
+      // that reached nothing does not read as a successful refresh.
+      final now = DateTime.now();
+      setState(() {
+        _freshness = result.freshness;
+        if (result.didRefresh) {
+          _itinerary = result.itinerary;
+          _lastUpdated = now;
+        }
+      });
+
+      // Keep what the check found, so a restart opens on it instead of on the
+      // plan. The service decides whether this result may overwrite the stored
+      // connection — a refresh that came back with a different one may not.
+      final saved = widget.savedTrip;
+      if (saved != null) {
+        unawaited(
+          SavedTripsService.storeLiveItinerary(
+            id: saved.id,
+            refreshed: result.itinerary,
+            didRefresh: result.didRefresh,
+            freshness: result.freshness,
+            at: now,
+          ),
+        );
+      }
+    } finally {
+      // Cleared however the check ended: loading the options or the
+      // refresh itself may throw, and left set, nothing would refresh
+      // again until the screen closed.
+      _isRefreshing = false;
+    }
   }
 
   /// Re-plans the same journey, so the user has somewhere to go when the
