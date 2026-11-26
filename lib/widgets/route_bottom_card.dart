@@ -17,6 +17,7 @@ import '../utils/time_utils.dart';
 import '../widgets/route_field_box.dart';
 import '../theme/app_colors.dart';
 import 'map/bottom_sheet_chrome.dart';
+import 'map/sheet_scroll_controller.dart';
 import 'floating_nav_bar.dart';
 import 'buttons/primary_button.dart';
 import 'search/journey_spine.dart';
@@ -53,6 +54,7 @@ class BottomCard extends StatefulWidget {
     required this.timeSelection,
     required this.recentTrips,
     required this.onRecentTripTap,
+    this.onSearchBottomMeasured,
   });
 
   final bool isCollapsed;
@@ -95,6 +97,13 @@ class BottomCard extends StatefulWidget {
   final List<SavedTrip> recentTrips;
   final ValueChanged<SavedTrip> onRecentTripTap;
 
+  /// Told where the Search button ends, measured down from the card's top
+  /// edge with the body unscrolled, so the sheet can rest where the nav bar
+  /// does not cover it. Measured again when the screen, the text size or how
+  /// the stages open changes, not when a stage is opened by hand: the card
+  /// would otherwise jump under the finger that opened it.
+  final ValueChanged<double>? onSearchBottomMeasured;
+
   @override
   State<BottomCard> createState() => _BottomCardState();
 }
@@ -136,7 +145,42 @@ class _BottomCardState extends State<BottomCard> {
     });
   }
 
-  final ScrollController _scroll = ScrollController();
+  final SheetScrollController _scroll = SheetScrollController();
+
+  final GlobalKey _searchKey = GlobalKey();
+
+  /// What the last measurement of the Search button was taken for.
+  Object? _searchMeasuredFor;
+
+  void _scheduleSearchMeasurement(BuildContext context) {
+    final opening = context.select<ThemeProvider, SearchOptionsOpening>(
+      (theme) => theme.searchOptionsOpening,
+    );
+    if (widget.onSearchBottomMeasured == null || widget.isCollapsed) return;
+    final measuredFor = (
+      MediaQuery.sizeOf(context),
+      MediaQuery.textScalerOf(context),
+      opening,
+    );
+    if (measuredFor == _searchMeasuredFor) return;
+    _searchMeasuredFor = measuredFor;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureSearch());
+  }
+
+  void _measureSearch() {
+    final report = widget.onSearchBottomMeasured;
+    if (!mounted || report == null) return;
+    final search = _searchKey.currentContext?.findRenderObject();
+    final card = context.findRenderObject();
+    if (search is! RenderBox || card is! RenderBox) return;
+    if (!search.attached || !card.attached) return;
+    final scrolled = _scroll.hasClients ? _scroll.offset : 0.0;
+    final bottom = search.localToGlobal(
+      Offset(0, search.size.height),
+      ancestor: card,
+    );
+    report(bottom.dy + scrolled);
+  }
 
   /// The journey stages. Collapsed, the card is just a search box.
   Widget? _buildSpine() {
@@ -179,8 +223,17 @@ class _BottomCardState extends State<BottomCard> {
     required List<Widget> above,
     required List<Widget> below,
   }) {
+    _scroll.body = widget.drag?.body;
     return SingleChildScrollView(
       controller: _scroll,
+      // A body that moves the card has to take drags even when everything
+      // fits, and must not bounce at the top: there the drag belongs to the
+      // card.
+      physics: _scroll.body == null
+          ? null
+          : const AlwaysScrollableScrollPhysics(
+              parent: ClampingScrollPhysics(),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -203,6 +256,7 @@ class _BottomCardState extends State<BottomCard> {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleSearchMeasurement(context);
     final content = _buildContent(context);
     if (widget.drag == null) {
       return ColoredBox(
@@ -247,7 +301,10 @@ class _BottomCardState extends State<BottomCard> {
                             toLoading: widget.toLoading,
                             middle: _buildSpine(),
                             timeLine: _buildTimeLine(),
-                            footer: _buildSearchButton(),
+                            footer: KeyedSubtree(
+                              key: _searchKey,
+                              child: _buildSearchButton(),
+                            ),
                             onFromPressed: widget.onFromPressed,
                             onToPressed: widget.onToPressed,
                           ),

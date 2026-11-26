@@ -23,7 +23,8 @@ screen opened from them, so back returns to the sheet. Exceptions are marked.
 
 - **Routing** (tab; back: steps below, then leaves the app)
   - Steps, innermost first: focused vehicle → quick settings → stop card →
-    long-press pin → sheet lowered over the map is raised again
+    long-press pin → search card raised to the top is lowered to where it
+    rests → search card lowered over the map is raised again
   - Origin / destination search
     - Map place picker
   - Travel through (hands over each change as it is made)

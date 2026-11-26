@@ -9,10 +9,7 @@ import 'package:transportia/widgets/search/traveller_strip.dart';
 
 import '../support/bottom_card_host.dart';
 
-/// Counts the drag callbacks the card reports.
-///
-/// The map screen turns `onDragStart` into a periodic haptic pulse, so a drag
-/// reported by scrolling is a phone that buzzes while you read a list.
+/// Counts the drag callbacks the card's handle reports.
 class _DragLog {
   int starts = 0;
   int ends = 0;
@@ -54,9 +51,8 @@ void main() {
   });
 
   testWidgets('scrolling the body never reports a sheet drag', (tester) async {
-    // The card used to hand a body drag to the sheet, which meant reading a
-    // list buzzed: onDragStart is a periodic haptic pulse. Only the handle
-    // moves the card now.
+    // With no body drag given — the sheets whose map is what they are about —
+    // only the handle moves the card, and the body just scrolls.
     final log = _DragLog();
     await _pump(tester, log);
 
