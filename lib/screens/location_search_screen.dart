@@ -446,18 +446,6 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
   /// A stop is kept with the icon the lists draw it with, so it looks the
   /// same above the line as it did below.
   Future<void> _toggleFavourite(TransitousLocationSuggestion place) async {
-    final existing = FavoritesService.findAt(place.lat, place.lon);
-    // Kept before stop ids were recorded, so the timetable cannot list it and
-    // its heart reads empty here. Keeping it again fills the id in, which
-    // lists it, rather than letting go of a place kept elsewhere.
-    if (existing != null &&
-        !_lists(existing) &&
-        (place.stopId?.isNotEmpty ?? false)) {
-      await FavoritesService.updateFavorite(
-        existing.copyWith(type: place.type, stopId: place.stopId),
-      );
-      return;
-    }
     final isStop = place.type.toUpperCase() == 'STOP';
     await FavoritesService.toggleAt(
       name: place.name,
@@ -466,6 +454,10 @@ class _LocationSearchBodyState extends State<LocationSearchBody> {
       type: place.type,
       stopId: place.stopId,
       iconName: isStop ? favoriteIconNameForStop(place.modes) : null,
+      // Kept before stop ids were recorded, so the timetable cannot list it
+      // and its heart reads empty here. Keeping it again fills the id in,
+      // which lists it, rather than letting go of a place kept elsewhere.
+      isListed: _lists,
     );
   }
 

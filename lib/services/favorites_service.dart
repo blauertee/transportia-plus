@@ -163,7 +163,11 @@ class FavoritesService {
     });
   }
 
-  /// The favourite at these coordinates, if there is one.
+  /// The favourite at these coordinates among those loaded, if there is one.
+  ///
+  /// Synchronous, for drawing a heart: it reads the list as last loaded,
+  /// and finds nothing before the first load. Anything that changes what is
+  /// stored decides on the stored list instead, as [toggleAt] does.
   ///
   /// Matched on position rather than id: a place hearted from a search and the
   /// same place reached from a deep link carry different ids, and a rider
@@ -185,8 +189,17 @@ class FavoritesService {
 
   /// Adds a place, or removes it when it is already there.
   ///
-  /// Returns the favourite that was added, or null when one was removed, so
-  /// the caller can say which happened.
+  /// Decided on the stored list, in turn with every other change, rather
+  /// than on what was loaded: a heart tapped before the list has loaded, or
+  /// twice in quick succession, must not keep the same place twice.
+  ///
+  /// [isListed] says whether the screen that asked shows a kept place. One
+  /// it does not show, though the heart was tapped on it, is a stop kept
+  /// before stop ids were recorded: given a [stopId], it is filled in rather
+  /// than let go, which lists it.
+  ///
+  /// Returns the favourite as kept afterwards, or null when it was let go,
+  /// so the caller can say which happened.
   static Future<FavoritePlace?> toggleAt({
     required String name,
     required double lat,
@@ -194,12 +207,9 @@ class FavoritesService {
     String type = 'PLACE',
     String? stopId,
     String? iconName,
+    bool Function(FavoritePlace kept)? isListed,
   }) async {
-    final existing = findAt(lat, lon);
-    if (existing != null) {
-      await removeFavorite(existing.id);
-      return null;
-    }
+    final key = _coordinateKey(lat, lon);
     final place = FavoritePlace(
       id: 'fav_${DateTime.now().microsecondsSinceEpoch}',
       name: name,
@@ -210,8 +220,30 @@ class FavoritesService {
       iconName: iconName ?? FavoritePlace.defaultIconName,
       addedAt: DateTime.now(),
     );
-    await saveFavorite(place);
-    return place;
+    final canFillIn = stopId?.isNotEmpty ?? false;
+
+    FavoritePlace? kept;
+    await _update((favorites) {
+      final index = favorites.indexWhere(
+        (f) => _coordinateKey(f.lat, f.lon) == key,
+      );
+      if (index == -1) {
+        favorites.insert(0, place);
+        kept = place;
+        return true;
+      }
+      final existing = favorites[index];
+      if (isListed != null && !isListed(existing) && canFillIn) {
+        kept = favorites[index] = existing.copyWith(type: type, stopId: stopId);
+        return true;
+      }
+      // Every copy, so a place kept twice before this was decided here
+      // is let go of in one tap.
+      favorites.removeWhere((f) => _coordinateKey(f.lat, f.lon) == key);
+      kept = null;
+      return true;
+    });
+    return kept;
   }
 
   static Future<bool> isFavorite(String id) async {
