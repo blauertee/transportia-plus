@@ -157,4 +157,16 @@ void main() {
 
     expect(await c.client.lookup(_rewe), isNull);
   });
+
+  test('a host that is no host has nothing to say, and asks nothing', () async {
+    final c = _client((_) async => _fixture('lookup_rewe.json'));
+
+    final details = await c.client.lookup(
+      _rewe,
+      host: 'https://nominatim.example.org/lookup',
+    );
+
+    expect(details, isNull);
+    expect(c.requests, isEmpty);
+  });
 }

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/nominatim_client.dart';
 import '../api/transitous_endpoint.dart';
 import '../constants/prefs_keys.dart';
+import '../utils/host_input.dart';
 
 class BackendProvider extends ChangeNotifier {
   static const String defaultHost = 'api.transitous.org';
@@ -95,13 +96,16 @@ class BackendProvider extends ChangeNotifier {
       _ => null,
     };
 
-    _host = text(PrefsKeys.transitousHost) ?? _host;
+    // Normalised as the settings field does, so a value stored before hosts
+    // were checked cannot send every request to an address that is none.
+    _host = _storedHost(text(PrefsKeys.transitousHost)) ?? _host;
     _apiVersionOverride = text(PrefsKeys.transitousApiVersion);
     _placeDetailsEnabled = switch (stored[PrefsKeys.placeDetailsEnabled]) {
       final bool enabled => enabled,
       _ => true,
     };
-    _nominatimHost = text(PrefsKeys.nominatimHost) ?? _nominatimHost;
+    _nominatimHost =
+        _storedHost(text(PrefsKeys.nominatimHost)) ?? _nominatimHost;
     for (final MapEntry(key: endpoint, value: prefKey)
         in endpointKeys.entries) {
       if (text(prefKey) case final version?) {
@@ -110,10 +114,22 @@ class BackendProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> setHost(String host) async {
-    final trimmed = host.trim();
-    final effective = trimmed.isEmpty ? defaultHost : trimmed;
-    if (effective == _host) return;
+  static String? _storedHost(String? stored) =>
+      stored == null ? null : normalizeHost(stored);
+
+  /// [input] as the host to keep: the default when blank, otherwise
+  /// normalised. Null when it is not a host at all.
+  static String? _hostOrDefault(String input, String fallback) =>
+      input.trim().isEmpty ? fallback : normalizeHost(input);
+
+  /// Points the app at the routing server [host]; blank means the default.
+  ///
+  /// Returns false, and changes nothing, when [host] is not a host: see
+  /// [normalizeHost].
+  Future<bool> setHost(String host) async {
+    final effective = _hostOrDefault(host, defaultHost);
+    if (effective == null) return false;
+    if (effective == _host) return true;
     _host = effective;
     notifyListeners();
     final prefs = SharedPreferencesAsync();
@@ -122,6 +138,7 @@ class BackendProvider extends ChangeNotifier {
     } else {
       await prefs.setString(PrefsKeys.transitousHost, _host);
     }
+    return true;
   }
 
   Future<void> resetHost() => setHost(defaultHost);
@@ -138,10 +155,11 @@ class BackendProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> setNominatimHost(String host) async {
-    final trimmed = host.trim();
-    final effective = trimmed.isEmpty ? NominatimClient.defaultHost : trimmed;
-    if (effective == _nominatimHost) return;
+  /// As [setHost], for the place details server.
+  Future<bool> setNominatimHost(String host) async {
+    final effective = _hostOrDefault(host, NominatimClient.defaultHost);
+    if (effective == null) return false;
+    if (effective == _nominatimHost) return true;
     _nominatimHost = effective;
     notifyListeners();
     final prefs = SharedPreferencesAsync();
@@ -150,6 +168,7 @@ class BackendProvider extends ChangeNotifier {
     } else {
       await prefs.setString(PrefsKeys.nominatimHost, _nominatimHost);
     }
+    return true;
   }
 
   Future<void> setApiVersion(String version) async {

@@ -178,6 +178,7 @@ class OptionsTextRow extends StatelessWidget {
     this.focusNode,
     this.keyboardType,
     this.labelWidth = 92,
+    this.errorText,
   });
 
   final String label;
@@ -190,54 +191,80 @@ class OptionsTextRow extends StatelessWidget {
   final TextInputType? keyboardType;
   final double labelWidth;
 
+  /// Why what was typed was not kept, shown under the field until the next
+  /// try. Null when there is nothing wrong.
+  final String? errorText;
+
   @override
   Widget build(BuildContext context) {
+    final error = errorText;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: labelWidth,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.black.withValues(alpha: 0.65),
-              ),
-            ),
-          ),
-          Expanded(
-            child: CupertinoTextField.borderless(
-              controller: controller,
-              focusNode: focusNode,
-              placeholder: placeholder,
-              style: TextStyle(fontSize: 14.5, color: AppColors.black),
-              placeholderStyle: TextStyle(
-                fontSize: 14.5,
-                color: AppColors.black.withValues(alpha: 0.3),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              autocorrect: false,
-              keyboardType: keyboardType,
-              textInputAction: TextInputAction.done,
-              onSubmitted: onSubmitted,
-            ),
-          ),
-          if (isCustom)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onReset,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Icon(
-                  LucideIcons.rotateCcw,
-                  size: 14,
-                  color: AppColors.black.withValues(alpha: 0.35),
+          _buildField(),
+          if (error != null)
+            Padding(
+              padding: EdgeInsets.only(left: labelWidth, bottom: 4),
+              child: Text(
+                error,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.3,
+                  color: AppColors.cancelled,
                 ),
               ),
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildField() {
+    return Row(
+      children: [
+        SizedBox(
+          width: labelWidth,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.black.withValues(alpha: 0.65),
+            ),
+          ),
+        ),
+        Expanded(
+          child: CupertinoTextField.borderless(
+            controller: controller,
+            focusNode: focusNode,
+            placeholder: placeholder,
+            style: TextStyle(fontSize: 14.5, color: AppColors.black),
+            placeholderStyle: TextStyle(
+              fontSize: 14.5,
+              color: AppColors.black.withValues(alpha: 0.3),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            autocorrect: false,
+            keyboardType: keyboardType,
+            textInputAction: TextInputAction.done,
+            onSubmitted: onSubmitted,
+          ),
+        ),
+        if (isCustom)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onReset,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Icon(
+                LucideIcons.rotateCcw,
+                size: 14,
+                color: AppColors.black.withValues(alpha: 0.35),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
