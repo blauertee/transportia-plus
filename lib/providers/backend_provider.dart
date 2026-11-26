@@ -58,30 +58,56 @@ class BackendProvider extends ChangeNotifier {
   static String _endpointPrefKey(String key) =>
       'transitous_api_version_endpoint_$key';
 
+  /// The defaults, without reading storage. The app starts from [load]
+  /// instead; this is for tests that need no stored settings.
   BackendProvider() {
     _instance = this;
-    _load();
   }
 
-  Future<void> _load() async {
-    final prefs = SharedPreferencesAsync();
-    final savedHost = await prefs.getString(PrefsKeys.transitousHost);
-    final savedVersion = await prefs.getString(PrefsKeys.transitousApiVersion);
-    if (savedHost != null && savedHost.isNotEmpty) _host = savedHost;
-    _placeDetailsEnabled =
-        await prefs.getBool(PrefsKeys.placeDetailsEnabled) ?? true;
-    final savedNominatim = await prefs.getString(PrefsKeys.nominatimHost);
-    if (savedNominatim != null && savedNominatim.isNotEmpty) {
-      _nominatimHost = savedNominatim;
+  /// The provider with the rider's stored settings already in place.
+  ///
+  /// Awaited in `main()` before anything can ask the server: read in the
+  /// background, the first requests of a rider on their own server went to
+  /// the default one. One read from local storage, so start-up does not
+  /// wait on anything slower.
+  static Future<BackendProvider> load() async {
+    final provider = BackendProvider();
+    await provider._readStored();
+    return provider;
+  }
+
+  Future<void> _readStored() async {
+    final endpointKeys = {
+      for (final endpoint in TransitousEndpoint.values)
+        endpoint.prefKey: _endpointPrefKey(endpoint.prefKey),
+    };
+    final stored = await SharedPreferencesAsync().getAll(
+      allowList: {
+        PrefsKeys.transitousHost,
+        PrefsKeys.transitousApiVersion,
+        PrefsKeys.placeDetailsEnabled,
+        PrefsKeys.nominatimHost,
+        ...endpointKeys.values,
+      },
+    );
+    String? text(String key) => switch (stored[key]) {
+      final String value when value.isNotEmpty => value,
+      _ => null,
+    };
+
+    _host = text(PrefsKeys.transitousHost) ?? _host;
+    _apiVersionOverride = text(PrefsKeys.transitousApiVersion);
+    _placeDetailsEnabled = switch (stored[PrefsKeys.placeDetailsEnabled]) {
+      final bool enabled => enabled,
+      _ => true,
+    };
+    _nominatimHost = text(PrefsKeys.nominatimHost) ?? _nominatimHost;
+    for (final MapEntry(key: endpoint, value: prefKey)
+        in endpointKeys.entries) {
+      if (text(prefKey) case final version?) {
+        _endpointVersions[endpoint] = version;
+      }
     }
-    if (savedVersion != null && savedVersion.isNotEmpty) {
-      _apiVersionOverride = savedVersion;
-    }
-    for (final endpoint in TransitousEndpoint.values) {
-      final v = await prefs.getString(_endpointPrefKey(endpoint.prefKey));
-      if (v != null && v.isNotEmpty) _endpointVersions[endpoint.prefKey] = v;
-    }
-    notifyListeners();
   }
 
   Future<void> setHost(String host) async {

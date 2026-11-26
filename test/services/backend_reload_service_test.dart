@@ -42,8 +42,7 @@ Future<void> _settle() async {
 
 /// A provider that has finished reading storage, being watched.
 Future<BackendProvider> _watched() async {
-  final backend = BackendProvider();
-  await _settle();
+  final backend = await BackendProvider.load();
   BackendReloadService.watch(backend);
   return backend;
 }
@@ -113,18 +112,20 @@ void main() {
     expect(requests, isEmpty);
   });
 
-  test('stored settings arriving at start-up count as a switch', () async {
+  test('stored settings read at start-up are no switch', () async {
+    // They are in place before anything is watched or asked, so there is
+    // nothing from another server to reload.
     await SharedPreferencesAsync().setString(
       'transitous_host',
       'motis.example.org',
     );
-    final backend = BackendProvider();
-    BackendReloadService.watch(backend);
     final before = BackendReloadService.generation.value;
+    final backend = await _watched();
 
     await _settle();
 
     expect(backend.host, 'motis.example.org');
-    expect(BackendReloadService.generation.value, before + 1);
+    expect(BackendReloadService.generation.value, before);
+    expect(requests, isEmpty);
   });
 }

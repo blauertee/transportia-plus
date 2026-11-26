@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'app.dart';
 import 'migrations/storage_migrations.dart';
+import 'providers/backend_provider.dart';
 import 'services/map_rendering_service.dart';
 import 'utils/app_version.dart';
 
@@ -12,5 +13,8 @@ Future<void> main() async {
   await StorageMigrations.run();
   // Before the first map is built, which takes its rendering from it.
   await MapRenderingService.instance.load();
-  runApp(const Transportia());
+  // Before anything asks the server, so a rider on their own server is
+  // never sent to the default one.
+  final backend = await BackendProvider.load();
+  runApp(Transportia(backend: backend));
 }
