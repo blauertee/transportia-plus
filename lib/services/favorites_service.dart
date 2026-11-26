@@ -130,53 +130,37 @@ class FavoritesService {
   }
 
   static Future<void> saveFavorite(FavoritePlace place) async {
-    try {
-      await _update((favorites) {
-        if (favorites.any((f) => f.id == place.id)) return false;
-        favorites.insert(0, place);
-        return true;
-      });
-    } catch (e) {
-      rethrow;
-    }
+    await _update((favorites) {
+      if (favorites.any((f) => f.id == place.id)) return false;
+      favorites.insert(0, place);
+      return true;
+    });
   }
 
   static Future<void> removeFavorite(String id) async {
-    try {
-      await _update((favorites) {
-        final before = favorites.length;
-        favorites.removeWhere((f) => f.id == id);
-        return favorites.length < before;
-      });
-    } catch (e) {
-      rethrow;
-    }
+    await _update((favorites) {
+      final before = favorites.length;
+      favorites.removeWhere((f) => f.id == id);
+      return favorites.length < before;
+    });
   }
 
   static Future<void> updateFavorite(FavoritePlace updatedPlace) async {
-    try {
-      await _update((favorites) {
-        final index = favorites.indexWhere((f) => f.id == updatedPlace.id);
-        if (index == -1) return false;
-        favorites[index] = updatedPlace;
-        return true;
-      });
-    } catch (e) {
-      rethrow;
-    }
+    await _update((favorites) {
+      final index = favorites.indexWhere((f) => f.id == updatedPlace.id);
+      if (index == -1) return false;
+      favorites[index] = updatedPlace;
+      return true;
+    });
   }
 
   static Future<void> reorderFavorites(List<FavoritePlace> reordered) async {
-    try {
-      await _update((favorites) {
-        favorites
-          ..clear()
-          ..addAll(reordered);
-        return true;
-      });
-    } catch (e) {
-      rethrow;
-    }
+    await _update((favorites) {
+      favorites
+        ..clear()
+        ..addAll(reordered);
+      return true;
+    });
   }
 
   /// The favourite at these coordinates, if there is one.
