@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
 import 'calendar_sync_service.dart';
 import 'itinerary_refresh_service.dart';
+import 'stored_list_store.dart';
 
 /// Told when the rider saves, renames or removes a trip, and when the app
 /// clears old ones. Not told about live refreshes: those change times the
@@ -26,7 +25,11 @@ abstract class SavedTripsListener {
 class SavedTripsService {
   const SavedTripsService._();
 
-  static const String _savedTripsKey = PrefsKeys.savedTrips;
+  static final StoredListStore<SavedTrip> _store = StoredListStore(
+    key: PrefsKeys.savedTrips,
+    fromJson: SavedTrip.fromJson,
+    toJson: (trip) => trip.toJson(),
+  );
 
   /// How long a trip stays in the list after it has finished.
   static const Duration _keepPastTripsFor = Duration(days: 30);
@@ -48,45 +51,47 @@ class SavedTripsService {
   /// saving the same connection twice does not duplicate it. Keeps a
   /// user-set label from the existing entry.
   static Future<void> saveTrip(SavedTrip trip) async {
-    final prefs = SharedPreferencesAsync();
-    final trips = await _readTrips(prefs: prefs);
-
-    final existingIndex = trips.indexWhere((t) => t.id == trip.id);
-    final toStore = existingIndex == -1
-        ? trip
-        : trip.withLabel(trips[existingIndex].label ?? trip.label);
-    if (existingIndex != -1) {
-      trips.removeAt(existingIndex);
-    }
-    trips.add(toStore);
-
-    await _persist(prefs, trips);
+    late SavedTrip toStore;
+    await _update((trips) {
+      final existingIndex = trips.indexWhere((t) => t.id == trip.id);
+      toStore = existingIndex == -1
+          ? trip
+          : trip.withLabel(trips[existingIndex].label ?? trip.label);
+      if (existingIndex != -1) {
+        trips.removeAt(existingIndex);
+      }
+      trips.add(toStore);
+      return true;
+    });
     listener.saved(toStore);
   }
 
   static Future<void> removeTrip(String id) async {
-    final prefs = SharedPreferencesAsync();
-    final trips = await _readTrips(prefs: prefs);
-    final before = trips.length;
-    trips.removeWhere((t) => t.id == id);
-    await _persist(prefs, trips);
-    if (trips.length < before) listener.removed(id);
+    var removed = false;
+    await _update((trips) {
+      final before = trips.length;
+      trips.removeWhere((t) => t.id == id);
+      removed = trips.length < before;
+      return removed;
+    });
+    if (removed) listener.removed(id);
   }
 
   /// Sets a user-chosen name. Pass null or blank to fall back to the
   /// generated label.
   static Future<void> renameTrip(String id, String? label) async {
-    final prefs = SharedPreferencesAsync();
-    final trips = await _readTrips(prefs: prefs);
-    final index = trips.indexWhere((t) => t.id == id);
-    if (index == -1) return;
+    SavedTrip? renamed;
+    await _update((trips) {
+      final index = trips.indexWhere((t) => t.id == id);
+      if (index == -1) return false;
 
-    final trimmed = label?.trim();
-    trips[index] = trips[index].withLabel(
-      trimmed == null || trimmed.isEmpty ? null : trimmed,
-    );
-    await _persist(prefs, trips);
-    listener.renamed(trips[index]);
+      final trimmed = label?.trim();
+      renamed = trips[index] = trips[index].withLabel(
+        trimmed == null || trimmed.isEmpty ? null : trimmed,
+      );
+      return true;
+    });
+    if (renamed case final trip?) listener.renamed(trip);
   }
 
   /// Whether a refresh result is worth storing over the saved snapshot.
@@ -117,19 +122,26 @@ class SavedTripsService {
       return;
     }
 
-    final prefs = SharedPreferencesAsync();
-    final trips = await _readTrips(prefs: prefs);
-    final index = trips.indexWhere((t) => t.id == id);
-    if (index == -1) return;
+    // Read inside the queue, so a rename made while the check was out
+    // lands first and is kept, rather than written over with what the trip
+    // was called when the check began.
+    try {
+      await _update((trips) {
+        final index = trips.indexWhere((t) => t.id == id);
+        if (index == -1) return false;
 
-    final updated = trips[index].withLiveItinerary(
-      refreshed,
-      at: at ?? DateTime.now(),
-    );
-    if (identical(updated, trips[index])) return;
+        final updated = trips[index].withLiveItinerary(
+          refreshed,
+          at: at ?? DateTime.now(),
+        );
+        if (identical(updated, trips[index])) return false;
 
-    trips[index] = updated;
-    await _persist(prefs, trips);
+        trips[index] = updated;
+        return true;
+      });
+    } on StoredListUnreadable {
+      // Nobody asked for this write; the trip just stays as planned.
+    }
   }
 
   static Future<bool> isSaved(String id) async {
@@ -140,62 +152,46 @@ class SavedTripsService {
   /// Drops trips that finished more than [_keepPastTripsFor] ago. Returns
   /// how many were removed.
   static Future<int> pruneExpired({DateTime? now}) async {
-    final prefs = SharedPreferencesAsync();
-    final trips = await _readTrips(prefs: prefs);
     final cutoff = (now ?? DateTime.now()).subtract(_keepPastTripsFor);
-
-    final expired = [
-      for (final trip in trips)
-        if (trip.arrivalTime.isBefore(cutoff)) trip.id,
-    ];
+    var expired = <String>[];
+    try {
+      await _update((trips) {
+        expired = [
+          for (final trip in trips)
+            if (trip.arrivalTime.isBefore(cutoff)) trip.id,
+        ];
+        if (expired.isEmpty) return false;
+        trips.removeWhere((t) => expired.contains(t.id));
+        return true;
+      });
+    } on StoredListUnreadable {
+      // Housekeeping; the screen that asked still has to open.
+      return 0;
+    }
     if (expired.isEmpty) return 0;
-
-    trips.removeWhere((t) => expired.contains(t.id));
-    await _persist(prefs, trips);
     listener.pruned(expired);
     return expired.length;
   }
 
-  static Future<List<SavedTrip>> _readTrips({
-    SharedPreferencesAsync? prefs,
-  }) async {
-    try {
-      final storage = prefs ?? SharedPreferencesAsync();
-      final encoded = await storage.getString(_savedTripsKey);
-      if (encoded == null || encoded.isEmpty) return <SavedTrip>[];
-
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List) return <SavedTrip>[];
-
-      final trips = <SavedTrip>[];
-      for (final item in decoded) {
-        if (item is! Map<String, dynamic>) continue;
-        try {
-          trips.add(SavedTrip.fromJson(item));
-        } catch (_) {
-          // Skip entries written by an older or newer schema rather than
-          // dropping the whole list.
-          continue;
-        }
-      }
-
-      _sort(trips);
-      return trips;
-    } catch (_) {
-      return <SavedTrip>[];
-    }
+  static Future<List<SavedTrip>> _readTrips() async {
+    final trips = await _store.read();
+    _sort(trips);
+    return trips;
   }
 
-  static Future<void> _persist(
-    SharedPreferencesAsync prefs,
-    List<SavedTrip> trips,
+  /// [change] applied in turn with every other change to the list, which is
+  /// then kept sorted and shown.
+  static Future<void> _update(
+    bool Function(List<SavedTrip> trips) change,
   ) async {
-    _sort(trips);
-    final encoded = jsonEncode(
-      trips.map((t) => t.toJson()).toList(growable: false),
-    );
-    await prefs.setString(_savedTripsKey, encoded);
-    savedTripsListenable.value = List.unmodifiable(trips);
+    final written = await _store.update((trips) {
+      if (!change(trips)) return false;
+      _sort(trips);
+      return true;
+    });
+    if (written != null) {
+      savedTripsListenable.value = List.unmodifiable(written);
+    }
   }
 
   static void _sort(List<SavedTrip> trips) {

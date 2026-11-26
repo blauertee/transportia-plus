@@ -27,8 +27,9 @@ String _resolveEndpointName({
 ///
 /// It holds two things, and needs both:
 ///
-/// * the **snapshot** — the raw planner output for the itinerary that was
-///   chosen, so the exact departure can be shown again;
+/// * the **snapshot** — the planner output for the itinerary that was
+///   chosen, with the last live times merged in, so the exact departure can
+///   be shown again;
 /// * the **intent** — where the user was going and when, so the app can
 ///   re-plan when the snapshot no longer holds (cancelled leg, timetable
 ///   change, or simply a departure too far out for the real-time feed).
@@ -77,11 +78,12 @@ class SavedTrip {
   final DateTime savedAt;
   final bool isDirect;
 
-  /// The raw planner output, straight from `Itinerary.sourceJson`.
+  /// The planner's output, straight from `Itinerary.sourceJson`.
   ///
-  /// Refreshed in place when a live check comes back with the same
-  /// connection, so reopening the app shows the times the operator last
-  /// reported rather than the plan it was saved under.
+  /// Replaced when a live check comes back with the same connection, by the
+  /// same JSON with the live times merged in, so reopening the app shows the
+  /// times the operator last reported rather than the plan it was saved
+  /// under.
   final Map<String, dynamic> itineraryJson;
 
   /// When [itineraryJson] last picked up real-time data. Null while the trip
@@ -125,7 +127,9 @@ class SavedTrip {
   }) {
     final from = coordKey(fromLat, fromLon, decimals: _identityDecimals);
     final to = coordKey(toLat, toLon, decimals: _identityDecimals);
-    final departure = itinerary.startTime.toUtc().toIso8601String();
+    // The departure as first planned: a delay moves the times, not the
+    // connection.
+    final departure = itinerary.plannedStartTime.toUtc().toIso8601String();
     return '$from>$to@$departure#${_rides(itinerary.legs.map((leg) => leg.tripId))}';
   }
 
@@ -190,8 +194,8 @@ class SavedTrip {
       );
     }
 
-    // Read the schedule back out of the snapshot rather than off the
-    // in-memory itinerary, which may already carry real-time offsets.
+    // Read back out of the snapshot rather than off the in-memory
+    // itinerary, so what is saved is what reopening it will show.
     final snapshot = Itinerary.fromJson(json, isDirect: itinerary.isDirect);
     final firstLeg = snapshot.legs.firstOrNull;
     final lastLeg = snapshot.legs.lastOrNull;
@@ -277,7 +281,7 @@ class SavedTrip {
   /// the stamp move. The caller decides whether a refresh is *the same*
   /// connection; a different one is not an update to this trip.
   ///
-  /// Returns this trip untouched when [refreshed] has no raw JSON to store.
+  /// Returns this trip untouched when [refreshed] has no JSON to store.
   /// Stamping it fresh over the old snapshot would claim times the trip does
   /// not actually carry.
   SavedTrip withLiveItinerary(Itinerary refreshed, {required DateTime at}) {

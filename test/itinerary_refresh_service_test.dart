@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transportia/api/transitous_api_exception.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/services/itinerary_refresh_service.dart';
 
@@ -58,7 +59,7 @@ void main() {
       expect(result.itinerary, same(itinerary));
     });
 
-    test('reports scheduled when every lookup fails', () async {
+    test('reports scheduled when the server has nothing on the trip', () async {
       final itinerary = _itinerary([
         _leg(
           mode: 'RAIL',
@@ -71,7 +72,7 @@ void main() {
       final result = await ItineraryRefreshService.refresh(
         itinerary,
         fetchTripDetails: ({required String tripId}) async =>
-            throw Exception('not in the feed yet'),
+            throw TransitousApiException('trip not found', statusCode: 404),
       );
 
       // This is the far-future case: nothing was learned, so the caller must
@@ -79,6 +80,61 @@ void main() {
       expect(result.freshness, ItineraryFreshness.scheduled);
       expect(result.didRefresh, isFalse);
       expect(result.itinerary, same(itinerary));
+    });
+
+    for (final (what, error) in [
+      ('no response', TransitousApiException('timed out')),
+      ('a socket that would not open', Exception('offline')),
+    ]) {
+      test('reports unreachable for $what, keeping what it had', () async {
+        final itinerary = _itinerary([
+          _leg(
+            mode: 'RAIL',
+            tripId: 'trip-1',
+            startTime: _depart,
+            endTime: _arrive,
+            realTime: true,
+          ),
+        ]);
+
+        final result = await ItineraryRefreshService.refresh(
+          itinerary,
+          fetchTripDetails: ({required String tripId}) async => throw error,
+        );
+
+        // Not "scheduled": the live times it carries are still the last
+        // known, and nothing said otherwise.
+        expect(result.freshness, ItineraryFreshness.unreachable);
+        expect(result.didRefresh, isFalse);
+        expect(result.itinerary, same(itinerary));
+      });
+    }
+
+    test('one answer among failures is an answer', () async {
+      final itinerary = _itinerary([
+        _leg(
+          mode: 'RAIL',
+          tripId: 'trip-1',
+          startTime: _depart,
+          endTime: _arrive,
+        ),
+        _leg(
+          mode: 'RAIL',
+          tripId: 'trip-2',
+          startTime: _arrive,
+          endTime: _arrive,
+        ),
+      ]);
+
+      final result = await ItineraryRefreshService.refresh(
+        itinerary,
+        fetchTripDetails: ({required String tripId}) async =>
+            throw tripId == 'trip-1'
+                ? TransitousApiException('trip not found', statusCode: 404)
+                : Exception('offline'),
+      );
+
+      expect(result.freshness, ItineraryFreshness.scheduled);
     });
 
     test('reports live and merges fresh times when lookups succeed', () async {

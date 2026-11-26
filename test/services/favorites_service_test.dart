@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:transportia/services/favorites_service.dart';
@@ -118,6 +121,186 @@ void main() {
       );
       expect(removed, isNull);
       expect(FavoritesService.favoritesListenable.value, isEmpty);
+    });
+  });
+
+  group('a favourite this build cannot read', () {
+    // Literal, as a released build would have written it.
+    const key = 'favorite_places';
+
+    void seed(List<Object?> entries) {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.withData({key: jsonEncode(entries)});
+    }
+
+    test('is skipped, not the whole list', () async {
+      seed([
+        _place(id: 'fav_1').toJson(),
+        {'id': 'fav_broken', 'name': 'No position'},
+        _place(id: 'fav_2', lat: 52.4, lon: 13.5).toJson(),
+      ]);
+
+      final favourites = await FavoritesService.getFavorites();
+
+      expect(favourites.map((f) => f.id), ['fav_1', 'fav_2']);
+    });
+
+    test('does not cost the others their place on the next write', () async {
+      seed([
+        _place(id: 'fav_1').toJson(),
+        {'id': 'fav_broken', 'lat': 'north'},
+      ]);
+
+      await FavoritesService.saveFavorite(
+        _place(id: 'fav_2', lat: 52.4, lon: 13.5),
+      );
+
+      final stored = await SharedPreferencesAsync().getString(key);
+      final ids = [
+        for (final entry in jsonDecode(stored!) as List) (entry as Map)['id'],
+      ];
+      expect(ids, ['fav_2', 'fav_1']);
+    });
+  });
+
+  group('changes made at once', () {
+    test('both land', () async {
+      await FavoritesService.saveFavorite(_place(id: 'fav_1'));
+
+      await Future.wait([
+        FavoritesService.saveFavorite(
+          _place(id: 'fav_2', lat: 52.4, lon: 13.5),
+        ),
+        FavoritesService.updateFavorite(_place(id: 'fav_1', label: 'Home')),
+      ]);
+
+      final favourites = await FavoritesService.getFavorites();
+      expect(favourites.map((f) => f.id), ['fav_2', 'fav_1']);
+      expect(favourites.last.label, 'Home');
+    });
+  });
+
+  group('a heart tapped before the favourites have loaded', () {
+    // Literal, as a released build would have written it.
+    void store(List<FavoritePlace> kept) {
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.withData({
+            'favorite_places': jsonEncode([for (final f in kept) f.toJson()]),
+          });
+    }
+
+    Future<List<FavoritePlace>> stored() async {
+      final raw = await SharedPreferencesAsync().getString('favorite_places');
+      return [
+        for (final entry in jsonDecode(raw!) as List)
+          FavoritePlace.fromJson(entry as Map<String, dynamic>),
+      ];
+    }
+
+    test('lets go of a kept place rather than keeping it twice', () async {
+      store([_place(id: 'fav_1')]);
+      // Nothing loaded yet: what is drawn says the place is not kept.
+      expect(FavoritesService.findAt(52.525, 13.369), isNull);
+
+      final kept = await FavoritesService.toggleAt(
+        name: 'Hauptbahnhof',
+        lat: 52.525,
+        lon: 13.369,
+      );
+
+      expect(kept, isNull);
+      expect(await stored(), isEmpty);
+    });
+
+    test('keeps a new place beside those already kept', () async {
+      store([_place(id: 'fav_1')]);
+
+      await FavoritesService.toggleAt(
+        name: 'Alexanderplatz',
+        lat: 52.521,
+        lon: 13.413,
+      );
+
+      expect((await stored()).map((f) => f.name), [
+        'Alexanderplatz',
+        'Hauptbahnhof',
+      ]);
+      // And what is drawn catches up.
+      expect(FavoritesService.findAt(52.525, 13.369)?.id, 'fav_1');
+    });
+  });
+
+  group('hearts tapped quickly', () {
+    test('twice at once keep it, then let it go', () async {
+      final toggles = await Future.wait([
+        for (var i = 0; i < 2; i++)
+          FavoritesService.toggleAt(
+            name: 'Alexanderplatz',
+            lat: 52.521,
+            lon: 13.413,
+          ),
+      ]);
+
+      expect(toggles.first, isNotNull);
+      expect(toggles.last, isNull);
+      expect(await FavoritesService.getFavorites(), isEmpty);
+    });
+
+    test('a place kept twice already is let go of in one tap', () async {
+      await FavoritesService.saveFavorite(_place(id: 'fav_1'));
+      await FavoritesService.saveFavorite(_place(id: 'fav_2'));
+
+      await FavoritesService.toggleAt(
+        name: 'Hauptbahnhof',
+        lat: 52.525,
+        lon: 13.369,
+      );
+
+      expect(await FavoritesService.getFavorites(), isEmpty);
+    });
+  });
+
+  group('a stop kept before stop ids were recorded', () {
+    FavoritePlace oldStop() => FavoritePlace(
+      id: 'fav_old',
+      name: 'Hauptbahnhof',
+      type: 'STOP',
+      lat: 52.525,
+      lon: 13.369,
+      addedAt: DateTime.utc(2025, 1, 1),
+    );
+
+    test('where it is not listed, is filled in rather than let go', () async {
+      await FavoritesService.saveFavorite(oldStop());
+
+      final kept = await FavoritesService.toggleAt(
+        name: 'Hauptbahnhof',
+        lat: 52.525,
+        lon: 13.369,
+        type: 'STOP',
+        stopId: 'de:11000:900003201',
+        isListed: (f) => f.hasTimetable,
+      );
+
+      expect(kept?.id, 'fav_old');
+      final favourites = await FavoritesService.getFavorites();
+      expect(favourites.single.stopId, 'de:11000:900003201');
+    });
+
+    test('where it is listed, is let go as any other', () async {
+      await FavoritesService.saveFavorite(oldStop());
+
+      final kept = await FavoritesService.toggleAt(
+        name: 'Hauptbahnhof',
+        lat: 52.525,
+        lon: 13.369,
+        type: 'STOP',
+        stopId: 'de:11000:900003201',
+        isListed: (_) => true,
+      );
+
+      expect(kept, isNull);
+      expect(await FavoritesService.getFavorites(), isEmpty);
     });
   });
 }

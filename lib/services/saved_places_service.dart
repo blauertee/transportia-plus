@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../models/saved_place.dart';
 import '../models/transitous/enums.dart';
+import '../utils/stored_list.dart';
 import 'transitous_geocode_service.dart';
 
 enum SavedPlacesBucket { search, timetable }
@@ -23,22 +24,7 @@ class SavedPlacesService {
   }) async {
     final prefs = SharedPreferencesAsync();
     final raw = await prefs.getString(_keyFor(bucket));
-    if (raw == null || raw.isEmpty) {
-      return <SavedPlace>[];
-    }
-    final decoded = jsonDecode(raw);
-    if (decoded is! List) {
-      return <SavedPlace>[];
-    }
-    final places = <SavedPlace>[];
-    for (final entry in decoded) {
-      if (entry is! Map<String, dynamic>) continue;
-      final place = SavedPlace.fromJson(entry);
-      if (place != null) {
-        places.add(place);
-      }
-    }
-    return _normalize(places);
+    return _normalize(decodeStoredList(raw, SavedPlace.fromJson) ?? []);
   }
 
   static Future<void> savePlaces({

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:transportia/api/transitous_api_exception.dart';
 import 'package:transportia/models/itinerary.dart';
 import 'package:transportia/models/saved_trip.dart';
 import 'package:transportia/services/itinerary_refresh_service.dart';
@@ -35,7 +36,10 @@ void main() {
       final result = await ItineraryRefreshService.refresh(
         trip.itinerary,
         fetchTripDetails: ({required String tripId}) async =>
-            throw Exception('trip not in the feed this far out'),
+            throw TransitousApiException(
+              'trip not in the feed this far out',
+              statusCode: 404,
+            ),
       );
 
       // The screen shows the "Scheduled times" notice for this, and must not

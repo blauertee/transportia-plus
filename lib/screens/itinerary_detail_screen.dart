@@ -48,6 +48,7 @@ import 'connection_info_screen.dart';
 import 'itinerary_list_screen.dart';
 import 'itinerary_map_screen.dart';
 import '../theme/app_text.dart';
+import '../utils/log_caught.dart';
 
 /// Opens the [StopDeparturesSheet] for a tapped stop. Passed down through
 /// the leg widgets so they don't need to know how the sheet is presented.
@@ -455,47 +456,49 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     if (_isRefreshing) return;
 
     _isRefreshing = true;
-    // The refresh re-plans, so it needs the settings the journey was planned
-    // under; without them the server answers with its own defaults and the
-    // street legs come back unrouted.
-    final result = await ItineraryRefreshService.refresh(
-      _itinerary,
-      options: await RoutingOptionsService.load(),
-    );
-
-    if (!mounted) {
-      _isRefreshing = false;
-      return;
-    }
-
-    // Only move the timestamp when live data actually arrived, so a pull
-    // that reached nothing does not read as a successful refresh.
-    final now = DateTime.now();
-    setState(() {
-      _freshness = result.freshness;
-      if (result.didRefresh) {
-        _itinerary = result.itinerary;
-        _lastUpdated = now;
-      }
-    });
-
-    // Keep what the check found, so a restart opens on it instead of on the
-    // plan. The service decides whether this result may overwrite the stored
-    // connection — a refresh that came back with a different one may not.
-    final saved = widget.savedTrip;
-    if (saved != null) {
-      unawaited(
-        SavedTripsService.storeLiveItinerary(
-          id: saved.id,
-          refreshed: result.itinerary,
-          didRefresh: result.didRefresh,
-          freshness: result.freshness,
-          at: now,
-        ),
+    try {
+      // The refresh re-plans, so it needs the settings the journey was planned
+      // under; without them the server answers with its own defaults and the
+      // street legs come back unrouted.
+      final result = await ItineraryRefreshService.refresh(
+        _itinerary,
+        options: await RoutingOptionsService.load(),
       );
-    }
 
-    _isRefreshing = false;
+      if (!mounted) return;
+
+      // Only move the timestamp when live data actually arrived, so a pull
+      // that reached nothing does not read as a successful refresh.
+      final now = DateTime.now();
+      setState(() {
+        _freshness = result.freshness;
+        if (result.didRefresh) {
+          _itinerary = result.itinerary;
+          _lastUpdated = now;
+        }
+      });
+
+      // Keep what the check found, so a restart opens on it instead of on the
+      // plan. The service decides whether this result may overwrite the stored
+      // connection — a refresh that came back with a different one may not.
+      final saved = widget.savedTrip;
+      if (saved != null) {
+        unawaited(
+          SavedTripsService.storeLiveItinerary(
+            id: saved.id,
+            refreshed: result.itinerary,
+            didRefresh: result.didRefresh,
+            freshness: result.freshness,
+            at: now,
+          ),
+        );
+      }
+    } finally {
+      // Cleared however the check ended: loading the options or the
+      // refresh itself may throw, and left set, nothing would refresh
+      // again until the screen closed.
+      _isRefreshing = false;
+    }
   }
 
   /// Re-plans the same journey, so the user has somewhere to go when the
@@ -625,6 +628,16 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     return today.isAfter(now) ? today : today.add(const Duration(days: 1));
   }
 
+  /// Whether the times on screen are the timetable's, as far as the last
+  /// check can tell: it learned nothing live, and the trip carries no live
+  /// times from before either. A saved trip reopened offline shows the live
+  /// times it stored, and must not be labelled scheduled above them.
+  bool get _showsPlannedTimes => switch (_freshness) {
+    ItineraryFreshness.scheduled ||
+    ItineraryFreshness.unreachable => !_itinerary.hasLiveTimes,
+    _ => false,
+  };
+
   /// The one thing worth saying about a saved trip's current state, or null
   /// when it is simply live and on time.
   Widget? _savedTripNotice() {
@@ -656,7 +669,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       );
     }
 
-    if (_freshness == ItineraryFreshness.scheduled) {
+    if (_showsPlannedTimes) {
       return _JourneyNotice(
         icon: LucideIcons.calendarClock,
         message: "Scheduled times — live data isn't available yet.",
@@ -1265,8 +1278,9 @@ class _TicketFaresState extends State<TicketFares> {
   Future<void> _openFareUrl(String url) async {
     try {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {
+    } catch (e, stack) {
       // A link that will not open has nothing to fall back to.
+      logCaught(e, stack, name: 'ItineraryDetail', context: 'opening $url');
     }
   }
 

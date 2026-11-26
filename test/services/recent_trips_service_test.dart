@@ -115,4 +115,15 @@ void main() {
 
     expect(trips.map((t) => t.id), [good.id]);
   });
+
+  test('connections opened at once are all kept', () async {
+    await Future.wait([
+      RecentTripsService.record(_connection()),
+      RecentTripsService.record(
+        _connection(departure: DateTime.utc(2026, 8, 5, 9)),
+      ),
+    ]);
+
+    expect(await RecentTripsService.getRecentTrips(), hasLength(2));
+  });
 }

@@ -40,7 +40,12 @@ class TransitousClient {
     ResponseParser<T> parse, {
     String? host,
   }) {
-    final uri = uriFor(endpoint, query, host: host);
+    final Uri uri;
+    try {
+      uri = uriFor(endpoint, query, host: host);
+    } on FormatException catch (e) {
+      return Future.error(_badHost(e));
+    }
     final headers = Environment.transitousHeaders();
     return _send(
       endpoint,
@@ -62,7 +67,12 @@ class TransitousClient {
     Object body,
     ResponseParser<T> parse,
   ) {
-    final uri = uriFor(endpoint, query);
+    final Uri uri;
+    try {
+      uri = uriFor(endpoint, query);
+    } on FormatException catch (e) {
+      return Future.error(_badHost(e));
+    }
     final headers = {
       ...Environment.transitousHeaders(),
       'content-type': 'application/json',
@@ -78,6 +88,12 @@ class TransitousClient {
       body: encoded,
     );
   }
+
+  /// A host that cannot be put in a URL, reported as any other failed
+  /// request rather than thrown at whoever asked: callers handle
+  /// [TransitousApiException], and a bad host would otherwise escape them.
+  static TransitousApiException _badHost(FormatException cause) =>
+      TransitousApiException('Not a server address', cause: cause);
 
   /// Builds the request URI, dropping null parameters so an unset option is
   /// absent rather than sent as an empty string.
@@ -232,7 +248,8 @@ class TransitousClient {
         if (error is String && error.isNotEmpty) return error;
       }
     } catch (_) {
-      // Fall through to the generic message below.
+      // Left unlogged: a body that is not MOTIS's JSON (a proxy's HTML
+      // page) is expected here, and the status code below says enough.
     }
     return 'Unexpected status ${response.statusCode}';
   }

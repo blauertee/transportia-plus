@@ -23,6 +23,10 @@ class ServerCapabilitiesService {
   static Future<void>? _inFlight;
   static bool _loaded = false;
 
+  /// Moved on whenever the cache is dropped, so a load started before can
+  /// tell that its answer is from the server the app has since left.
+  static int _generation = 0;
+
   /// True once a real answer has replaced the fallback.
   static bool get isLoaded => _loaded;
 
@@ -38,22 +42,31 @@ class ServerCapabilitiesService {
   /// Fetches again even if already loaded, e.g. after the user points the app
   /// at a different backend.
   static Future<ServerConfig> refresh() async {
-    _loaded = false;
-    _inFlight = null;
+    _forget();
     return ensureLoaded();
   }
 
   /// Drops the cache without fetching. Used when the host changes, so the
   /// next read reflects the new server rather than the old one.
   static void invalidate() {
-    _loaded = false;
-    _inFlight = null;
+    _forget();
     capabilities.value = ServerConfig.fallback;
   }
 
+  static void _forget() {
+    _generation++;
+    _loaded = false;
+    _inFlight = null;
+  }
+
   static Future<void> _load() async {
+    final generation = _generation;
+    // A load the cache was dropped under still runs to the end. It must not
+    // write the old server's limits, nor clear the load that replaced it.
+    bool isCurrent() => generation == _generation;
     try {
       final initial = await MapEndpoint.initial();
+      if (!isCurrent()) return;
       capabilities.value = initial.serverConfig;
       _loaded = true;
     } catch (e) {
@@ -65,7 +78,7 @@ class ServerCapabilitiesService {
         error: e,
       );
     } finally {
-      _inFlight = null;
+      if (isCurrent()) _inFlight = null;
     }
   }
 }

@@ -71,13 +71,15 @@ class NominatimClient {
       if (remaining > Duration.zero) await _wait(remaining);
     }
     _lastSent = now();
-    final uri = Uri.https(host, '/lookup', {
-      'osm_ids': ref.lookupId,
-      'format': 'jsonv2',
-      'extratags': '1',
-      'addressdetails': '1',
-    });
     try {
+      // Inside the try: a host that is no host throws here, and is one more
+      // way of not having the details.
+      final uri = Uri.https(host, '/lookup', {
+        'osm_ids': ref.lookupId,
+        'format': 'jsonv2',
+        'extratags': '1',
+        'addressdetails': '1',
+      });
       final response = await _http
           .get(uri, headers: Environment.transitousHeaders())
           .timeout(timeout);

@@ -6,6 +6,7 @@ import '../../api/nominatim_client.dart';
 import '../../api/transitous_endpoint.dart';
 import '../../providers/backend_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/host_input.dart';
 import 'search_options_rows.dart';
 
 /// Which servers the app talks to, and which MOTIS API version it asks for.
@@ -31,6 +32,10 @@ class _SearchOptionsBackendGroupsState
   late final TextEditingController _nominatimController;
   late final FocusNode _nominatimFocusNode;
 
+  /// Why the host last typed in each field was not kept.
+  String? _hostError;
+  String? _nominatimError;
+
   /// Held from initState: the focus listeners and dispose run when the
   /// card may already be out of the tree, where looking it up is unsafe.
   late final BackendProvider _backend;
@@ -46,7 +51,7 @@ class _SearchOptionsBackendGroupsState
     _nominatimController = TextEditingController(text: backend.nominatimHost);
     _hostFocusNode = FocusNode()
       ..addListener(() {
-        if (!_hostFocusNode.hasFocus) _backend.setHost(_hostController.text);
+        if (!_hostFocusNode.hasFocus) _submitHost(_hostController.text);
       });
     _versionFocusNode = FocusNode()
       ..addListener(() {
@@ -57,11 +62,31 @@ class _SearchOptionsBackendGroupsState
     _nominatimFocusNode = FocusNode()
       ..addListener(() {
         if (!_nominatimFocusNode.hasFocus) {
-          _backend.setNominatimHost(_nominatimController.text);
+          _submitNominatimHost(_nominatimController.text);
         }
       });
     backend.addListener(_syncBackendControllers);
   }
+
+  Future<void> _submitHost(String input) async {
+    final kept = await _backend.setHost(input);
+    // Also called as the field loses focus on the way out of the tree.
+    if (!mounted) return;
+    if (kept) _hostController.text = _backend.host;
+    setState(() => _hostError = kept ? null : _whyNotAHost(input));
+  }
+
+  Future<void> _submitNominatimHost(String input) async {
+    final kept = await _backend.setNominatimHost(input);
+    if (!mounted) return;
+    if (kept) _nominatimController.text = _backend.nominatimHost;
+    setState(() => _nominatimError = kept ? null : _whyNotAHost(input));
+  }
+
+  static String _whyNotAHost(String input) => isPlainHttpAddress(input)
+      ? 'Not kept: only https:// servers can be reached.'
+      : 'Not kept: not a host name. Like motis.example.org, or with a '
+            'port, motis.example.org:8080.';
 
   void _syncBackendControllers() {
     final backend = _backend;
@@ -98,7 +123,8 @@ class _SearchOptionsBackendGroupsState
         OptionsGroup(
           title: 'Routing server · MOTIS',
           footnote:
-              'Hostname only, without https://. The API version applies to '
+              'Hostname, optionally with a port; reached over https. The API '
+              'version applies to '
               'routes, trips, stop times, stops and vehicles on the map; '
               'place search and rentals stay on v1. Empty means automatic: '
               'v6.',
@@ -109,9 +135,10 @@ class _SearchOptionsBackendGroupsState
               focusNode: _hostFocusNode,
               placeholder: BackendProvider.defaultHost,
               keyboardType: TextInputType.url,
-              onSubmitted: backend.setHost,
+              onSubmitted: _submitHost,
               isCustom: backend.isCustomHost,
-              onReset: backend.resetHost,
+              onReset: () => _submitHost(''),
+              errorText: _hostError,
             ),
             OptionsTextRow(
               label: 'API version',
@@ -137,9 +164,10 @@ class _SearchOptionsBackendGroupsState
               focusNode: _nominatimFocusNode,
               placeholder: NominatimClient.defaultHost,
               keyboardType: TextInputType.url,
-              onSubmitted: backend.setNominatimHost,
+              onSubmitted: _submitNominatimHost,
               isCustom: backend.isCustomNominatimHost,
-              onReset: () => backend.setNominatimHost(''),
+              onReset: () => _submitNominatimHost(''),
+              errorText: _nominatimError,
             ),
           ],
         ),

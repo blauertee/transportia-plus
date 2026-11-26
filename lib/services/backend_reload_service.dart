@@ -24,9 +24,8 @@ class BackendReloadService {
   static BackendProvider? _watched;
   static String? _signature;
 
-  /// Starts watching [backend]. The first notification after start-up is
-  /// usually the stored settings arriving, and reloads only when they differ
-  /// from the defaults the app began with.
+  /// Starts watching [backend], whose settings as they are now count as the
+  /// server already in use. Only a change after this reloads.
   static void watch(BackendProvider backend) {
     _watched?.removeListener(_onBackendChanged);
     _watched = backend;

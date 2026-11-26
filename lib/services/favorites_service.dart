@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../utils/geo_utils.dart';
+import 'stored_list_store.dart';
 
 class FavoritePlace {
   final String id;
@@ -116,70 +115,59 @@ class FavoritePlace {
 }
 
 class FavoritesService {
-  static const String _favoritesKey = PrefsKeys.favoritePlaces;
+  static final StoredListStore<FavoritePlace> _store = StoredListStore(
+    key: PrefsKeys.favoritePlaces,
+    fromJson: FavoritePlace.fromJson,
+    toJson: (place) => place.toJson(),
+  );
   static final ValueNotifier<List<FavoritePlace>> favoritesListenable =
       ValueNotifier<List<FavoritePlace>>(<FavoritePlace>[]);
 
   static Future<List<FavoritePlace>> getFavorites() async {
-    final favourites = await _readFavorites();
+    final favourites = await _store.read();
     favoritesListenable.value = List.unmodifiable(favourites);
     return favourites;
   }
 
   static Future<void> saveFavorite(FavoritePlace place) async {
-    try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
-      final exists = favorites.any((f) => f.id == place.id);
-      if (exists) return;
-
+    await _update((favorites) {
+      if (favorites.any((f) => f.id == place.id)) return false;
       favorites.insert(0, place);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
-    } catch (e) {
-      rethrow;
-    }
+      return true;
+    });
   }
 
   static Future<void> removeFavorite(String id) async {
-    try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
+    await _update((favorites) {
+      final before = favorites.length;
       favorites.removeWhere((f) => f.id == id);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
-    } catch (e) {
-      rethrow;
-    }
+      return favorites.length < before;
+    });
   }
 
   static Future<void> updateFavorite(FavoritePlace updatedPlace) async {
-    try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
+    await _update((favorites) {
       final index = favorites.indexWhere((f) => f.id == updatedPlace.id);
-      if (index != -1) {
-        favorites[index] = updatedPlace;
-        await _persistFavorites(prefs, favorites);
-        favoritesListenable.value = List.unmodifiable(favorites);
-      }
-    } catch (e) {
-      rethrow;
-    }
+      if (index == -1) return false;
+      favorites[index] = updatedPlace;
+      return true;
+    });
   }
 
   static Future<void> reorderFavorites(List<FavoritePlace> reordered) async {
-    try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = List<FavoritePlace>.from(reordered);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
-    } catch (e) {
-      rethrow;
-    }
+    await _update((favorites) {
+      favorites
+        ..clear()
+        ..addAll(reordered);
+      return true;
+    });
   }
 
-  /// The favourite at these coordinates, if there is one.
+  /// The favourite at these coordinates among those loaded, if there is one.
+  ///
+  /// Synchronous, for drawing a heart: it reads the list as last loaded,
+  /// and finds nothing before the first load. Anything that changes what is
+  /// stored decides on the stored list instead, as [toggleAt] does.
   ///
   /// Matched on position rather than id: a place hearted from a search and the
   /// same place reached from a deep link carry different ids, and a rider
@@ -201,8 +189,17 @@ class FavoritesService {
 
   /// Adds a place, or removes it when it is already there.
   ///
-  /// Returns the favourite that was added, or null when one was removed, so
-  /// the caller can say which happened.
+  /// Decided on the stored list, in turn with every other change, rather
+  /// than on what was loaded: a heart tapped before the list has loaded, or
+  /// twice in quick succession, must not keep the same place twice.
+  ///
+  /// [isListed] says whether the screen that asked shows a kept place. One
+  /// it does not show, though the heart was tapped on it, is a stop kept
+  /// before stop ids were recorded: given a [stopId], it is filled in rather
+  /// than let go, which lists it.
+  ///
+  /// Returns the favourite as kept afterwards, or null when it was let go,
+  /// so the caller can say which happened.
   static Future<FavoritePlace?> toggleAt({
     required String name,
     required double lat,
@@ -210,12 +207,9 @@ class FavoritesService {
     String type = 'PLACE',
     String? stopId,
     String? iconName,
+    bool Function(FavoritePlace kept)? isListed,
   }) async {
-    final existing = findAt(lat, lon);
-    if (existing != null) {
-      await removeFavorite(existing.id);
-      return null;
-    }
+    final key = _coordinateKey(lat, lon);
     final place = FavoritePlace(
       id: 'fav_${DateTime.now().microsecondsSinceEpoch}',
       name: name,
@@ -226,45 +220,49 @@ class FavoritesService {
       iconName: iconName ?? FavoritePlace.defaultIconName,
       addedAt: DateTime.now(),
     );
-    await saveFavorite(place);
-    return place;
+    final canFillIn = stopId?.isNotEmpty ?? false;
+
+    FavoritePlace? kept;
+    await _update((favorites) {
+      final index = favorites.indexWhere(
+        (f) => _coordinateKey(f.lat, f.lon) == key,
+      );
+      if (index == -1) {
+        favorites.insert(0, place);
+        kept = place;
+        return true;
+      }
+      final existing = favorites[index];
+      if (isListed != null && !isListed(existing) && canFillIn) {
+        kept = favorites[index] = existing.copyWith(type: type, stopId: stopId);
+        return true;
+      }
+      // Every copy, so a place kept twice before this was decided here
+      // is let go of in one tap.
+      favorites.removeWhere((f) => _coordinateKey(f.lat, f.lon) == key);
+      kept = null;
+      return true;
+    });
+    return kept;
   }
 
   static Future<bool> isFavorite(String id) async {
     try {
-      final favorites = await _readFavorites();
+      final favorites = await _store.read();
       return favorites.any((f) => f.id == id);
     } catch (e) {
       return false;
     }
   }
 
-  static Future<List<FavoritePlace>> _readFavorites({
-    SharedPreferencesAsync? prefs,
-  }) async {
-    try {
-      final storage = prefs ?? SharedPreferencesAsync();
-      final String? jsonString = await storage.getString(_favoritesKey);
-      if (jsonString == null || jsonString.isEmpty) {
-        return <FavoritePlace>[];
-      }
-
-      final List<dynamic> jsonList = json.decode(jsonString) as List<dynamic>;
-      return jsonList
-          .map((item) => FavoritePlace.fromJson(item as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      return <FavoritePlace>[];
-    }
-  }
-
-  static Future<void> _persistFavorites(
-    SharedPreferencesAsync prefs,
-    List<FavoritePlace> favorites,
+  /// [change] applied in turn with every other change to the list, which is
+  /// then shown.
+  static Future<void> _update(
+    bool Function(List<FavoritePlace> favorites) change,
   ) async {
-    final encoded = json.encode(
-      favorites.map((f) => f.toJson()).toList(growable: false),
-    );
-    await prefs.setString(_favoritesKey, encoded);
+    final written = await _store.update(change);
+    if (written != null) {
+      favoritesListenable.value = List.unmodifiable(written);
+    }
   }
 }

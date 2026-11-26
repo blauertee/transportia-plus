@@ -195,6 +195,30 @@ void main() {
       expect(seen.url.queryParameters, {'withFares': 'true'});
     });
   });
+
+  group('a host that is no host', () {
+    // Possible only from a value stored before hosts were checked, or a
+    // caller passing one in; either way it must fail as a request does.
+    test('fails the request rather than throwing at the caller', () async {
+      var sent = false;
+      final client = _clientReturning((_) async {
+        sent = true;
+        return _json(const {});
+      });
+
+      // Not thrown here, synchronously, where a caller awaiting a Future
+      // has no handler.
+      final request = client.get(
+        TransitousEndpoint.plan,
+        const {},
+        (json) => json,
+        host: 'https://motis.example.org',
+      );
+
+      await expectLater(request, throwsA(isA<TransitousApiException>()));
+      expect(sent, isFalse);
+    });
+  });
 }
 
 /// Stands in for a transport-level failure without depending on `dart:io`,

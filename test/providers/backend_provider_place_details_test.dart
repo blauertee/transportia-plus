@@ -5,13 +5,7 @@ import 'package:shared_preferences_platform_interface/shared_preferences_async_p
 import 'package:transportia/api/nominatim_client.dart';
 import 'package:transportia/providers/backend_provider.dart';
 
-Future<BackendProvider> _loaded() async {
-  final provider = BackendProvider();
-  // The constructor reads storage without being awaited.
-  await Future<void>.delayed(Duration.zero);
-  await Future<void>.delayed(Duration.zero);
-  return provider;
-}
+Future<BackendProvider> _loaded() => BackendProvider.load();
 
 void main() {
   setUp(() {

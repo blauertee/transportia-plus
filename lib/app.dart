@@ -26,7 +26,10 @@ import 'utils/trip_link.dart';
 import 'widgets/offline_banner_shell.dart';
 
 class Transportia extends StatelessWidget {
-  const Transportia({super.key});
+  const Transportia({super.key, required this.backend});
+
+  /// Built in `main()`, with the stored settings already read.
+  final BackendProvider backend;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +38,6 @@ class Transportia extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(
           create: (_) {
-            final backend = BackendProvider();
             BackendReloadService.watch(backend);
             return backend;
           },

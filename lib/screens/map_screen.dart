@@ -78,6 +78,7 @@ import '../widgets/map/long_press_selection_modal.dart';
 import '../widgets/map/stop_selection_modal.dart';
 import '../theme/app_text.dart';
 import '../services/map_rendering_service.dart';
+import '../utils/log_caught.dart';
 
 part 'map_screen/map_screen_models.dart';
 part 'map_screen/map_screen_controls.dart';
@@ -507,8 +508,8 @@ class _MapScreenState extends State<MapScreen>
     unawaited(_clearFocusedVehicles());
     unawaited(_clearFocusedStops());
     unawaited(_removeRouteSymbols());
-    super.dispose();
     _snapCtrl.dispose();
+    super.dispose();
   }
 
   void _maybeAttachActivateListener() {
@@ -1162,7 +1163,8 @@ class _MapScreenState extends State<MapScreen>
     LatLngBounds bounds;
     try {
       bounds = await controller.getVisibleRegion();
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'visible region');
       return;
     }
     final viewKey = _viewKey(bounds, _lastCam.zoom);
@@ -1178,7 +1180,8 @@ class _MapScreenState extends State<MapScreen>
         startTime: startTime,
         endTime: endTime,
       );
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'vehicles on the map');
       return;
     }
     if (!mounted || token != _tripRequestId) return;
@@ -1211,7 +1214,8 @@ class _MapScreenState extends State<MapScreen>
     LatLngBounds bounds;
     try {
       bounds = await controller.getVisibleRegion();
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'visible region');
       return;
     }
     if (!force) {
@@ -1229,7 +1233,8 @@ class _MapScreenState extends State<MapScreen>
         startTime: startTime,
         endTime: endTime,
       );
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'vehicles on the map');
       return;
     }
     if (!mounted || token != _tripRequestId) return;
@@ -2235,7 +2240,23 @@ class _MapScreenState extends State<MapScreen>
 
     setState(() => _isSearching = true);
     Haptics.mediumTick();
+    try {
+      await _resolveAndOpenResults(timeSelection, fromText, toText);
+    } finally {
+      // However the search ended: no results to show, the rider back from
+      // them, or a location step that threw. Left set, it would turn every
+      // later search away.
+      if (mounted) setState(() => _isSearching = false);
+    }
+  }
 
+  /// The body of [_search], with [_isSearching] already set: finds both
+  /// ends, opens the results, and waits for the rider to come back.
+  Future<void> _resolveAndOpenResults(
+    TimeSelection timeSelection,
+    String fromText,
+    String toText,
+  ) async {
     TransitousLocationSuggestion? resolvedFrom = _fromSelection;
     TransitousLocationSuggestion? resolvedTo = _toSelection;
 
@@ -2250,48 +2271,40 @@ class _MapScreenState extends State<MapScreen>
     if (!mounted) return;
     if (resolvedFrom == null) {
       showValidationToast(context, 'Please select a starting point');
-      setState(() => _isSearching = false);
       return;
     }
 
     if (resolvedTo == null) {
       showValidationToast(context, 'Please select a destination');
-      setState(() => _isSearching = false);
       return;
     }
 
     LatLng? here;
     if (resolvedFrom.isMyLocation || resolvedTo.isMyLocation) {
       here = await _myLocationForSearch();
-      if (!mounted) return;
-      if (here == null) {
-        setState(() => _isSearching = false);
-        return;
-      }
+      if (!mounted || here == null) return;
     }
     final from = resolvedFrom.isMyLocation ? here! : resolvedFrom.latLng;
     final to = resolvedTo.isMyLocation ? here! : resolvedTo.latLng;
 
-    context
-        .openScreen(
-          ItineraryListScreen(
-            fromLat: from.latitude,
-            fromLon: from.longitude,
-            toLat: to.latitude,
-            toLon: to.longitude,
-            timeSelection: timeSelection,
-            options: _options,
-            // Not My Location: a trip saved from these results is reopened
-            // from somewhere else, where it would name the wrong place.
-            fromSelection: resolvedFrom.isMyLocation ? null : resolvedFrom,
-            toSelection: resolvedTo.isMyLocation ? null : resolvedTo,
-          ),
-        )
-        .then((_) {
-          _unfocusInputs();
-          setState(() => _isSearching = false);
-          unawaited(_loadRecentTrips());
-        });
+    await context.openScreen(
+      ItineraryListScreen(
+        fromLat: from.latitude,
+        fromLon: from.longitude,
+        toLat: to.latitude,
+        toLon: to.longitude,
+        timeSelection: timeSelection,
+        options: _options,
+        // Not My Location: a trip saved from these results is reopened
+        // from somewhere else, where it would name the wrong place.
+        fromSelection: resolvedFrom.isMyLocation ? null : resolvedFrom,
+        toSelection: resolvedTo.isMyLocation ? null : resolvedTo,
+      ),
+    );
+    // The map may have gone while the results were open.
+    if (!mounted) return;
+    _unfocusInputs();
+    unawaited(_loadRecentTrips());
   }
 
   /// Where the rider is, for a search with My Location at either end, or

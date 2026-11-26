@@ -1,10 +1,7 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../constants/prefs_keys.dart';
 import '../models/itinerary.dart';
 import '../models/saved_trip.dart';
+import 'stored_list_store.dart';
 
 /// The connections the rider most recently opened, kept as [SavedTrip]s.
 ///
@@ -20,7 +17,11 @@ import '../models/saved_trip.dart';
 class RecentTripsService {
   const RecentTripsService._();
 
-  static const String _key = PrefsKeys.recentTrips;
+  static final StoredListStore<SavedTrip> _store = StoredListStore(
+    key: PrefsKeys.recentTrips,
+    fromJson: SavedTrip.fromJson,
+    toJson: (trip) => trip.toJson(),
+  );
 
   /// How many are kept. The card lists every one of them, so this is also
   /// how long that list can get.
@@ -47,42 +48,25 @@ class RecentTripsService {
       return;
     }
 
-    final prefs = SharedPreferencesAsync();
-    final trips = await getRecentTrips()
-      ..removeWhere((t) => t.id == trip.id)
-      ..insert(0, trip);
-    await prefs.setString(
-      _key,
-      jsonEncode([for (final t in trips.take(maxTrips)) t.toJson()]),
-    );
+    try {
+      await _store.update((trips) {
+        trips
+          ..removeWhere((t) => t.id == trip.id)
+          ..insert(0, trip);
+        if (trips.length > maxTrips) trips.removeRange(maxTrips, trips.length);
+        return true;
+      });
+    } on StoredListUnreadable {
+      // Remembered in passing; opening the trip matters more.
+    }
   }
 
   /// Most recently opened first.
   static Future<List<SavedTrip>> getRecentTrips() async {
-    try {
-      final encoded = await SharedPreferencesAsync().getString(_key);
-      if (encoded == null || encoded.isEmpty) return [];
-
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List) return [];
-
-      final trips = <SavedTrip>[];
-      for (final item in decoded) {
-        if (item is! Map<String, dynamic>) continue;
-        try {
-          trips.add(SavedTrip.fromJson(item));
-        } catch (_) {
-          // An entry this build cannot read is dropped, not the whole list.
-          continue;
-        }
-      }
-      return trips;
-    } catch (_) {
-      return [];
-    }
+    return _store.read();
   }
 
   static Future<void> clearHistory() async {
-    await SharedPreferencesAsync().remove(_key);
+    await _store.clear();
   }
 }

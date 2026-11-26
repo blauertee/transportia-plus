@@ -1,4 +1,5 @@
 import '../api/endpoints/trip_endpoint.dart';
+import '../api/transitous_api_exception.dart';
 import '../models/itinerary.dart';
 import '../models/routing_options.dart';
 import '../models/transitous/itinerary_id.dart';
@@ -14,11 +15,15 @@ enum ItineraryFreshness {
   /// Live data came back and has been merged in.
   live,
 
-  /// The lookups ran but the feed returned nothing, so the times on screen
-  /// are still the planned ones. Usually means the departure is beyond the
-  /// real-time horizon, which is the normal case for a trip saved days or
-  /// weeks ahead.
+  /// The server answered, and its feed had nothing on this trip. Usually
+  /// means the departure is beyond the real-time horizon, which is the
+  /// normal case for a trip saved days or weeks ahead.
   scheduled,
+
+  /// No lookup reached the server, so nothing new is known. The itinerary is
+  /// as it was, carrying whatever live data it already had: a saved trip
+  /// reopened offline still shows the times last stored.
+  unreachable,
 
   /// Live data came back and says the connection no longer works as
   /// planned — at least one leg is cancelled.
@@ -260,10 +265,14 @@ class ItineraryRefreshService {
         .toSet();
 
     final updates = <String, Leg>{};
+    // Whether the server answered at all. An error it sent back (the trip
+    // is not in the feed) is an answer; no response is not.
+    var answered = false;
     await Future.wait(
       tripIds.map((tripId) async {
         try {
           final details = await fetch(tripId: tripId);
+          answered = true;
           // Not blindly the first leg: a `/trip` response that leads with a
           // walk would otherwise lend its times and its cancellation to every
           // transit leg in the itinerary.
@@ -273,16 +282,23 @@ class ItineraryRefreshService {
               break;
             }
           }
-        } catch (_) {}
+        } on TransitousApiException catch (e) {
+          if (e.statusCode != null) answered = true;
+        } catch (_) {
+          // Not reached; [answered] stays as it was, which is the report.
+        }
       }),
     );
 
     // Every lookup failed or came back empty. The itinerary is untouched and
-    // we know nothing new about it, so say so instead of reporting a refresh.
+    // we know nothing new about it, so say so instead of reporting a refresh,
+    // and say which: a feed with nothing is not a network that was down.
     if (updates.isEmpty) {
       return ItineraryRefreshResult(
         itinerary: itinerary,
-        freshness: ItineraryFreshness.scheduled,
+        freshness: answered
+            ? ItineraryFreshness.scheduled
+            : ItineraryFreshness.unreachable,
       );
     }
 
