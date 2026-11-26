@@ -299,7 +299,7 @@ void main() {
       );
 
       expect(tripLookups, 2);
-      expect(result.freshness, ItineraryFreshness.scheduled);
+      expect(result.freshness, ItineraryFreshness.unreachable);
     });
 
     test(

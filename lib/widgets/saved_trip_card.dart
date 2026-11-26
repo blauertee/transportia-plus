@@ -273,8 +273,8 @@ class _StatusDot extends StatelessWidget {
     } else if (freshness == ItineraryFreshness.live) {
       color = AppColors.accentOf(context);
     } else {
-      // Not checked, or checked and the feed had nothing: either way the
-      // times shown are the planned ones.
+      // Not checked, or checked and nothing live came back: the times shown
+      // are the planned ones, or the live ones last stored.
       color = AppColors.black.withValues(alpha: 0.25);
     }
 

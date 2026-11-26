@@ -206,6 +206,10 @@ class Itinerary {
   DateTime get plannedStartTime =>
       asDateTime(sourceJson?[_plannedStartKey]) ?? startTime;
 
+  /// Whether any leg's times came from the real-time feed, at planning or at
+  /// a later refresh.
+  bool get hasLiveTimes => legs.any((leg) => leg.realTime);
+
   /// Whether any leg is a ride on a scheduled service. Walking, cycling and
   /// shared vehicles carry no trip id.
   bool get hasTransit => legs.any((leg) => leg.isRide);

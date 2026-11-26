@@ -628,6 +628,16 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     return today.isAfter(now) ? today : today.add(const Duration(days: 1));
   }
 
+  /// Whether the times on screen are the timetable's, as far as the last
+  /// check can tell: it learned nothing live, and the trip carries no live
+  /// times from before either. A saved trip reopened offline shows the live
+  /// times it stored, and must not be labelled scheduled above them.
+  bool get _showsPlannedTimes => switch (_freshness) {
+    ItineraryFreshness.scheduled ||
+    ItineraryFreshness.unreachable => !_itinerary.hasLiveTimes,
+    _ => false,
+  };
+
   /// The one thing worth saying about a saved trip's current state, or null
   /// when it is simply live and on time.
   Widget? _savedTripNotice() {
@@ -659,7 +669,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       );
     }
 
-    if (_freshness == ItineraryFreshness.scheduled) {
+    if (_showsPlannedTimes) {
       return _JourneyNotice(
         icon: LucideIcons.calendarClock,
         message: "Scheduled times — live data isn't available yet.",
