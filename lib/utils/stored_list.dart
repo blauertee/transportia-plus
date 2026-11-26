@@ -4,10 +4,14 @@ import 'dart:convert';
 ///
 /// An entry [parse] cannot read — written by another schema, or damaged —
 /// costs that entry and no other. [parse] may throw or return null to skip
-/// one. Anything that is not a JSON array at all reads as empty.
+/// one. Nothing stored is an empty list.
+///
+/// Returns null when the value is not a JSON array at all. That is not an
+/// empty list: writing one back would replace whatever is there, so a caller
+/// about to write has to tell the two apart.
 ///
 /// The list is growable, so a caller can change it and write it back.
-List<T> decodeStoredList<T>(
+List<T>? decodeStoredList<T>(
   String? encoded,
   T? Function(Map<String, dynamic> json) parse,
 ) {
@@ -16,9 +20,9 @@ List<T> decodeStoredList<T>(
   try {
     decoded = jsonDecode(encoded);
   } on FormatException {
-    return <T>[];
+    return null;
   }
-  if (decoded is! List) return <T>[];
+  if (decoded is! List) return null;
 
   final entries = <T>[];
   for (final item in decoded) {

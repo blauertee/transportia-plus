@@ -24,7 +24,7 @@ class SavedPlacesService {
   }) async {
     final prefs = SharedPreferencesAsync();
     final raw = await prefs.getString(_keyFor(bucket));
-    return _normalize(decodeStoredList(raw, SavedPlace.fromJson));
+    return _normalize(decodeStoredList(raw, SavedPlace.fromJson) ?? []);
   }
 
   static Future<void> savePlaces({

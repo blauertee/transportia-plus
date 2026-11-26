@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/prefs_keys.dart';
 import '../utils/geo_utils.dart';
-import '../utils/stored_list.dart';
+import 'stored_list_store.dart';
 
 class FavoritePlace {
   final String id;
@@ -117,26 +115,27 @@ class FavoritePlace {
 }
 
 class FavoritesService {
-  static const String _favoritesKey = PrefsKeys.favoritePlaces;
+  static final StoredListStore<FavoritePlace> _store = StoredListStore(
+    key: PrefsKeys.favoritePlaces,
+    fromJson: FavoritePlace.fromJson,
+    toJson: (place) => place.toJson(),
+  );
   static final ValueNotifier<List<FavoritePlace>> favoritesListenable =
       ValueNotifier<List<FavoritePlace>>(<FavoritePlace>[]);
 
   static Future<List<FavoritePlace>> getFavorites() async {
-    final favourites = await _readFavorites();
+    final favourites = await _store.read();
     favoritesListenable.value = List.unmodifiable(favourites);
     return favourites;
   }
 
   static Future<void> saveFavorite(FavoritePlace place) async {
     try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
-      final exists = favorites.any((f) => f.id == place.id);
-      if (exists) return;
-
-      favorites.insert(0, place);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
+      await _update((favorites) {
+        if (favorites.any((f) => f.id == place.id)) return false;
+        favorites.insert(0, place);
+        return true;
+      });
     } catch (e) {
       rethrow;
     }
@@ -144,11 +143,11 @@ class FavoritesService {
 
   static Future<void> removeFavorite(String id) async {
     try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
-      favorites.removeWhere((f) => f.id == id);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
+      await _update((favorites) {
+        final before = favorites.length;
+        favorites.removeWhere((f) => f.id == id);
+        return favorites.length < before;
+      });
     } catch (e) {
       rethrow;
     }
@@ -156,14 +155,12 @@ class FavoritesService {
 
   static Future<void> updateFavorite(FavoritePlace updatedPlace) async {
     try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = await _readFavorites(prefs: prefs);
-      final index = favorites.indexWhere((f) => f.id == updatedPlace.id);
-      if (index != -1) {
+      await _update((favorites) {
+        final index = favorites.indexWhere((f) => f.id == updatedPlace.id);
+        if (index == -1) return false;
         favorites[index] = updatedPlace;
-        await _persistFavorites(prefs, favorites);
-        favoritesListenable.value = List.unmodifiable(favorites);
-      }
+        return true;
+      });
     } catch (e) {
       rethrow;
     }
@@ -171,10 +168,12 @@ class FavoritesService {
 
   static Future<void> reorderFavorites(List<FavoritePlace> reordered) async {
     try {
-      final prefs = SharedPreferencesAsync();
-      final favorites = List<FavoritePlace>.from(reordered);
-      await _persistFavorites(prefs, favorites);
-      favoritesListenable.value = List.unmodifiable(favorites);
+      await _update((favorites) {
+        favorites
+          ..clear()
+          ..addAll(reordered);
+        return true;
+      });
     } catch (e) {
       rethrow;
     }
@@ -233,32 +232,21 @@ class FavoritesService {
 
   static Future<bool> isFavorite(String id) async {
     try {
-      final favorites = await _readFavorites();
+      final favorites = await _store.read();
       return favorites.any((f) => f.id == id);
     } catch (e) {
       return false;
     }
   }
 
-  static Future<List<FavoritePlace>> _readFavorites({
-    SharedPreferencesAsync? prefs,
-  }) async {
-    final storage = prefs ?? SharedPreferencesAsync();
-    // One by one: every write saves what was read, so a single favourite
-    // this build cannot read must not empty the whole list.
-    return decodeStoredList(
-      await storage.getString(_favoritesKey),
-      FavoritePlace.fromJson,
-    );
-  }
-
-  static Future<void> _persistFavorites(
-    SharedPreferencesAsync prefs,
-    List<FavoritePlace> favorites,
+  /// [change] applied in turn with every other change to the list, which is
+  /// then shown.
+  static Future<void> _update(
+    bool Function(List<FavoritePlace> favorites) change,
   ) async {
-    final encoded = json.encode(
-      favorites.map((f) => f.toJson()).toList(growable: false),
-    );
-    await prefs.setString(_favoritesKey, encoded);
+    final written = await _store.update(change);
+    if (written != null) {
+      favoritesListenable.value = List.unmodifiable(written);
+    }
   }
 }

@@ -162,4 +162,21 @@ void main() {
       expect(ids, ['fav_2', 'fav_1']);
     });
   });
+
+  group('changes made at once', () {
+    test('both land', () async {
+      await FavoritesService.saveFavorite(_place(id: 'fav_1'));
+
+      await Future.wait([
+        FavoritesService.saveFavorite(
+          _place(id: 'fav_2', lat: 52.4, lon: 13.5),
+        ),
+        FavoritesService.updateFavorite(_place(id: 'fav_1', label: 'Home')),
+      ]);
+
+      final favourites = await FavoritesService.getFavorites();
+      expect(favourites.map((f) => f.id), ['fav_2', 'fav_1']);
+      expect(favourites.last.label, 'Home');
+    });
+  });
 }

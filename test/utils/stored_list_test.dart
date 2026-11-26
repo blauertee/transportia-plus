@@ -38,17 +38,18 @@ void main() {
       expect(decodeStoredList('[{"n":"a"},{}]', _parse), isEmpty);
     });
 
-    test('a value that is not JSON reads as empty rather than throwing', () {
-      expect(decodeStoredList('[{"n":1},', _parse), isEmpty);
+    test('a value that is not JSON is unreadable, not empty', () {
+      expect(decodeStoredList('[{"n":1},', _parse), isNull);
     });
 
-    test('JSON that is not an array reads as empty', () {
-      expect(decodeStoredList('{"n":1}', _parse), isEmpty);
-      expect(decodeStoredList('42', _parse), isEmpty);
+    test('JSON that is not an array is unreadable, not empty', () {
+      expect(decodeStoredList('{"n":1}', _parse), isNull);
+      expect(decodeStoredList('42', _parse), isNull);
+      expect(decodeStoredList('null', _parse), isNull);
     });
 
     test('the list can be changed and written back', () {
-      final list = decodeStoredList('[{"n":1}]', _parse)..add(2);
+      final list = decodeStoredList('[{"n":1}]', _parse)!..add(2);
       expect(list, [1, 2]);
     });
   });
