@@ -68,6 +68,9 @@ List<T> asList<T>(Object? value, T Function(Map<String, dynamic> json) parse) {
     try {
       result.add(parse(entry));
     } catch (_) {
+      // Left unlogged: this runs over every stop, alert and step of a
+      // response, and a field the server gets wrong is wrong in all of
+      // them, which would be one line per entry.
       continue;
     }
   }

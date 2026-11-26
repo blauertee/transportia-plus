@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'log_caught.dart';
+
 /// Reads a list kept in storage as one JSON array, entry by entry.
 ///
 /// An entry [parse] cannot read — written by another schema, or damaged —
@@ -30,8 +32,9 @@ List<T>? decodeStoredList<T>(
     try {
       final entry = parse(item);
       if (entry != null) entries.add(entry);
-    } catch (_) {
-      continue;
+    } catch (e, stack) {
+      // The next write leaves this entry out for good, so say so.
+      logCaught(e, stack, name: 'StoredList', context: 'unreadable entry');
     }
   }
   return entries;

@@ -78,6 +78,7 @@ import '../widgets/map/long_press_selection_modal.dart';
 import '../widgets/map/stop_selection_modal.dart';
 import '../theme/app_text.dart';
 import '../services/map_rendering_service.dart';
+import '../utils/log_caught.dart';
 
 part 'map_screen/map_screen_models.dart';
 part 'map_screen/map_screen_controls.dart';
@@ -1162,7 +1163,8 @@ class _MapScreenState extends State<MapScreen>
     LatLngBounds bounds;
     try {
       bounds = await controller.getVisibleRegion();
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'visible region');
       return;
     }
     final viewKey = _viewKey(bounds, _lastCam.zoom);
@@ -1178,7 +1180,8 @@ class _MapScreenState extends State<MapScreen>
         startTime: startTime,
         endTime: endTime,
       );
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'vehicles on the map');
       return;
     }
     if (!mounted || token != _tripRequestId) return;
@@ -1211,7 +1214,8 @@ class _MapScreenState extends State<MapScreen>
     LatLngBounds bounds;
     try {
       bounds = await controller.getVisibleRegion();
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'visible region');
       return;
     }
     if (!force) {
@@ -1229,7 +1233,8 @@ class _MapScreenState extends State<MapScreen>
         startTime: startTime,
         endTime: endTime,
       );
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'MapScreen', context: 'vehicles on the map');
       return;
     }
     if (!mounted || token != _tripRequestId) return;

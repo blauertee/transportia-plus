@@ -248,7 +248,8 @@ class TransitousClient {
         if (error is String && error.isNotEmpty) return error;
       }
     } catch (_) {
-      // Fall through to the generic message below.
+      // Left unlogged: a body that is not MOTIS's JSON (a proxy's HTML
+      // page) is expected here, and the status code below says enough.
     }
     return 'Unexpected status ${response.statusCode}';
   }

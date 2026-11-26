@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/log_caught.dart';
 import '../utils/stored_list.dart';
 
 /// Thrown, with nothing written, when a change is asked of a list whose
@@ -48,7 +49,8 @@ class StoredListStore<T> {
     try {
       final raw = await SharedPreferencesAsync().getString(key);
       return decodeStoredList(raw, fromJson) ?? <T>[];
-    } catch (_) {
+    } catch (e, stack) {
+      logCaught(e, stack, name: 'StoredListStore', context: 'reading $key');
       return <T>[];
     }
   }
@@ -65,7 +67,8 @@ class StoredListStore<T> {
         final String? raw;
         try {
           raw = await prefs.getString(key);
-        } catch (_) {
+        } catch (e, stack) {
+          logCaught(e, stack, name: 'StoredListStore', context: 'reading $key');
           throw StoredListUnreadable(key);
         }
         final entries = decodeStoredList(raw, fromJson);

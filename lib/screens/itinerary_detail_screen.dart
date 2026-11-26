@@ -48,6 +48,7 @@ import 'connection_info_screen.dart';
 import 'itinerary_list_screen.dart';
 import 'itinerary_map_screen.dart';
 import '../theme/app_text.dart';
+import '../utils/log_caught.dart';
 
 /// Opens the [StopDeparturesSheet] for a tapped stop. Passed down through
 /// the leg widgets so they don't need to know how the sheet is presented.
@@ -1267,8 +1268,9 @@ class _TicketFaresState extends State<TicketFares> {
   Future<void> _openFareUrl(String url) async {
     try {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {
+    } catch (e, stack) {
       // A link that will not open has nothing to fall back to.
+      logCaught(e, stack, name: 'ItineraryDetail', context: 'opening $url');
     }
   }
 
